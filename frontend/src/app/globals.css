@@ -1,0 +1,66 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  min-height: 100%;
+  background: #020508;
+}
+
+body {
+  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+  color: #d7eef2;
+}
+
+.hud-bg {
+  background:
+    radial-gradient(900px 520px at 50% 115%, rgba(62, 224, 212, 0.1), transparent 55%),
+    radial-gradient(700px 400px at 80% 0%, rgba(62, 224, 212, 0.05), transparent 50%),
+    linear-gradient(180deg, #050b11 0%, #020508 100%);
+}
+
+.glass {
+  background: rgba(6, 16, 24, 0.55);
+  border: 1px solid rgba(62, 224, 212, 0.1);
+  backdrop-filter: blur(18px);
+}
+
+.scanline {
+  pointer-events: none;
+  opacity: 0.35;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.012),
+    rgba(255, 255, 255, 0.012) 1px,
+    transparent 1px,
+    transparent 4px
+  );
+}
+
+@keyframes breathe {
+  0%, 100% { transform: scale(1); opacity: 0.55; }
+  50% { transform: scale(1.08); opacity: 0.95; }
+}
+
+@keyframes think {
+  0% { transform: scale(0.9); opacity: 0.4; }
+  70% { transform: scale(1.25); opacity: 0; }
+  100% { opacity: 0; }
+}
+
+.orb-core {
+  animation: breathe 4.8s ease-in-out infinite;
+}
+
+.orb-think {
+  animation: think 1.4s ease-out infinite;
+}
+
+.whisper {
+  text-wrap: balance;
+}
