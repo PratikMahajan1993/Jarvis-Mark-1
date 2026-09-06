@@ -69,7 +69,11 @@ def auth_url() -> str:
         prompt="consent",
         login_hint=settings.google_account or None,
     )
-    state_path().write_text(json.dumps({"state": state}), encoding="utf-8")
+    state_path().parent.mkdir(parents=True, exist_ok=True)
+    state_path().write_text(
+        json.dumps({"state": state, "code_verifier": flow.code_verifier}),
+        encoding="utf-8",
+    )
     return url
 
 
@@ -83,9 +87,13 @@ def finish_auth(code: str, state: str = "") -> None:
         except json.JSONDecodeError:
             saved = {}
     if state and saved.get("state") and state != saved["state"]:
-        raise RuntimeError("OAuth state mismatch.")
+        raise RuntimeError("OAuth state mismatch. Start Connect Gmail again.")
+    verifier = saved.get("code_verifier")
+    if not verifier:
+        raise RuntimeError("OAuth session expired. Start Connect Gmail again.")
     flow = Flow.from_client_config(_client_config(), scopes=list(SCOPES), redirect_uri=settings.google_redirect_uri)
-    flow.fetch_token(code=code)
+    flow.code_verifier = verifier
+    flow.fetch_token(code=code, code_verifier=verifier)
     token_path().write_text(flow.credentials.to_json(), encoding="utf-8")
     if state_path().is_file():
         state_path().unlink()

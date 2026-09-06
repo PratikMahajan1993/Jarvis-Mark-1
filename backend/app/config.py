@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:3000"
     data_dir: Path = ROOT / "data"
     exports_dir: Path = ROOT / "exports"
+    canvas_dir: Path = ROOT / "data" / "canvas"
     tavily_api_key: str = ""
     brave_api_key: str = ""
     email_backend: str = "local"
@@ -53,3 +54,4 @@ class Settings(BaseSettings):
 settings = Settings()
 settings.data_dir.mkdir(parents=True, exist_ok=True)
 settings.exports_dir.mkdir(parents=True, exist_ok=True)
+settings.canvas_dir.mkdir(parents=True, exist_ok=True)

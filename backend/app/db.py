@@ -1,5 +1,6 @@
 import json
 import sqlite3
+import uuid
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -113,6 +114,38 @@ def init_db() -> None:
                 after_id TEXT,
                 status TEXT NOT NULL,
                 data TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS canvas_boards (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                camera TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS canvas_items (
+                id TEXT PRIMARY KEY,
+                board_id TEXT NOT NULL,
+                kind TEXT NOT NULL,
+                x REAL NOT NULL DEFAULT 0,
+                y REAL NOT NULL DEFAULT 0,
+                w REAL NOT NULL DEFAULT 0,
+                h REAL NOT NULL DEFAULT 0,
+                rotation REAL NOT NULL DEFAULT 0,
+                z INTEGER NOT NULL DEFAULT 0,
+                data TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS canvas_items_board ON canvas_items (board_id);
+            CREATE TABLE IF NOT EXISTS canvas_files (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                mime TEXT NOT NULL,
+                path TEXT NOT NULL,
+                width REAL NOT NULL DEFAULT 0,
+                height REAL NOT NULL DEFAULT 0,
+                page_count INTEGER NOT NULL DEFAULT 0,
                 created_at TEXT NOT NULL
             );
             """
@@ -509,6 +542,187 @@ def list_focused_pending(session_id: str) -> list[dict[str, Any]]:
     if focus == "":
         return []
     return [item for item in items if item["id"] == focus]
+
+
+DEFAULT_CAMERA = {"x": 0.0, "y": 0.0, "z": 1.0}
+
+
+def _canvas_board(row: sqlite3.Row) -> dict[str, Any]:
+    board = dict(row)
+    try:
+        camera = json.loads(board.get("camera") or "{}")
+    except json.JSONDecodeError:
+        camera = {}
+    board["camera"] = {**DEFAULT_CAMERA, **(camera if isinstance(camera, dict) else {})}
+    return board
+
+
+def upsert_canvas_board(
+    board_id: str,
+    name: str = "Canvas",
+    camera: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    now = utc_now()
+    with connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO canvas_boards (id, name, camera, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                name = excluded.name,
+                camera = excluded.camera,
+                updated_at = excluded.updated_at
+            """,
+            (board_id, name, json.dumps({**DEFAULT_CAMERA, **(camera or {})}), now, now),
+        )
+    return {
+        "id": board_id,
+        "name": name,
+        "camera": {**DEFAULT_CAMERA, **(camera or {})},
+        "created_at": now,
+        "updated_at": now,
+    }
+
+
+def get_canvas_board(board_id: str) -> dict[str, Any] | None:
+    with connect() as conn:
+        row = conn.execute("SELECT * FROM canvas_boards WHERE id = ?", (board_id,)).fetchone()
+    return _canvas_board(row) if row else None
+
+
+def list_canvas_boards(limit: int = 40) -> list[dict[str, Any]]:
+    with connect() as conn:
+        rows = conn.execute(
+            "SELECT * FROM canvas_boards ORDER BY updated_at DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+    return [_canvas_board(row) for row in rows]
+
+
+def list_canvas_items(board_id: str) -> list[dict[str, Any]]:
+    with connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, kind, x, y, w, h, rotation, z, data FROM canvas_items
+            WHERE board_id = ? ORDER BY z ASC, created_at ASC
+            """,
+            (board_id,),
+        ).fetchall()
+    items = []
+    for row in rows:
+        item = dict(row)
+        try:
+            extra = json.loads(item.pop("data") or "{}")
+        except json.JSONDecodeError:
+            extra = {}
+        items.append({**item, **(extra if isinstance(extra, dict) else {})})
+    return items
+
+
+def replace_canvas_items(board_id: str, items: list[dict[str, Any]]) -> int:
+    """Whole-board save. The HUD debounces edits, so one replace beats a stream
+    of per-item updates."""
+    now = utc_now()
+    rows = [
+        (
+            item["id"],
+            board_id,
+            item.get("kind") or "note",
+            float(item.get("x") or 0),
+            float(item.get("y") or 0),
+            float(item.get("w") or 0),
+            float(item.get("h") or 0),
+            float(item.get("rotation") or 0),
+            int(item.get("z") or 0),
+            json.dumps(item.get("data") or {}),
+            now,
+            now,
+        )
+        for item in items
+    ]
+    with connect() as conn:
+        conn.execute("DELETE FROM canvas_items WHERE board_id = ?", (board_id,))
+        conn.executemany(
+            """
+            INSERT INTO canvas_items
+            (id, board_id, kind, x, y, w, h, rotation, z, data, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            rows,
+        )
+    return len(rows)
+
+
+def add_canvas_item(
+    board_id: str,
+    kind: str,
+    x: float,
+    y: float,
+    w: float,
+    h: float,
+    data: dict[str, Any] | None = None,
+    rotation: float = 0.0,
+    z: int = 0,
+    item_id: str | None = None,
+) -> dict[str, Any]:
+    """Single entry point for putting something on a board. A future
+    `add_to_canvas` tool calls this and nothing else needs to change."""
+    now = utc_now()
+    new_id = item_id or uuid.uuid4().hex[:12]
+    with connect() as conn:
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO canvas_items
+            (id, board_id, kind, x, y, w, h, rotation, z, data, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (new_id, board_id, kind, x, y, w, h, rotation, z, json.dumps(data or {}), now, now),
+        )
+    return {
+        "id": new_id,
+        "kind": kind,
+        "x": x,
+        "y": y,
+        "w": w,
+        "h": h,
+        "rotation": rotation,
+        "z": z,
+        **(data or {}),
+    }
+
+
+def add_canvas_file(
+    file_id: str,
+    name: str,
+    mime: str,
+    path: str,
+    width: float = 0.0,
+    height: float = 0.0,
+    page_count: int = 0,
+) -> dict[str, Any]:
+    with connect() as conn:
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO canvas_files
+            (id, name, mime, path, width, height, page_count, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (file_id, name, mime, path, width, height, page_count, utc_now()),
+        )
+    return {
+        "file_id": file_id,
+        "name": name,
+        "mime": mime,
+        "width": width,
+        "height": height,
+        "page_count": page_count,
+    }
+
+
+def get_canvas_file(file_id: str) -> dict[str, Any] | None:
+    with connect() as conn:
+        row = conn.execute("SELECT * FROM canvas_files WHERE id = ?", (file_id,)).fetchone()
+    return dict(row) if row else None
 
 
 def safe_export_path(name: str) -> Path:

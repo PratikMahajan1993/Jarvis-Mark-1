@@ -9,6 +9,23 @@ import { CanvasBackground } from "./CanvasBackground";
 import { CanvasItemContent } from "./items";
 import { SelectionFrame, type ResizeHandle } from "./SelectionFrame";
 
+/** setPointerCapture throws if the pointer is already gone; the drag can still proceed. */
+function capture(element: HTMLElement | null, pointerId: number): void {
+  try {
+    element?.setPointerCapture(pointerId);
+  } catch {
+    /* pointer already released */
+  }
+}
+
+function release(element: HTMLElement | null, pointerId: number): void {
+  try {
+    element?.releasePointerCapture(pointerId);
+  } catch {
+    /* pointer already released */
+  }
+}
+
 type Interaction =
   | { mode: "none" }
   | { mode: "pan"; pointerId: number; from: Point; camera: Point }
@@ -91,7 +108,7 @@ export function CanvasViewport({
     // Elements that run their own pointer behaviour (note editor, links).
     if (target.closest("[data-canvas-interactive='true']")) return;
 
-    containerRef.current?.setPointerCapture(event.pointerId);
+    capture(containerRef.current, event.pointerId);
 
     // Middle mouse pans from anywhere, including on top of an item.
     if (event.button === 1 || !id) {
@@ -174,7 +191,7 @@ export function CanvasViewport({
   const endInteraction = (event: ReactPointerEvent<HTMLDivElement>) => {
     const current = interaction.current;
     if (current.mode !== "none" && current.pointerId === event.pointerId) {
-      containerRef.current?.releasePointerCapture(event.pointerId);
+      release(containerRef.current, event.pointerId);
     }
     interaction.current = { mode: "none" };
   };
@@ -183,7 +200,7 @@ export function CanvasViewport({
     event.stopPropagation();
     const item = itemsRef.current.find((candidate) => candidate.id === selectedId);
     if (!item) return;
-    containerRef.current?.setPointerCapture(event.pointerId);
+    capture(containerRef.current, event.pointerId);
     interaction.current = {
       mode: "resize",
       pointerId: event.pointerId,

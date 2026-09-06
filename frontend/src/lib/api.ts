@@ -1,4 +1,5 @@
 import type { ChatResponse, Health, Preferences, Artifact, AuditEntry, PendingAction } from "./types";
+import type { CanvasBoard, CanvasCamera, CanvasFile, CanvasItem } from "./canvas/types";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -54,5 +55,21 @@ export const api = {
     const response = await fetch(`${API}/api/inbox`, { method: "POST", body });
     if (!response.ok) throw new Error(await response.text());
     return response.json() as Promise<{ id: string; name: string; preview: string }>;
+  },
+  canvas: {
+    board: (boardId: string) => json<CanvasBoard>(`/api/canvas/boards/${boardId}`),
+    saveBoard: (boardId: string, payload: { name: string; camera: CanvasCamera; items: CanvasItem[] }) =>
+      json<{ ok: boolean; count: number }>(`/api/canvas/boards/${boardId}`, {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      }),
+    upload: async (file: File) => {
+      const body = new FormData();
+      body.append("file", file);
+      const response = await fetch(`${API}/api/canvas/files`, { method: "POST", body });
+      if (!response.ok) throw new Error(await response.text());
+      return response.json() as Promise<CanvasFile>;
+    },
+    fileUrl: (fileId: string) => `${API}/api/canvas/files/${fileId}`,
   },
 };

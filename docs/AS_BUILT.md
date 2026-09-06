@@ -71,9 +71,22 @@ Research: Tavily/Brave or DuckDuckGo. Drops: `POST /api/inbox` → `review_inbox
 
 Local xlsx under exports. “Open the spreadsheet” → `show_artifact` + `os.startfile` (Windows).
 
+## Canvas
+
+Second surface at `http://localhost:3000/canvas`. Manual only: no voice, no agent, no HUD link yet — open the URL directly.
+
+- Board: one CSS transform (`translate` + `scale`). Scroll zooms at the cursor, shift-scroll pans sideways, drag empty space or middle-mouse pans. **0** resets zoom, **1** fits, **N** adds a note, **Delete** removes the selection, **Esc** deselects.
+- Items: sticky notes (double-click to write), dropped images, dropped PDFs. A drop lands under the cursor at true aspect ratio; images and PDFs keep their ratio while resizing (hold Alt to override).
+- PDFs show a placeholder card — name, page count, page size from `pypdf` — and open in a tab. Page rasterization is not built.
+- Storage: `canvas_boards` / `canvas_items` / `canvas_files` in SQLite, uploads under `backend/data/canvas`. Edits save on a 600ms debounce; the board reopens where you left it, camera included.
+- API: `GET`/`POST /api/canvas/boards`, `GET`/`PUT /api/canvas/boards/{id}`, `POST /api/canvas/files`, `GET /api/canvas/files/{id}`. Item geometry is columns; kind-specific fields are JSON, so a new item kind needs no migration.
+- Seams: `CanvasItem` union in `lib/canvas/types.ts` plus the `ITEM_RENDERERS` registry on the HUD side, `db.add_canvas_item(...)` on the API side — the one call a future `add_to_canvas` tool would make.
+
 ## Not built
 
 Larger Ollama model, Electron/Tauri, RAG, in-app vision (unreadable → Gemini email), IMAP send, direct Gemini API.
+
+Canvas: PDF page rendering (`pdfjs-dist`), freehand ink and shapes, multi-select, undo/redo, multiple boards, and any voice or agent control of the board.
 
 ## Limits
 

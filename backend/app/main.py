@@ -16,7 +16,15 @@ from .familiarity import ensure_demo_people
 from .connectors.email import seed_mailbox
 from .connectors import google_auth
 from .ollama_client import health
-from .schemas import ChatRequest, ConfirmRequest, Preferences, PreferencesUpdate
+from .schemas import (
+    CANVAS_ITEM_BASE_FIELDS,
+    CanvasBoardCreate,
+    CanvasBoardUpdate,
+    ChatRequest,
+    ConfirmRequest,
+    Preferences,
+    PreferencesUpdate,
+)
 from .tools.documents import read_export_text
 from .watch import watch_payload
 
@@ -162,3 +170,88 @@ async def api_inbox(file: UploadFile = File(...)) -> dict:
     db.add_inbox_file(file_id, file.filename or temp.name, text, str(temp))
     db.add_audit("default", "inbox", f"Ingested {file.filename}", "ok")
     return {"id": file_id, "name": file.filename, "preview": text[:500]}
+
+
+@app.get("/api/canvas/boards")
+def api_canvas_boards() -> dict:
+    return {"items": db.list_canvas_boards()}
+
+
+@app.post("/api/canvas/boards")
+def api_canvas_create_board(payload: CanvasBoardCreate) -> dict:
+    board = db.upsert_canvas_board(payload.id or uuid.uuid4().hex[:12], payload.name)
+    board["items"] = []
+    return board
+
+
+@app.get("/api/canvas/boards/{board_id}")
+def api_canvas_board(board_id: str) -> dict:
+    board = db.get_canvas_board(board_id) or db.upsert_canvas_board(board_id)
+    board["items"] = db.list_canvas_items(board_id)
+    return board
+
+
+@app.put("/api/canvas/boards/{board_id}")
+def api_canvas_save_board(board_id: str, payload: CanvasBoardUpdate) -> dict:
+    rows = []
+    for item in payload.items:
+        raw = item.model_dump()
+        rows.append(
+            {
+                **{key: raw[key] for key in CANVAS_ITEM_BASE_FIELDS},
+                "data": {key: value for key, value in raw.items() if key not in CANVAS_ITEM_BASE_FIELDS},
+            }
+        )
+    db.upsert_canvas_board(board_id, payload.name, payload.camera.model_dump())
+    count = db.replace_canvas_items(board_id, rows)
+    return {"ok": True, "count": count}
+
+
+@app.post("/api/canvas/files")
+async def api_canvas_upload(file: UploadFile = File(...)) -> dict:
+    raw = await file.read()
+    suffix = Path(file.filename or "drop").suffix.lower()
+    settings.canvas_dir.mkdir(parents=True, exist_ok=True)
+    file_id = uuid.uuid4().hex[:12]
+    target = settings.canvas_dir / f"{file_id}{suffix}"
+    target.write_bytes(raw)
+    width = height = 0.0
+    page_count = 0
+    if suffix == ".pdf":
+        # Page geometry so the board can place the drawing at true aspect ratio.
+        try:
+            from pypdf import PdfReader
+
+            reader = PdfReader(str(target))
+            page_count = len(reader.pages)
+            box = reader.pages[0].mediabox
+            width = float(box.width)
+            height = float(box.height)
+        except Exception:
+            page_count = 0
+    record = db.add_canvas_file(
+        file_id,
+        file.filename or target.name,
+        file.content_type or "",
+        str(target),
+        width,
+        height,
+        page_count,
+    )
+    db.add_audit("canvas", "canvas_upload", f"Placed {file.filename} on the board", "ok")
+    return record
+
+
+@app.get("/api/canvas/files/{file_id}")
+def api_canvas_file(file_id: str):
+    record = db.get_canvas_file(file_id)
+    if not record:
+        raise HTTPException(404, "Canvas file not found")
+    path = Path(record["path"]).resolve()
+    root = settings.canvas_dir.resolve()
+    if root not in path.parents and path.parent != root:
+        raise HTTPException(400, "Invalid canvas file path")
+    if not path.exists():
+        raise HTTPException(404, "File missing")
+    # No filename= here: an attachment disposition would stop <img> from showing it.
+    return FileResponse(path, media_type=record.get("mime") or None)

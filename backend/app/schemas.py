@@ -1,6 +1,6 @@
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 WidgetType = Literal["kpi", "table", "markdown", "chart", "timeline", "quote"]
@@ -111,3 +111,55 @@ class AuditEntry(BaseModel):
     tool: str
     detail: str
     status: str
+
+
+class CanvasCamera(BaseModel):
+    x: float = 0.0
+    y: float = 0.0
+    z: float = 1.0
+
+
+class CanvasItem(BaseModel):
+    """Geometry is fixed; anything kind-specific rides along and is stored as JSON,
+    so a new item kind needs no schema or table change."""
+
+    model_config = ConfigDict(extra="allow")
+
+    id: str
+    kind: str
+    x: float = 0.0
+    y: float = 0.0
+    w: float = 0.0
+    h: float = 0.0
+    rotation: float = 0.0
+    z: int = 0
+
+
+CANVAS_ITEM_BASE_FIELDS = set(CanvasItem.model_fields)
+
+
+class CanvasBoard(BaseModel):
+    id: str
+    name: str = "Canvas"
+    camera: CanvasCamera = Field(default_factory=CanvasCamera)
+    items: list[CanvasItem] = Field(default_factory=list)
+
+
+class CanvasBoardCreate(BaseModel):
+    id: str | None = None
+    name: str = "Canvas"
+
+
+class CanvasBoardUpdate(BaseModel):
+    name: str = "Canvas"
+    camera: CanvasCamera = Field(default_factory=CanvasCamera)
+    items: list[CanvasItem] = Field(default_factory=list)
+
+
+class CanvasFile(BaseModel):
+    file_id: str
+    name: str
+    mime: str = ""
+    width: float = 0.0
+    height: float = 0.0
+    page_count: int = 0
