@@ -107,6 +107,11 @@ def init_db() -> None:
                 session_id TEXT PRIMARY KEY,
                 data TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS hud_state (
+                session_id TEXT PRIMARY KEY,
+                data TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
             CREATE TABLE IF NOT EXISTS watches (
                 session_id TEXT PRIMARY KEY,
                 kind TEXT NOT NULL,
@@ -273,6 +278,29 @@ def save_working_set(session_id: str, data: dict[str, Any]) -> None:
             """,
             (session_id, json.dumps(data)),
         )
+
+
+def save_hud_state(session_id: str, data: dict[str, Any]) -> None:
+    with connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO hud_state (session_id, data, updated_at) VALUES (?, ?, ?)
+            ON CONFLICT(session_id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at
+            """,
+            (session_id, json.dumps(data), utc_now()),
+        )
+
+
+def get_hud_state(session_id: str) -> dict[str, Any]:
+    with connect() as conn:
+        row = conn.execute("SELECT data FROM hud_state WHERE session_id = ?", (session_id,)).fetchone()
+    if not row:
+        return {}
+    try:
+        data = json.loads(row["data"])
+    except json.JSONDecodeError:
+        return {}
+    return data if isinstance(data, dict) else {}
 
 
 def add_audit(session_id: str, tool: str, detail: str, status: str = "ok") -> None:
@@ -446,11 +474,7 @@ def set_watch(session_id: str, kind: str, thread_id: str, after_id: str = "", st
         )
 
 
-def get_watch(session_id: str) -> dict[str, Any] | None:
-    with connect() as conn:
-        row = conn.execute("SELECT * FROM watches WHERE session_id = ?", (session_id,)).fetchone()
-    if not row:
-        return None
+def _watch_row(row: Any) -> dict[str, Any]:
     item = dict(row)
     try:
         item["payload"] = json.loads(item.get("data") or "{}")
@@ -459,18 +483,22 @@ def get_watch(session_id: str) -> dict[str, Any] | None:
     return item
 
 
+def get_watch(session_id: str) -> dict[str, Any] | None:
+    with connect() as conn:
+        row = conn.execute("SELECT * FROM watches WHERE session_id = ?", (session_id,)).fetchone()
+    return _watch_row(row) if row else None
+
+
+def list_watches() -> list[dict[str, Any]]:
+    with connect() as conn:
+        rows = conn.execute("SELECT * FROM watches ORDER BY created_at DESC").fetchall()
+    return [_watch_row(row) for row in rows]
+
+
 def list_waiting_watches() -> list[dict[str, Any]]:
     with connect() as conn:
         rows = conn.execute("SELECT * FROM watches WHERE status = 'waiting'").fetchall()
-    items = []
-    for row in rows:
-        item = dict(row)
-        try:
-            item["payload"] = json.loads(item.get("data") or "{}")
-        except json.JSONDecodeError:
-            item["payload"] = {}
-        items.append(item)
-    return items
+    return [_watch_row(row) for row in rows]
 
 
 def _thought_state(session_id: str) -> dict[str, Any]:

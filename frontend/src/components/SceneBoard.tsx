@@ -6,7 +6,7 @@ export function SceneBoard({ scene, dense }: { scene: Scene; dense?: boolean }) 
   const kpis = scene.widgets.filter((widget) => widget.type === "kpi");
   const rest = scene.widgets.filter((widget) => widget.type !== "kpi");
   return (
-    <section className="mx-auto min-h-0 w-full max-w-5xl overflow-auto px-6">
+    <section className="mx-auto w-full max-w-5xl px-6 pb-8">
       {scene.title ? (
         <header className="mb-10">
           <h1 className="font-display text-5xl tracking-wide text-white md:text-6xl">{scene.title}</h1>

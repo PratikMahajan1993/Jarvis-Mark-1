@@ -41,6 +41,8 @@ export const api = {
       body: JSON.stringify(patch),
     }),
   pending: () => json<{ items: PendingAction[] }>("/api/pending"),
+  session: (sessionId = "default") =>
+    json<Partial<ChatResponse>>(`/api/session?session_id=${sessionId}`),
   nextThought: (sessionId = "default") => json<ChatResponse>(`/api/thought?session_id=${sessionId}`),
   googleStatus: () => json<{ configured: boolean; connected: boolean; account: string; task_to: string }>("/api/google/status"),
   googleAuthUrl: () => `${API}/api/google/auth`,

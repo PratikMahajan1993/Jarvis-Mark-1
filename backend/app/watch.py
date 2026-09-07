@@ -8,8 +8,13 @@ from . import db
 from .connectors import gmail as gmail_conn
 from .familiarity import facts_from_body, first_name, join_facts, remember_person
 
+WATCH_SECONDS = 20 * 60
+POLL_GAP = 12
+
 _lock = threading.Lock()
 _running = False
+_last_poll: dict[str, float] = {}
+_backoff_until = 0.0
 
 
 def start_gemini_watch(session_id: str, thread_id: str, after_id: str = "") -> None:
@@ -17,7 +22,24 @@ def start_gemini_watch(session_id: str, thread_id: str, after_id: str = "") -> N
         db.set_watch(session_id, "gemini", "", "", "error", {"error": "No thread to watch."})
         return
     db.set_watch(session_id, "gemini", thread_id, after_id, "waiting", {})
+    if session_id != "default":
+        db.set_watch("default", "gemini", thread_id, after_id, "waiting", {})
     _ensure_loop()
+
+
+def resume_watches() -> None:
+    revived = False
+    for item in db.list_watches():
+        thread_id = item.get("thread_id") or ""
+        if not thread_id or thread_id.startswith("sent-"):
+            continue
+        status = item.get("status") or ""
+        if status == "waiting" or _retryable(item):
+            if status != "waiting":
+                db.set_watch(item["session_id"], item["kind"], thread_id, item.get("after_id") or "", "waiting", {})
+            revived = True
+    if revived:
+        _ensure_loop()
 
 
 def _ensure_loop() -> None:
@@ -30,77 +52,186 @@ def _ensure_loop() -> None:
         thread.start()
 
 
+def _retryable(item: dict[str, Any]) -> bool:
+    payload = item.get("payload") or {}
+    error = str(payload.get("error") or "").lower()
+    return any(token in error for token in ("quota", "403", "429", "rate", "timeout", "unavailable", "internal"))
+
+
+def _transient(exc: Exception) -> bool:
+    text = str(exc).lower()
+    return any(token in text for token in ("quota", "403", "429", "rate", "timeout", "unavailable", "internal", "timed out"))
+
+
 def _loop() -> None:
     global _running
-    deadline_by_session: dict[str, float] = {}
+    started: dict[str, float] = {}
     try:
         while True:
             waiting = db.list_waiting_watches()
             if not waiting:
                 break
             now = time.time()
+            seen_threads: set[str] = set()
             for item in waiting:
                 session_id = item["session_id"]
-                deadline_by_session.setdefault(session_id, now + 180)
-                if now > deadline_by_session[session_id]:
+                started.setdefault(session_id, now)
+                if now - started[session_id] > WATCH_SECONDS:
                     db.set_watch(session_id, item["kind"], item["thread_id"], item.get("after_id") or "", "timeout", {})
                     continue
-                if not gmail_conn.live():
-                    db.set_watch(
-                        session_id,
-                        item["kind"],
-                        item["thread_id"],
-                        item.get("after_id") or "",
-                        "error",
-                        {"error": "Gmail is not connected."},
-                    )
+                thread_id = item.get("thread_id") or ""
+                if thread_id in seen_threads:
                     continue
-                try:
-                    reply = gmail_conn.newer_in_thread(item["thread_id"], item.get("after_id") or "")
-                except Exception as exc:
-                    db.set_watch(session_id, item["kind"], item["thread_id"], item.get("after_id") or "", "error", {"error": str(exc)})
-                    continue
-                if not reply:
-                    continue
-                db.upsert_email(reply)
-                remember_person(session_id, reply.get("sender") or "", reply.get("id"), reply.get("subject"))
-                facts = facts_from_body(reply.get("body") or "")
-                name = first_name(reply.get("sender") or "") or "Gemini"
-                speak = f"Here is what {name} replied: {join_facts(facts)}."
-                db.set_watch(
-                    session_id,
-                    item["kind"],
-                    item["thread_id"],
-                    item.get("after_id") or "",
-                    "ready",
-                    {"mail": reply, "speak": speak},
-                )
+                seen_threads.add(thread_id)
+                _poll_and_store(item)
             time.sleep(20)
     finally:
         with _lock:
             _running = False
 
 
-def watch_payload(session_id: str) -> dict[str, Any]:
+def _poll_and_store(item: dict[str, Any]) -> dict[str, Any] | None:
+    global _backoff_until
+    now = time.time()
+    thread_id = item.get("thread_id") or ""
+    if now < _backoff_until:
+        return None
+    last = _last_poll.get(thread_id) or 0
+    if now - last < POLL_GAP:
+        return None
+    _last_poll[thread_id] = now
+    if not gmail_conn.live():
+        return None
+    try:
+        reply = _find_reply(item)
+    except Exception as exc:
+        if _transient(exc):
+            _backoff_until = time.time() + 45
+            return None
+        db.set_watch(item["session_id"], item["kind"], thread_id, item.get("after_id") or "", "error", {"error": str(exc)})
+        return None
+    if not reply:
+        return None
+    _mark_ready(item, reply)
+    return reply
+
+
+def _find_reply(item: dict[str, Any]) -> dict[str, Any] | None:
+    thread_id = item.get("thread_id") or ""
+    after_id = item.get("after_id") or ""
+    if thread_id:
+        reply = gmail_conn.newer_in_thread(thread_id, after_id)
+        if reply and not _same_message(reply, after_id):
+            return reply
+    rows = gmail_conn.list_messages(query='subject:"Task for Gemini"', limit=6)
+    for row in rows:
+        subject = (row.get("subject") or "").lower()
+        if not subject.startswith("re:"):
+            continue
+        if _same_message(row, after_id):
+            continue
+        return row
+    return None
+
+
+def _same_message(row: dict[str, Any], after_id: str) -> bool:
+    if not after_id:
+        return False
+    return after_id in {row.get("gmail_id"), row.get("id"), str(row.get("id") or "").removeprefix("gmail-")}
+
+
+def _mark_ready(item: dict[str, Any], reply: dict[str, Any]) -> None:
+    db.upsert_email(reply)
+    remember_person(item["session_id"], reply.get("sender") or "", reply.get("id"), reply.get("subject"))
+    facts = facts_from_body(reply.get("body") or "")
+    name = first_name(reply.get("sender") or "") or "Gemini"
+    if name.lower() in {"pratik", "you", "me"}:
+        name = "Gemini"
+    speak = f"Here is what {name} replied: {join_facts(facts)}."
+    payload = {"mail": reply, "speak": speak}
+    db.set_watch(item["session_id"], item["kind"], item["thread_id"], item.get("after_id") or "", "ready", payload)
+    if item["session_id"] != "default":
+        db.set_watch("default", item["kind"], item["thread_id"], item.get("after_id") or "", "ready", payload)
+
+
+def _hud_item(session_id: str) -> dict[str, Any] | None:
     item = db.get_watch(session_id)
+    if item and (item.get("thread_id") or "").startswith("sent-") is False:
+        return item
+    if session_id != "default":
+        return item
+    for other in db.list_watches():
+        if other.get("kind") != "gemini":
+            continue
+        if (other.get("thread_id") or "").startswith("sent-"):
+            continue
+        if other.get("status") in {"waiting", "ready"} or _retryable(other):
+            return other
+    return item
+
+
+def watch_payload(session_id: str) -> dict[str, Any]:
+    item = _hud_item(session_id)
     if not item:
         return {"watching": False, "ready": False}
     status = item.get("status") or ""
+    if status == "waiting" or _retryable(item):
+        if status != "waiting":
+            db.set_watch(item["session_id"], item["kind"], item["thread_id"], item.get("after_id") or "", "waiting", {})
+            item = db.get_watch(item["session_id"]) or item
+        _ensure_loop()
+        _poll_and_store(item)
+        item = db.get_watch(item["session_id"]) or item
+        status = item.get("status") or ""
     payload = item.get("payload") or {}
     mail = payload.get("mail") if isinstance(payload.get("mail"), dict) else {}
     if status == "waiting":
         return {"watching": True, "ready": False, "status": "waiting"}
     if status == "ready":
-        speak = payload.get("speak") or "Gemini replied. The note is on the board."
+        who = first_name(mail.get("sender") or "") or "Gemini"
+        if who.lower() in {"pratik", "you", "me"}:
+            who = "Gemini"
+        from .tables import widgets_from_body
+
+        body = mail.get("body") or ""
+        gmail_id = mail.get("gmail_id") or ""
+        if gmail_id and gmail_conn.live() and "|" not in body and "<table" not in body.lower():
+            try:
+                fresh = gmail_conn.get_message(gmail_id)
+                if fresh and fresh.get("body"):
+                    body = fresh["body"]
+                    mail = {**mail, "body": body}
+            except Exception:
+                pass
+        facts = facts_from_body(body)
+        speak = f"Here is what {who} replied: {join_facts(facts)}."
         scene = {
-            "title": first_name(mail.get("sender") or "") or "Gemini",
+            "title": who,
             "subtitle": mail.get("subject") or "Task for Gemini",
             "widgets": [
-                {"type": "kpi", "label": "From", "value": first_name(mail.get("sender") or "") or "Gemini"},
-                {"type": "markdown", "title": mail.get("subject") or "Reply", "text": mail.get("body") or ""},
+                {"type": "kpi", "label": "From", "value": who},
+                *widgets_from_body(body, mail.get("subject") or "Reply"),
             ],
         }
-        return {"watching": False, "ready": True, "status": "ready", "speak": speak, "scene": scene}
+        from .hud_state import remember_hud
+
+        remember_hud(
+            item["session_id"],
+            {"speak": speak, "reply": speak, "scene": scene, "watching": False, "artifacts": [], "pending": [], "more": 0},
+        )
+        if item["session_id"] != "default":
+            remember_hud(
+                "default",
+                {"speak": speak, "reply": speak, "scene": scene, "watching": False, "artifacts": [], "pending": [], "more": 0},
+            )
+        return {
+            "watching": False,
+            "ready": True,
+            "status": "ready",
+            "key": f"gemini:ready:{mail.get('gmail_id') or mail.get('id') or speak}",
+            "speak": speak,
+            "scene": scene,
+        }
     if status == "timeout":
         return {
             "watching": False,

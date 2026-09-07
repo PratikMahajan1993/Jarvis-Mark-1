@@ -353,12 +353,14 @@ def _read_email(session_id: str, email_id: str = "", query: str = "", **_: Any) 
         }
         return _ok({"empty": True}, scene=scene, speak="I do not have that mail.")
     name = (mail["sender"] or "").split("<")[0].strip()
+    from ..tables import widgets_from_body
+
     scene = {
         "title": name.split()[0] if name else "Mail",
         "subtitle": mail["subject"],
         "widgets": [
             {"type": "kpi", "label": "From", "value": name},
-            {"type": "markdown", "title": mail["subject"], "text": mail["body"]},
+            *widgets_from_body(mail.get("body") or "", mail.get("subject") or ""),
         ],
     }
     return _ok(mail, scene=scene)

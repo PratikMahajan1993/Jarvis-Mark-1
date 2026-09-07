@@ -53,6 +53,7 @@ export function HudShell() {
   const [talking, setTalking] = useState(false);
   const fileTimer = useRef<number | null>(null);
   const lastWhisper = useRef("");
+  const lastWatchSpeak = useRef("");
   const idleSince = useRef(Date.now());
   const voiceEnabledRef = useRef(true);
   const busyRef = useRef(false);
@@ -162,10 +163,29 @@ export function HudShell() {
 
   useEffect(() => {
     api.health().then(setHealth).catch(() => setHealth({ ok: false, ollama: false, model: "unknown", models: [] }));
-    void refreshSide().then(() => {
+    void refreshSide().then(async () => {
       if (pendingIdRef.current) listenForConfirm.current(pendingIdRef.current);
+      try {
+        const last = await api.session();
+        if (!last?.scene?.title && !last?.speak) return;
+        applyResponse(
+          {
+            speak: last.speak || "",
+            reply: last.reply || last.speak || "",
+            scene: last.scene || EMPTY_SCENE,
+            artifacts: last.artifacts || [],
+            pending: last.pending || [],
+            offline: Boolean(last.offline),
+            more: last.more || 0,
+            watching: Boolean(last.watching),
+          },
+          false,
+        );
+      } catch {
+        /* first launch has no saved board */
+      }
     });
-  }, [refreshSide]);
+  }, [refreshSide, applyResponse]);
 
   useEffect(() => {
     let cancelled = false;
@@ -174,6 +194,7 @@ export function HudShell() {
         const next = await api.glance();
         if (cancelled) return;
         setGlance(next.line || "");
+        const geminiReady = Boolean(next.key?.startsWith("gemini:") && next.speak);
         const occupied =
           busyRef.current ||
           listeningRef.current ||
@@ -183,7 +204,17 @@ export function HudShell() {
           moreRef.current > 0;
         const current = replyRef.current;
         const holdingGlance = !current || current === lastWhisper.current;
-        if (occupied || !holdingGlance) return;
+        if (!geminiReady && (occupied || !holdingGlance)) return;
+        if (geminiReady) {
+          stopListening();
+          setListening(false);
+          setHot(false);
+          if (next.whisper && next.whisper !== lastWatchSpeak.current) {
+            lastWhisper.current = next.whisper;
+            setReply(next.whisper);
+          }
+          return;
+        }
         if (next.whisper) {
           lastWhisper.current = next.whisper;
           setReply(next.whisper);
@@ -236,39 +267,50 @@ export function HudShell() {
   }, [pageOpen, busy, listening, compose, talking, pending.length, more, watching, panel]);
 
   useEffect(() => {
-    if (!watching) return;
     let cancelled = false;
     const tick = async () => {
       try {
         const next = await api.watch();
         if (cancelled) return;
-        if (next.ready && next.speak) {
-          setWatching(false);
-          applyResponse(
-            {
-              speak: next.speak,
-              reply: next.speak,
-              scene: next.scene || EMPTY_SCENE,
-              artifacts: [],
-              pending: [],
-              offline: false,
-              more: 0,
-              watching: false,
-            },
-            true,
-          );
+        if (next.watching) setWatching(true);
+        if (!next.ready || !next.speak) {
+          if (!next.watching && !next.ready) setWatching(false);
+          return;
         }
+        const watchKey = next.key || `gemini:${next.status || "ready"}:${next.speak}`;
+        const spoken = next.speak !== lastWatchSpeak.current && claimGlanceSpeech(watchKey);
+        lastWatchSpeak.current = next.speak;
+        lastWhisper.current = next.speak;
+        if (spoken) {
+          stopListening();
+          setListening(false);
+          setHot(false);
+        }
+        setWatching(false);
+        applyResponse(
+          {
+            speak: next.speak,
+            reply: next.speak,
+            scene: next.scene || EMPTY_SCENE,
+            artifacts: [],
+            pending: [],
+            offline: false,
+            more: 0,
+            watching: false,
+          },
+          spoken,
+        );
       } catch {
         /* watch is optional */
       }
     };
     tick();
-    const id = window.setInterval(tick, 15000);
+    const id = window.setInterval(tick, 10000);
     return () => {
       cancelled = true;
       window.clearInterval(id);
     };
-  }, [watching, applyResponse]);
+  }, [applyResponse]);
 
   const send = useCallback(async (text: string) => {
     const message = text.trim();
@@ -519,7 +561,7 @@ export function HudShell() {
 
   return (
     <div
-      className="hud-bg relative min-h-screen overflow-hidden"
+      className="hud-bg relative flex h-screen flex-col overflow-hidden"
       onDragOver={(event) => {
         event.preventDefault();
         setDragging(true);
@@ -533,7 +575,7 @@ export function HudShell() {
     >
       <div className="scanline absolute inset-0" />
 
-      <header className="absolute inset-x-0 top-0 z-10 flex items-start justify-between px-8 py-6">
+      <header className="relative z-10 flex shrink-0 items-start justify-between px-8 py-5">
         <button type="button" onClick={() => setPanel("settings")} className="text-white/20 hover:text-white/50">
           {prefs?.assistant_name || "Jarvis"}
         </button>
@@ -549,28 +591,24 @@ export function HudShell() {
         </div>
       </header>
 
-      <div className="relative flex min-h-screen flex-col justify-between pb-36 pt-24">
-        <div className="min-h-0 flex-1">
-          <SceneBoard scene={scene} dense={density} />
-        </div>
-      </div>
+      <main className="relative z-0 min-h-0 flex-1 overflow-auto">
+        <SceneBoard scene={scene} dense={density} />
+      </main>
 
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col items-center gap-5 px-6 pb-10">
-        <p className="whisper pointer-events-auto max-w-2xl text-center text-xl text-white/70">
+      <footer className="relative z-10 flex shrink-0 flex-col items-center gap-3 border-t border-white/5 bg-[#020508] px-6 pb-8 pt-3">
+        <p className="whisper max-h-16 max-w-2xl overflow-auto text-center text-xl text-white/70">
           {error || reply}
         </p>
-        <div className="pointer-events-auto">
-          <Composer value={input} onChange={setInput} onSubmit={() => send(input)} busy={busy} open={compose} />
-        </div>
-        <div className="pointer-events-auto" onMouseEnter={() => artifacts.length && setShowFiles(true)}>
+        <Composer value={input} onChange={setInput} onSubmit={() => send(input)} busy={busy} open={compose} />
+        <div onMouseEnter={() => artifacts.length && setShowFiles(true)}>
           <VoiceOrb mood={mood} onClick={startListen} />
         </div>
         {showFiles ? (
-          <div className="pointer-events-auto w-full max-w-3xl" onMouseLeave={() => setShowFiles(false)}>
+          <div className="w-full max-w-3xl" onMouseLeave={() => setShowFiles(false)}>
             <ArtifactTray items={artifacts} />
           </div>
         ) : null}
-      </div>
+      </footer>
 
       {dragging ? (
         <div className="pointer-events-none absolute inset-0 grid place-items-center bg-cyan/5 text-white/40">

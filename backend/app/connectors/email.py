@@ -273,7 +273,7 @@ def unread_count() -> int:
 
     if gmail_conn.live():
         try:
-            return len(gmail_conn.list_messages(unread_only=True, limit=20))
+            return gmail_conn.unread_estimate()
         except Exception:
             pass
     with connect() as conn:

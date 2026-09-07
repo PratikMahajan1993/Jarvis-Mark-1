@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import base64
-import re
 from email.mime.text import MIMEText
 from typing import Any
 
@@ -32,17 +31,35 @@ def _decode_part(part: dict[str, Any]) -> str:
     return raw.decode("utf-8", errors="replace")
 
 
-def _body_from_payload(payload: dict[str, Any]) -> str:
+def _walk_text(payload: dict[str, Any], plain: list[str], html: list[str]) -> None:
     mime = (payload.get("mimeType") or "").lower()
     if mime.startswith("text/plain"):
-        return _decode_part(payload)
-    if mime.startswith("text/html"):
-        html = _decode_part(payload)
-        return re.sub(r"<[^>]+>", " ", html)
-    for part in payload.get("parts") or []:
-        text = _body_from_payload(part)
+        text = _decode_part(payload)
         if text.strip():
-            return text
+            plain.append(text)
+        return
+    if mime.startswith("text/html"):
+        text = _decode_part(payload)
+        if text.strip():
+            html.append(text)
+        return
+    for part in payload.get("parts") or []:
+        _walk_text(part, plain, html)
+
+
+def _body_from_payload(payload: dict[str, Any]) -> str:
+    from ..tables import html_to_text
+
+    plain: list[str] = []
+    html: list[str] = []
+    _walk_text(payload, plain, html)
+    html_text = html[0] if html else ""
+    if html_text and "<table" in html_text.lower():
+        return html_to_text(html_text)
+    if plain:
+        return plain[0]
+    if html_text:
+        return html_to_text(html_text)
     return _decode_part(payload)
 
 
@@ -63,6 +80,17 @@ def _normalize(message: dict[str, Any]) -> dict[str, Any]:
         "created_at": utc_now(),
         "folder": folder,
     }
+
+
+def unread_estimate() -> int:
+    listed = (
+        _service()
+        .users()
+        .messages()
+        .list(userId="me", q="is:unread", maxResults=1)
+        .execute()
+    )
+    return int(listed.get("resultSizeEstimate") or 0)
 
 
 def list_messages(query: str = "", unread_only: bool = False, limit: int = 8) -> list[dict[str, Any]]:

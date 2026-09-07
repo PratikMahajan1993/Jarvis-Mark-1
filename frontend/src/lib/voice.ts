@@ -450,12 +450,21 @@ export function isSpeaking(): boolean {
   return Boolean(activeSpeech) || Date.now() < deafUntil;
 }
 
+let lastSpokenText = "";
+let lastSpokenAt = 0;
+
 export function speak(text: string, enabled = true, onEnd?: () => void) {
   if (!enabled || !text || typeof window === "undefined" || !window.speechSynthesis) {
     onEnd?.();
     return;
   }
   if (activeSpeech?.text === text) return;
+  if (text === lastSpokenText && Date.now() - lastSpokenAt < 90000) {
+    onEnd?.();
+    return;
+  }
+  lastSpokenText = text;
+  lastSpokenAt = Date.now();
   deafUntil = Date.now() + 30000;
   window.speechSynthesis.cancel();
   const utterance = new SpeechSynthesisUtterance(text);

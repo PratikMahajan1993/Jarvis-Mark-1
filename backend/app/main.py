@@ -26,7 +26,8 @@ from .schemas import (
     PreferencesUpdate,
 )
 from .tools.documents import read_export_text
-from .watch import watch_payload
+from .hud_state import load_hud, remember_hud
+from .watch import resume_watches, watch_payload
 
 app = FastAPI(title="Jarvis Command Center", version="0.1.0")
 app.add_middleware(
@@ -45,6 +46,7 @@ def startup() -> None:
     seed_calendar()
     ensure_demo_people()
     settings.exports_dir.mkdir(parents=True, exist_ok=True)
+    resume_watches()
 
 
 @app.get("/api/health")
@@ -82,16 +84,25 @@ def api_watch(session_id: str = "default") -> dict:
     return watch_payload(session_id)
 
 
+@app.get("/api/session")
+def api_session(session_id: str = "default") -> dict:
+    return load_hud(session_id)
+
+
 @app.post("/api/chat")
 def api_chat(payload: ChatRequest) -> dict:
     result = run_agent(payload.message.strip(), payload.session_id)
-    return result.model_dump()
+    data = result.model_dump()
+    remember_hud(payload.session_id, data)
+    return data
 
 
 @app.post("/api/confirm")
 def api_confirm(payload: ConfirmRequest) -> dict:
     result = resolve_pending(payload.action_id, payload.approved, payload.session_id)
-    return result.model_dump()
+    data = result.model_dump()
+    remember_hud(payload.session_id, data)
+    return data
 
 
 @app.get("/api/briefing")

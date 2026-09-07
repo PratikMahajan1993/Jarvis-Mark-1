@@ -12,6 +12,20 @@ _SKIP_LINE = re.compile(
     r"|:\s*$",
     re.I,
 )
+_QUOTE_SPLIT = re.compile(
+    r"\nOn .{8,90} wrote:"
+    r"|^-{3,}.*Original Message.*-{3,}"
+    r"|^\s*From:\s+\S+.*\nSent:",
+    re.I | re.M,
+)
+_INSTRUCTION = re.compile(
+    r"^(file|do this|reply like this|instructions)\b"
+    r"|extract the totals"
+    r"|reply with a table"
+    r"|task for gemini"
+    r"|here are the facts and totals extracted",
+    re.I,
+)
 _POINTER = re.compile(
     r"\b(that|the|this|last|same|him|her|his|open|show|again)\b",
     re.I,
@@ -254,17 +268,27 @@ def _clean_fact(item: str) -> str:
     return piece
 
 
+def reply_only(body: str) -> str:
+    text = (body or "").replace("\r\n", "\n")
+    cut = _QUOTE_SPLIT.search(text)
+    if cut:
+        text = text[: cut.start()]
+    return text.strip()
+
+
 def facts_from_body(body: str, limit: int = 3) -> list[str]:
-    text = body or ""
-    items = re.findall(r"^\s*(?:\d+[).]|[-*])\s+(.+)$", text, re.M)
+    text = reply_only(body)
+    section = re.search(r"(?is)\bfacts?\s*:\s*(.+?)(?:\n\s*\n|summary totals|items in sheet|$)", text)
+    source = (section.group(1) if section else text).strip()
+    items = re.findall(r"^\s*(?:\d+[).]|[-*])\s+(.+)$", source, re.M)
     seen = {_clean_fact(item) for item in items}
-    chunks = re.split(r"(?<=[.!?])\s+|\n+", text)
+    chunks = re.split(r"(?<=[.!?])\s+|\n+", source)
     for chunk in chunks:
         line = chunk.strip()
-        if len(line) < 18 or _SKIP_LINE.search(line):
+        if len(line) < 18 or _SKIP_LINE.search(line) or _INSTRUCTION.search(line):
             continue
         piece = _clean_fact(line)
-        if not piece or piece in seen:
+        if not piece or piece in seen or _INSTRUCTION.search(piece):
             continue
         seen.add(piece)
         items.append(line)

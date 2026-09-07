@@ -138,7 +138,7 @@ def build_glance() -> dict:
             "line": "Gemini replied",
             "whisper": watch["speak"],
             "speak": watch["speak"],
-            "key": f"gemini:{watch.get('status')}:{(watch.get('scene') or {}).get('subtitle')}",
+            "key": watch.get("key") or f"gemini:{watch.get('status')}:{(watch.get('scene') or {}).get('subtitle')}",
             "minutes": None,
         }
     now = datetime.now(_tz())

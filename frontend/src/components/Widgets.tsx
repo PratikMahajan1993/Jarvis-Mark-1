@@ -1,4 +1,5 @@
 import type { Widget } from "@/lib/types";
+import { splitMarkdownTables } from "@/lib/tables";
 
 function Kpi({ widget }: { widget: Widget }) {
   return (
@@ -36,10 +37,31 @@ function TableCard({ widget }: { widget: Widget }) {
 }
 
 function MarkdownCard({ widget }: { widget: Widget }) {
+  const blocks = splitMarkdownTables(widget.text || "");
+  const hasTable = blocks.some((block) => block.kind === "table");
+  if (!hasTable) {
+    return (
+      <div>
+        {widget.title ? <h3 className="mb-2 text-sm text-white/40">{widget.title}</h3> : null}
+        <div className="whitespace-pre-wrap leading-relaxed text-white/70">{widget.text}</div>
+      </div>
+    );
+  }
   return (
-    <div>
-      {widget.title ? <h3 className="mb-2 text-sm text-white/40">{widget.title}</h3> : null}
-      <div className="whitespace-pre-wrap leading-relaxed text-white/70">{widget.text}</div>
+    <div className="space-y-6">
+      {widget.title ? <h3 className="text-sm text-white/40">{widget.title}</h3> : null}
+      {blocks.map((block, index) =>
+        block.kind === "table" ? (
+          <TableCard
+            key={`t-${index}`}
+            widget={{ type: "table", columns: block.columns, rows: block.rows }}
+          />
+        ) : (
+          <div key={`p-${index}`} className="whitespace-pre-wrap leading-relaxed text-white/70">
+            {block.text}
+          </div>
+        ),
+      )}
     </div>
   );
 }
