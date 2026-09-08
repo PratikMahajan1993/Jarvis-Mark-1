@@ -1,9 +1,9 @@
-import type { CanvasCamera, CanvasItem } from "./types";
+import type { CanvasCamera, CanvasItem, Point } from "./types";
 
 export const MIN_ZOOM = 0.05;
 export const MAX_ZOOM = 8;
 
-export type Point = { x: number; y: number };
+export type { Point };
 
 export function clampZoom(zoom: number): number {
   return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom));
