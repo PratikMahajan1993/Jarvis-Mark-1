@@ -165,9 +165,28 @@ def _merge_gmail_fields(record: dict[str, Any]) -> dict[str, Any]:
     return row
 
 
-def search_emails(query: str = "", unread_only: bool = False, limit: int = 8) -> list[dict[str, Any]]:
+def search_emails(
+    query: str = "",
+    unread_only: bool = False,
+    limit: int = 8,
+    live: bool = False,
+) -> list[dict[str, Any]]:
     from . import gmail as gmail_conn
+    from ..db import search_emails_local
 
+    if not live:
+        rows = search_emails_local(query=query, unread_only=unread_only, limit=limit)
+        if rows:
+            return rows
+        if query and gmail_conn.live():
+            try:
+                fetched = gmail_conn.list_messages(query=query, unread_only=unread_only, limit=limit)
+                return [_merge_gmail_fields(row) for row in fetched]
+            except Exception:
+                return []
+        if settings.email_backend == "imap" and settings.imap_host and settings.imap_user:
+            return _imap_search(query, unread_only, limit)
+        return []
     if gmail_conn.live():
         try:
             rows = gmail_conn.list_messages(query=query, unread_only=unread_only, limit=limit)
@@ -176,35 +195,25 @@ def search_emails(query: str = "", unread_only: bool = False, limit: int = 8) ->
             pass
     if settings.email_backend == "imap" and settings.imap_host and settings.imap_user:
         return _imap_search(query, unread_only, limit)
-    sql = "SELECT * FROM emails WHERE folder = 'INBOX'"
-    args: list[Any] = []
-    if unread_only:
-        sql += " AND unread = 1"
-    if query:
-        sql += " AND (subject LIKE ? OR sender LIKE ? OR body LIKE ?)"
-        like = f"%{query}%"
-        args.extend([like, like, like])
-    sql += " ORDER BY created_at DESC LIMIT ?"
-    args.append(limit)
-    with connect() as conn:
-        rows = conn.execute(sql, args).fetchall()
-    return [dict(row) for row in rows]
+    return search_emails_local(query=query, unread_only=unread_only, limit=limit)
 
 
 def get_email(email_id: str) -> dict[str, Any] | None:
     if not email_id:
         return None
     from . import gmail as gmail_conn
+    from ..db import get_email_local
 
+    local = get_email_local(email_id)
+    if local and (local.get("body") or not str(email_id).startswith("gmail-")):
+        return local
     if gmail_conn.live() and str(email_id).startswith("gmail-"):
         try:
             found = gmail_conn.get_message(str(email_id)[6:])
-            return _merge_gmail_fields(found) if found else None
+            return _merge_gmail_fields(found) if found else local
         except Exception:
-            pass
-    with connect() as conn:
-        row = conn.execute("SELECT * FROM emails WHERE id = ?", (email_id,)).fetchone()
-    return dict(row) if row else None
+            return local
+    return local
 
 
 def mark_read(email_id: str) -> None:
@@ -317,12 +326,6 @@ def forward_email(
 
 
 def unread_count() -> int:
-    from . import gmail as gmail_conn
+    from ..db import unread_count_local
 
-    if gmail_conn.live():
-        try:
-            return gmail_conn.unread_estimate()
-        except Exception:
-            pass
-    with connect() as conn:
-        return int(conn.execute("SELECT COUNT(*) AS n FROM emails WHERE unread = 1 AND folder = 'INBOX'").fetchone()["n"])
+    return unread_count_local()

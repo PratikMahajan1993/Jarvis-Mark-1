@@ -153,11 +153,20 @@ def init_db() -> None:
                 page_count INTEGER NOT NULL DEFAULT 0,
                 created_at TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS work_snapshot (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                mail_synced_at TEXT,
+                calendar_synced_at TEXT,
+                mail_count INTEGER NOT NULL DEFAULT 0,
+                status TEXT NOT NULL DEFAULT ''
+            );
             """
         )
         email_cols = {row[1] for row in conn.execute("PRAGMA table_info(emails)").fetchall()}
         if "thread_id" not in email_cols:
             conn.execute("ALTER TABLE emails ADD COLUMN thread_id TEXT")
+        if "attachments" not in email_cols:
+            conn.execute("ALTER TABLE emails ADD COLUMN attachments TEXT")
         inbox_cols = {row[1] for row in conn.execute("PRAGMA table_info(inbox_files)").fetchall()}
         if "path" not in inbox_cols:
             conn.execute("ALTER TABLE inbox_files ADD COLUMN path TEXT")
@@ -433,6 +442,13 @@ def get_inbox_file(file_id: str) -> dict[str, str] | None:
 
 
 def upsert_email(record: dict[str, Any]) -> dict[str, Any]:
+    attachments = record.get("attachments")
+    if isinstance(attachments, str):
+        packed = attachments
+    elif attachments:
+        packed = json.dumps(attachments)
+    else:
+        packed = ""
     row = {
         "id": record["id"],
         "sender": record.get("sender") or "",
@@ -443,13 +459,149 @@ def upsert_email(record: dict[str, Any]) -> dict[str, Any]:
         "created_at": record.get("created_at") or utc_now(),
         "folder": record.get("folder") or "INBOX",
         "thread_id": record.get("thread_id") or "",
+        "attachments": packed,
     }
     with connect() as conn:
         conn.execute(
             """
             INSERT OR REPLACE INTO emails
-            (id, sender, to_addr, subject, body, unread, created_at, folder, thread_id)
-            VALUES (:id, :sender, :to_addr, :subject, :body, :unread, :created_at, :folder, :thread_id)
+            (id, sender, to_addr, subject, body, unread, created_at, folder, thread_id, attachments)
+            VALUES (:id, :sender, :to_addr, :subject, :body, :unread, :created_at, :folder, :thread_id, :attachments)
+            """,
+            row,
+        )
+    return hydrate_email(row)
+
+
+def hydrate_email(row: dict[str, Any]) -> dict[str, Any]:
+    item = dict(row)
+    raw = item.get("attachments")
+    if isinstance(raw, str):
+        try:
+            item["attachments"] = json.loads(raw) if raw else []
+        except json.JSONDecodeError:
+            item["attachments"] = []
+    elif not isinstance(raw, list):
+        item["attachments"] = []
+    return item
+
+
+def search_emails_local(query: str = "", unread_only: bool = False, limit: int = 8) -> list[dict[str, Any]]:
+    sql = "SELECT * FROM emails WHERE folder = 'INBOX'"
+    args: list[Any] = []
+    if unread_only:
+        sql += " AND unread = 1"
+    hint = (query or "").strip()
+    lowered = hint.lower()
+    if lowered.startswith("from:"):
+        name = hint.split(":", 1)[1].strip().strip('"')
+        sql += " AND sender LIKE ?"
+        args.append(f"%{name}%")
+    elif hint:
+        sql += " AND (subject LIKE ? OR sender LIKE ? OR body LIKE ?)"
+        like = f"%{hint}%"
+        args.extend([like, like, like])
+    sql += " ORDER BY created_at DESC LIMIT ?"
+    args.append(limit)
+    with connect() as conn:
+        rows = conn.execute(sql, args).fetchall()
+    return [hydrate_email(dict(row)) for row in rows]
+
+
+def get_email_local(email_id: str) -> dict[str, Any] | None:
+    if not email_id:
+        return None
+    with connect() as conn:
+        row = conn.execute("SELECT * FROM emails WHERE id = ?", (email_id,)).fetchone()
+    return hydrate_email(dict(row)) if row else None
+
+
+def unread_count_local() -> int:
+    with connect() as conn:
+        return int(
+            conn.execute(
+                "SELECT COUNT(*) AS n FROM emails WHERE unread = 1 AND folder = 'INBOX'"
+            ).fetchone()["n"]
+        )
+
+
+def upsert_calendar_event(record: dict[str, Any]) -> dict[str, Any]:
+    row = {
+        "id": record["id"],
+        "title": record.get("title") or "",
+        "start_at": record.get("start_at") or "",
+        "end_at": record.get("end_at") or "",
+        "location": record.get("location") or "",
+        "notes": record.get("notes") or "",
+    }
+    with connect() as conn:
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO calendar_events (id, title, start_at, end_at, location, notes)
+            VALUES (:id, :title, :start_at, :end_at, :location, :notes)
+            """,
+            row,
+        )
+    return row
+
+
+def replace_calendar_events(rows: list[dict[str, Any]]) -> None:
+    with connect() as conn:
+        conn.execute("DELETE FROM calendar_events")
+        for record in rows:
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO calendar_events (id, title, start_at, end_at, location, notes)
+                VALUES (:id, :title, :start_at, :end_at, :location, :notes)
+                """,
+                {
+                    "id": record["id"],
+                    "title": record.get("title") or "",
+                    "start_at": record.get("start_at") or "",
+                    "end_at": record.get("end_at") or "",
+                    "location": record.get("location") or "",
+                    "notes": record.get("notes") or "",
+                },
+            )
+
+
+def get_work_snapshot() -> dict[str, Any]:
+    with connect() as conn:
+        row = conn.execute("SELECT * FROM work_snapshot WHERE id = 1").fetchone()
+    if not row:
+        return {
+            "mail_synced_at": "",
+            "calendar_synced_at": "",
+            "mail_count": 0,
+            "status": "",
+        }
+    return dict(row)
+
+
+def set_work_snapshot(
+    *,
+    mail_synced_at: str | None = None,
+    calendar_synced_at: str | None = None,
+    mail_count: int | None = None,
+    status: str | None = None,
+) -> dict[str, Any]:
+    current = get_work_snapshot()
+    row = {
+        "mail_synced_at": mail_synced_at if mail_synced_at is not None else current.get("mail_synced_at") or "",
+        "calendar_synced_at": calendar_synced_at if calendar_synced_at is not None else current.get("calendar_synced_at") or "",
+        "mail_count": int(mail_count if mail_count is not None else current.get("mail_count") or 0),
+        "status": status if status is not None else current.get("status") or "",
+    }
+    with connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO work_snapshot (id, mail_synced_at, calendar_synced_at, mail_count, status)
+            VALUES (1, :mail_synced_at, :calendar_synced_at, :mail_count, :status)
+            ON CONFLICT(id) DO UPDATE SET
+                mail_synced_at = excluded.mail_synced_at,
+                calendar_synced_at = excluded.calendar_synced_at,
+                mail_count = excluded.mail_count,
+                status = excluded.status
             """,
             row,
         )

@@ -9,13 +9,15 @@ from . import db
 from .briefing import build_briefing
 from .compose import calendar_event_spec, document_spec, gemini_steps, reply_draft, spreadsheet_spec
 from .config import settings
+from .connectors import email as email_conn
 from .brain import OllamaError, chat as ollama_chat, health
 from .schemas import Artifact, ChatResponse, MailAttachment, PendingAction, Scene, Widget
 from .tools.registry import TOOL_SCHEMAS, _guess_file_title, execute_tool
-from .familiarity import remember_person, resolve as resolve_refs, speak_sent, wants_familiarity
+from .familiarity import get_set, remember_person, resolve as resolve_refs, speak_sent, wants_familiarity
 from .think import refine_research, refine_mail, refine_briefing, MAIL_TOOLS
-from .intent import classify, is_work, prepare, route_for
-from .understand import clarification_thought, normalize_speech, unmatched_clauses, wants_briefing
+from .intent import ROUTES, classify, intent_for_kind, looks_like_work, prepare, route_for
+from .snapshot import ready as snapshot_ready, refresh as refresh_snapshot, uses_snapshot, wants_fresh
+from .understand import clarification_thought, normalize_speech, unmatched_clauses
 
 _YES_SHORT = {
     "y", "yes", "yeah", "yep", "yup", "yea", "confirm", "send", "send it", "do it",
@@ -143,9 +145,15 @@ def run_attachment_reply(session_id: str, email_id: str, attachment_ids: list[st
     )
 
 
-def _fill_tool_args(name: str, arguments: dict[str, Any], asked: str, prefs: dict[str, Any] | None = None) -> dict[str, Any]:
+def _fill_tool_args(
+    name: str,
+    arguments: dict[str, Any],
+    asked: str,
+    prefs: dict[str, Any] | None = None,
+    intent=None,
+) -> dict[str, Any]:
     args = dict(arguments or {})
-    intent = classify(asked)
+    intent = intent or classify(asked)
     prefs = prefs or {}
     if name == "read_email":
         if intent.person and not args.get("email_id"):
@@ -193,8 +201,9 @@ def _try_model_route(
     prefs: dict[str, Any],
     session_id: str,
     tools: list[dict[str, Any]],
+    intent=None,
 ) -> tuple[list[dict[str, Any]], list[str]]:
-    intent = classify(message)
+    intent = intent or classify(message)
     route = route_for(intent.kind)
     allowed = list(route.tools)
     if not allowed:
@@ -228,20 +237,47 @@ def _try_model_route(
     used: list[str] = []
     calls = [call for call in _tool_calls_from_message(response) if call.get("name") in wanted]
     if not calls:
-        args = _fill_tool_args(allowed[0], {}, message, prefs)
+        args = _fill_tool_args(allowed[0], {}, message, prefs, intent)
         calls = [{"name": allowed[0], "arguments": args}]
     if len(allowed) == 1:
         calls = calls[:1]
     for call in calls:
         if call["name"] not in wanted:
             continue
-        arguments = _fill_tool_args(call["name"], call.get("arguments") or {}, message, prefs)
+        arguments = _fill_tool_args(call["name"], call.get("arguments") or {}, message, prefs, intent)
         result = _apply_tool(call["name"], arguments, session_id, prefs, message)
         used.append(call["name"])
         thought = _thought_from_result(result, call["name"])
         if thought:
             thoughts.append(thought)
     return thoughts, used
+
+
+def _model_label(message: str, prefs: dict[str, Any]) -> str:
+    kinds = ", ".join(sorted(ROUTES))
+    name = prefs.get("assistant_name") or "Jarvis"
+    prompt = f"""The user said: {message}
+
+Pick one kind. Greeting, thanks, or small talk → chat.
+If they clearly want mail, calendar, research, files, Drive, a briefing, or Gemini, pick that work kind.
+Kinds: {kinds}
+
+JSON only: {{"kind": "chat"}}"""
+    try:
+        response = ollama_chat(
+            [
+                {"role": "system", "content": f"You route jobs for {name}. Do not invent kinds."},
+                {"role": "user", "content": prompt},
+            ],
+            format_json=True,
+            timeout=45,
+            options={"temperature": 0, "num_predict": 40},
+        )
+    except OllamaError:
+        return ""
+    data = _extract_json(response.get("content") or "") or {}
+    kind = str(data.get("kind") or "").strip().lower()
+    return kind if kind in ROUTES else ""
 
 
 def _enabled_tools(prefs: dict[str, Any]) -> list[dict[str, Any]]:
@@ -310,15 +346,28 @@ Keep speak suitable for text-to-speech. Do not mention you are an AI model.
 """
 
 
-def _chat_prompt(prefs: dict[str, Any]) -> str:
+def _chat_prompt(prefs: dict[str, Any], session_id: str = "default") -> str:
+    focus = ""
+    data = get_set(session_id) if session_id else {}
+    thread = data.get("thread") if isinstance(data, dict) else None
+    email_id = (thread or {}).get("id") if isinstance(thread, dict) else ""
+    mail = email_conn.get_email(email_id) if email_id else None
+    if mail and mail.get("body"):
+        body = re.sub(r"\s+", " ", str(mail.get("body") or "")).strip()[:1200]
+        focus = (
+            "\nLast mail in focus (use only if they ask about it; ignore for small talk):\n"
+            f"From: {mail.get('sender') or ''}\n"
+            f"Subject: {mail.get('subject') or ''}\n"
+            f"{body}\n"
+        )
     return f"""You are {prefs.get('assistant_name', 'Jarvis')}, a present and slightly dry British aide.
 Address the user as {prefs.get('display_name', 'Sir')}.
 Persona: {prefs.get('persona')}
 Verbosity: {prefs.get('verbosity', 'concise')}.
-Answer ordinary conversation in one or two sentences. Be present, not a chatbot.
-Do not mention tools, JSON, or that you are a model.
+They may put your name anywhere in the sentence. Answer in one or two spoken sentences.
+Be present. Do not mention tools, JSON, or that you are a model.
 Do not invent emails, files, or calendar changes.
-"""
+{focus}"""
 
 
 def _extract_json(text: str) -> dict[str, Any] | None:
@@ -359,10 +408,6 @@ def _tool_calls_from_message(message: dict[str, Any]) -> list[dict[str, Any]]:
     return [item for item in parsed if item.get("name")]
 
 
-def _wants_work(message: str) -> bool:
-    return is_work(message) or wants_familiarity(message)
-
-
 def _session_mail(refs: dict[str, Any], session_id: str, pointed: bool = False) -> dict[str, Any] | None:
     mail = refs.get("mail") or (email_conn_get(refs.get("thread") or {}) if refs.get("thread") else None)
     if not mail:
@@ -375,10 +420,15 @@ def _session_mail(refs: dict[str, Any], session_id: str, pointed: bool = False) 
     return mail
 
 
-def _heuristic_tools(message: str, prefs: dict[str, Any], session_id: str = "default") -> list[dict[str, Any]]:
-    if not _wants_work(message):
+def _heuristic_tools(
+    message: str,
+    prefs: dict[str, Any],
+    session_id: str = "default",
+    intent=None,
+) -> list[dict[str, Any]]:
+    intent = intent or classify(message)
+    if intent.kind == "chat" and not wants_familiarity(message):
         return []
-    intent = classify(message)
     text = message.lower()
     refs = resolve_refs(session_id, message)
     calls: list[dict[str, Any]] = []
@@ -401,7 +451,7 @@ def _heuristic_tools(message: str, prefs: dict[str, Any], session_id: str = "def
                 args["email_id"] = mail["id"]
             calls.append({"name": "reply_with_attachments", "arguments": args})
         elif intent.kind == "mail_read":
-            args = _fill_tool_args("read_email", {}, message, prefs)
+            args = _fill_tool_args("read_email", {}, message, prefs, intent)
             mail = None
             if not intent.person:
                 if intent.last:
@@ -413,7 +463,7 @@ def _heuristic_tools(message: str, prefs: dict[str, Any], session_id: str = "def
             else:
                 calls.append({"name": "read_email", "arguments": args})
         elif intent.kind == "mail_search":
-            calls.append({"name": "search_emails", "arguments": _fill_tool_args("search_emails", {}, message, prefs)})
+            calls.append({"name": "search_emails", "arguments": _fill_tool_args("search_emails", {}, message, prefs, intent)})
         elif intent.kind == "mail_draft":
             inbox = refs.get("mail")
             if not inbox and refs.get("thread") and refs["thread"].get("id"):
@@ -716,16 +766,24 @@ def run_agent(message: str, session_id: str = "default") -> ChatResponse:
     memories = db.list_memories(session_id)
     inbox = db.list_inbox_files(6)
     tools = _enabled_tools(prefs)
-    status = health()
-
-    model_ready = bool(status.get("model_ready"))
-    offline = not model_ready
-    work = _wants_work(message)
-    if not work:
-        social = _social_reply(message, prefs)
-        if social:
-            return _chat_response(session_id, speak=social)
-    system = _system_prompt(prefs, memories, inbox) if work else _chat_prompt(prefs)
+    intent = classify(message)
+    skip_brain = uses_snapshot(intent.kind) and snapshot_ready() and not wants_fresh(message)
+    if skip_brain:
+        status = {"model_ready": True, "model": "snapshot"}
+        offline = False
+    else:
+        status = health()
+        offline = not bool(status.get("model_ready"))
+        if not offline and intent.kind == "chat" and looks_like_work(message):
+            labeled = _model_label(message, prefs)
+            if labeled:
+                intent = intent_for_kind(labeled, message)
+                skip_brain = uses_snapshot(intent.kind) and snapshot_ready() and not wants_fresh(message)
+                if skip_brain:
+                    offline = False
+    work = intent.kind != "chat" or wants_familiarity(message)
+    route = route_for(intent.kind)
+    system = _system_prompt(prefs, memories, inbox) if work else _chat_prompt(prefs, session_id)
     messages: list[dict[str, Any]] = [{"role": "system", "content": system}]
     for item in db.recent_messages(session_id, 12):
         messages.append({"role": item["role"], "content": item["content"]})
@@ -736,12 +794,16 @@ def run_agent(message: str, session_id: str = "default") -> ChatResponse:
     parsed: dict[str, Any] | None = None
     thoughts: list[dict[str, Any]] = []
     used_names: list[str] = []
-    intent = classify(message)
-    route = route_for(intent.kind)
 
     if work:
-        if route.tools and not offline:
-            extra, names = _try_model_route(message, prefs, session_id, tools)
+        need_sync = wants_fresh(message) or (uses_snapshot(intent.kind) and intent.kind != "mail_read" and not snapshot_ready())
+        if need_sync:
+            try:
+                refresh_snapshot(force=wants_fresh(message))
+            except Exception:
+                pass
+        if route.tools and not offline and not uses_snapshot(intent.kind):
+            extra, names = _try_model_route(message, prefs, session_id, tools, intent)
             used_names.extend(names)
             if names:
                 used_tools = True
@@ -750,7 +812,7 @@ def run_agent(message: str, session_id: str = "default") -> ChatResponse:
                 last_scene = extra[-1].get("scene")
         done = bool(route.complete and route.complete in used_names)
         if not done:
-            for call in _heuristic_tools(message, prefs, session_id):
+            for call in _heuristic_tools(message, prefs, session_id, intent):
                 if call["name"] in used_names:
                     continue
                 result = _apply_tool(call["name"], call.get("arguments") or {}, session_id, prefs, message)
@@ -763,54 +825,24 @@ def run_agent(message: str, session_id: str = "default") -> ChatResponse:
                 if route.complete and route.complete in used_names:
                     break
 
-    try:
-        if offline:
-            raise OllamaError(f"{status.get('model') or 'The model'} is not online yet")
-        if work:
-            raise OllamaError("skip model tools")
-        response = ollama_chat(messages, tools=tools if work else None)
-        last_text = response.get("content") or ""
-        calls = _tool_calls_from_message(response)
-        parsed = _extract_json(last_text)
-        if parsed and parsed.get("tool"):
-            calls.append({"name": parsed["tool"], "arguments": parsed.get("arguments") or {}})
-        for _ in range(5):
-            if not calls:
-                break
-            used_tools = True
-            messages.append(response)
-            for call in calls:
-                result = execute_tool(call["name"], call.get("arguments") or {}, session_id)
-                used_names.append(call["name"])
-                thought = _thought_from_result(result, call["name"])
-                if thought:
-                    thoughts.append(thought)
-                    last_scene = thought["scene"]
-                messages.append({"role": "tool", "content": json.dumps(result, default=str)[:6000]})
-            messages.append({"role": "user", "content": "If you need another tool, call it. Otherwise return the final JSON scene."})
-            response = ollama_chat(messages, tools=tools)
-            last_text = response.get("content") or last_text
-            calls = _tool_calls_from_message(response)
-            parsed = _extract_json(last_text) or parsed
-        if used_tools and not parsed:
-            messages.append({"role": "user", "content": "Return the final JSON scene now. Do not call more tools."})
-            final = ollama_chat(messages, format_json=True)
-            last_text = final.get("content") or last_text
-            parsed = _extract_json(last_text) or parsed
-    except OllamaError as exc:
-        detail = str(exc).lower()
-        if "does not support tools" not in detail and "not online yet" not in detail and "skip model tools" not in detail:
-            db.add_audit(session_id, "ollama", str(exc)[:400], "error")
-        if "skip model tools" not in detail:
+    if not work:
+        try:
+            if offline:
+                raise OllamaError(f"{status.get('model') or 'The model'} is not online yet")
+            response = ollama_chat(messages, tools=None, timeout=180)
+            last_text = response.get("content") or ""
+            parsed = None
+        except OllamaError as exc:
+            detail = str(exc).lower()
+            if "does not support tools" not in detail and "not online yet" not in detail:
+                db.add_audit(session_id, "ollama", str(exc)[:400], "error")
             last_text = ""
             parsed = None
-
-    if not used_tools and not last_text and not offline:
-        try:
-            last_text = (ollama_chat(messages).get("content") or "")
-            parsed = _extract_json(last_text) or parsed
-        except OllamaError as exc:
-            db.add_audit(session_id, "ollama", str(exc)[:400], "error")
+        if not last_text and not offline:
+            try:
+                last_text = ollama_chat(messages, tools=None, timeout=180).get("content") or ""
+            except OllamaError as exc:
+                db.add_audit(session_id, "ollama", str(exc)[:400], "error")
 
     speak = ""
     reply = ""
@@ -826,13 +858,19 @@ def run_agent(message: str, session_id: str = "default") -> ChatResponse:
         cleaned = re.sub(r"<think>.*?</think>", "", last_text, flags=re.S).strip()
         if _looks_like_error(cleaned):
             cleaned = ""
+        if not work and cleaned.startswith("{"):
+            cleaned = ""
         speak = cleaned[:320] or _speak_from_scene(scene, used_tools)
         reply = cleaned or speak
-    if offline and not used_tools and (not speak or speak in {"Standing by.", "Here."}):
+    if not work and (not speak or speak in {"Here.", "Standing by."}):
+        social = _social_reply(message, prefs)
+        speak = social or ("Yes?" if speak in {"Here.", "Standing by.", ""} else speak)
+        reply = speak
+    if offline and not used_tools and (not speak or speak in {"Standing by.", "Here.", "Yes?"}):
         speak = "The model is still coming online. Ask me to brief you, draft mail, or make a file."
         reply = speak
     if not scene:
-        if work and wants_briefing(message):
+        if work and intent.kind == "briefing":
             payload = build_briefing()
             scene = _scene_from_dict(payload["scene"])
             if not speak:
@@ -892,22 +930,23 @@ def run_agent(message: str, session_id: str = "default") -> ChatResponse:
             "artifact_id": None,
         })
 
-    for item in unmatched_clauses(heard, message, used_names):
-        if "task_for_gemini" in used_names:
-            continue
-        extra = clarification_thought(item)
-        guess = item.get("guess")
-        if guess:
-            pending = db.add_pending(
-                f"ask-{db.utc_now()}",
-                session_id,
-                "clarify",
-                f"Make a {guess['label']}",
-                f'I heard "{item["heard"]}"',
-                guess,
-            )
-            extra["pending_id"] = pending["id"]
-        thoughts.append(extra)
+    if work:
+        for item in unmatched_clauses(heard, message, used_names):
+            if "task_for_gemini" in used_names:
+                continue
+            extra = clarification_thought(item)
+            guess = item.get("guess")
+            if guess:
+                pending = db.add_pending(
+                    f"ask-{db.utc_now()}",
+                    session_id,
+                    "clarify",
+                    f"Make a {guess['label']}",
+                    f'I heard "{item["heard"]}"',
+                    guess,
+                )
+                extra["pending_id"] = pending["id"]
+            thoughts.append(extra)
 
     if work and not used_tools and not thoughts:
         if re.search(r"\bwhat('?s| is| did)\b", message, re.I):

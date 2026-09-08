@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from typing import Any
 
 from . import gemini_client, ollama_client
@@ -7,6 +8,9 @@ from .config import settings
 from .ollama_client import OllamaError
 
 __all__ = ["OllamaError", "chat", "health", "provider"]
+
+_HEALTH_TTL = 60.0
+_HEALTH: dict[str, Any] = {"at": 0.0, "data": None}
 
 
 def provider() -> str:
@@ -21,16 +25,21 @@ def provider() -> str:
 
 
 def health() -> dict[str, Any]:
+    now = time.monotonic()
+    cached = _HEALTH.get("data")
+    if isinstance(cached, dict) and now - float(_HEALTH.get("at") or 0) < _HEALTH_TTL:
+        return dict(cached)
     kind = provider()
     if kind == "gemini":
         status = gemini_client.health()
-        local = ollama_client.health()
         status["provider"] = "gemini"
-        status["ollama"] = bool(local.get("ollama"))
+        status["ollama"] = False
         status["ok"] = True
-        return status
-    status = ollama_client.health()
-    status["provider"] = "ollama"
+    else:
+        status = ollama_client.health()
+        status["provider"] = "ollama"
+    _HEALTH["at"] = now
+    _HEALTH["data"] = dict(status)
     return status
 
 

@@ -32,6 +32,8 @@ def test_every_route_kind_has_a_phrase():
 def test_prepare_wake_and_quotes():
     assert prepare("Jarvis, open Neha's last email") == "open Neha's last email"
     assert prepare("Hey Jarvis check my mail") == "check my mail"
+    assert prepare("how are you jarvis") == "how are you"
+    assert prepare("how are you, Jarvis") == "how are you"
     assert prepare("please read Neha's email") == "read Neha's email"
     curly = "open Neha\u2019s last email"
     assert "'" in prepare(curly)
@@ -134,6 +136,26 @@ def test_social_does_not_steal_work():
     assert _social_reply("brief me", prefs) == ""
     assert _social_reply("how are you", prefs)
     assert "order" in _social_reply("Hey Jarvis how are you", prefs).lower()
+    assert "order" in _social_reply("How are you jarvis", prefs).lower()
+    assert "order" in _social_reply("how are you, Jarvis?", prefs).lower()
+
+
+def test_hybrid_chat_vs_work_hints():
+    from app.intent import intent_for_kind, looks_like_work
+
+    assert looks_like_work("how are you jarvis") is False
+    assert looks_like_work("How are you, Jarvis?") is False
+    assert looks_like_work("thanks") is False
+    assert looks_like_work("pull up Neha's email") is True
+    assert looks_like_work("what's the aluminium price") is True
+    assert classify("how are you jarvis").kind == "chat"
+    assert classify("open Neha's last email").kind == "mail_read"
+    assert classify("anything new").kind == "mail_search"
+    labeled = intent_for_kind("mail_read", "open Neha's last email")
+    assert labeled.kind == "mail_read"
+    assert labeled.person == "Neha"
+    assert labeled.last is True
+    assert intent_for_kind("not_a_kind", "hello").kind == "chat"
 
 
 def test_punctuation_and_please():
@@ -154,6 +176,7 @@ if __name__ == "__main__":
         test_toolconfig_for_other_routes,
         test_glance_does_not_lead_with_unread_count,
         test_social_does_not_steal_work,
+        test_hybrid_chat_vs_work_hints,
         test_punctuation_and_please,
     ]
     for test in tests:

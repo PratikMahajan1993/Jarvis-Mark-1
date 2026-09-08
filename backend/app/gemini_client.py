@@ -23,7 +23,7 @@ def health() -> dict[str, Any]:
     if not settings.gemini_api_key:
         return {"ok": False, "gemini": False, "model": model, "models": [], "model_ready": False}
     try:
-        with httpx.Client(timeout=15) as client:
+        with httpx.Client(timeout=5) as client:
             response = client.get(f"{_API}/models", headers=_headers())
             response.raise_for_status()
             names = [str(item.get("name") or "").split("/")[-1] for item in response.json().get("models") or []]

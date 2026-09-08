@@ -101,7 +101,6 @@ def _grounded_briefing(speak: str, notes: str) -> bool:
 
 def refine_briefing(prefs: dict[str, Any], asked: str, result: dict[str, Any]) -> dict[str, Any]:
     from .briefing import (
-        briefing_notes,
         briefing_scene,
         fallback_briefing_speak,
         gather_briefing_facts,
@@ -110,12 +109,7 @@ def refine_briefing(prefs: dict[str, Any], asked: str, result: dict[str, Any]) -
     data = result.get("data") if isinstance(result.get("data"), dict) else {}
     if "priority_mail" not in data:
         data = gather_briefing_facts()
-    notes = briefing_notes(data)
-    fallback = fallback_briefing_speak(data)
-    model = _ask_briefing_model(prefs, asked, notes) if notes else {}
-    speak = _clean_voice(str(model.get("speak") or ""))
-    if not speak or "@" in speak or not _grounded_briefing(speak, notes):
-        speak = fallback
+    speak = fallback_briefing_speak(data)
     result["speak"] = speak
     result["scene"] = briefing_scene(data, speak)
     result["data"] = data
@@ -527,13 +521,20 @@ def _mail_scene(
 def refine_mail(prefs: dict[str, Any], asked: str, tool_name: str, result: dict[str, Any]) -> dict[str, Any]:
     data = result.get("data")
     notes = _mail_notes(tool_name, result)
-    if tool_name == "read_email" and isinstance(data, dict) and not data.get("empty"):
+    if (
+        tool_name == "read_email"
+        and isinstance(data, dict)
+        and not data.get("empty")
+        and re.search(r"\b(drawing|pdf|attachment|what(?:'s| is) in)\b", asked or "", re.I)
+    ):
         vision = _vision_notes(prefs, data)
         if vision:
             data = {**data, "vision_notes": vision}
             result["data"] = data
             notes = _mail_notes(tool_name, result)
-    model = _ask_mail_model(prefs, asked, tool_name, notes) if notes else {}
+    model = {}
+    if notes and tool_name not in {"search_emails", "read_email"}:
+        model = _ask_mail_model(prefs, asked, tool_name, notes)
     speak = _clean_voice(str(model.get("speak") or ""))
     briefing = str(model.get("briefing") or "").strip()
 

@@ -34,6 +34,7 @@ from .schemas import (
 )
 from .tools.documents import read_export_text
 from .hud_state import load_hud, remember_hud
+from .snapshot import kick as kick_snapshot
 from .watch import ack_watch, resume_watches, watch_payload
 
 app = FastAPI(title="Jarvis Command Center", version="0.1.0")
@@ -57,6 +58,7 @@ def startup() -> None:
         seed_calendar()
     settings.exports_dir.mkdir(parents=True, exist_ok=True)
     resume_watches()
+    kick_snapshot()
 
 
 @app.get("/api/health")
@@ -143,7 +145,16 @@ def api_briefing() -> dict:
 
 @app.get("/api/glance")
 def api_glance() -> dict:
+    kick_snapshot()
     return build_glance()
+
+
+@app.get("/api/snapshot")
+def api_snapshot() -> dict:
+    from .snapshot import status as snapshot_status
+
+    kick_snapshot()
+    return snapshot_status()
 
 
 @app.get("/api/artifacts")

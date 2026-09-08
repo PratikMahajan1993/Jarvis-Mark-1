@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     ollama_model: str = "llama3.2:1b"
     llm_provider: str = "auto"
     gemini_api_key: str = ""
-    gemini_model: str = "gemini-2.5-flash"
+    gemini_model: str = "gemini-3.6-flash"
     jarvis_host: str = "0.0.0.0"
     jarvis_port: int = 8000
     cors_origins: str = "http://localhost:3000"

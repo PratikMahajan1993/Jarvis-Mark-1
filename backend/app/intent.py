@@ -259,6 +259,7 @@ def prepare(message: str) -> str:
     text = text.replace("\u201c", '"').replace("\u201d", '"')
     text = re.sub(r"\s+", " ", text).strip()
     text = re.sub(r"^(?:hey\s+|ok\s+|okay\s+)?jarvis[,.]?\s+", "", text, flags=re.I)
+    text = re.sub(r"[,.]?\s+jarvis[.!?]*$", "", text, flags=re.I)
     text = re.sub(r"^(please|pls|plz|can you|could you|would you)\s+", "", text, flags=re.I)
     return text
 
@@ -400,6 +401,19 @@ def _rule_file(_text: str, low: str, _person: str) -> Intent | None:
     return None
 
 
+def _rule_refresh(_text: str, low: str, person: str) -> Intent | None:
+    if not re.search(
+        r"\b(anything new|what's new|whats new|any new(?: mail| emails?)?|refresh|check again|update me)\b",
+        low,
+    ):
+        return None
+    if any(word in low for word in ("calendar", "schedule", "agenda")):
+        return Intent("calendar_list")
+    if any(word in low for word in ("brief", "day", "standup")):
+        return Intent("briefing")
+    return Intent("mail_search", unread_only="unread" in low, person=person, query=f"from:{person}" if person else "")
+
+
 def _rule_doc(_text: str, low: str, _person: str) -> Intent | None:
     if any(word in low for word in ("word document", "docx", "one-pager", "meeting notes")) or (
         "document" in low and "google" not in low and re.search(r"\b(make|create|write)\b", low)
@@ -412,6 +426,7 @@ def _rule_doc(_text: str, low: str, _person: str) -> Intent | None:
 RULES = (
     _rule_gemini,
     _rule_briefing,
+    _rule_refresh,
     _rule_reply_attach,
     _rule_save,
     _rule_forward,
@@ -440,6 +455,46 @@ def classify(message: str) -> Intent:
         if hit:
             return hit
     return Intent("chat")
+
+
+_WORK_HINTS = (
+    "mail", "email", "e-mail", "gmail", "inbox", "unread", "calendar", "schedule",
+    "agenda", "brief", "briefing", "research", "look up", "look this up", "drive",
+    "spreadsheet", "excel", "xlsx", "gemini", "pdf", "drawing", "attachment",
+    "enquiry", "inquiry", "quotation", "quote", "price", "prices", "meeting",
+    "draft", "reply", "forward", "document", "docx", "workbook", "sheet",
+)
+
+
+def looks_like_work(message: str) -> bool:
+    low = prepare(message).lower()
+    return any(hint in low for hint in _WORK_HINTS)
+
+
+def intent_for_kind(kind: str, message: str) -> Intent:
+    if kind not in ROUTES:
+        kind = "chat"
+    seeded = classify(message)
+    if seeded.kind == kind:
+        return seeded
+    if kind == "chat":
+        return Intent("chat")
+    text = prepare(message)
+    low = text.lower()
+    person = person_in(text)
+    last = _LAST.search(low) is not None
+    unread = "unread" in low
+    if kind == "mail_read":
+        query = f"from:{person}" if person else ""
+        return Intent("mail_read", query=query, person=person, last=last)
+    if kind == "mail_search":
+        query = f"from:{person}" if person else ""
+        return Intent("mail_search", query=query, person=person, unread_only=unread)
+    if kind == "research":
+        return Intent("research", query=text)
+    if kind.startswith("mail_"):
+        return Intent(kind, query=text, person=person, last=last, unread_only=unread)
+    return Intent(kind, query=text, person=person)
 
 
 def wants_mail(message: str) -> bool:
@@ -558,4 +613,7 @@ CASES: list[tuple[str, str]] = [
     ("please check my mail", "mail_search"),
     ("can you read Neha's email", "mail_read"),
     ("e mail from Neha", "mail_read"),
+    ("anything new", "mail_search"),
+    ("what's new", "mail_search"),
+    ("any new mail", "mail_search"),
 ]

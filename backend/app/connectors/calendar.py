@@ -150,6 +150,9 @@ def _google_create(
     if not row:
         raise RuntimeError("Calendar did not take it.")
     _invalidate_cache()
+    from ..db import upsert_calendar_event
+
+    upsert_calendar_event(row)
     return row
 
 
@@ -226,21 +229,17 @@ def calendar_note(empty: bool = False) -> str:
     return ""
 
 
+def pull_google(days: int = 2) -> list[dict[str, Any]]:
+    rows = _google_list(days)
+    _LIST_CACHE["at"] = time.monotonic()
+    _LIST_CACHE["days"] = days
+    _LIST_CACHE["rows"] = rows
+    return list(rows)
+
+
 def list_events(days: int = 2) -> list[dict[str, Any]]:
     if google_auth.connected() and not live():
         return []
-    if live():
-        now = time.monotonic()
-        if float(_LIST_CACHE["at"]) and _LIST_CACHE["days"] == days and now - float(_LIST_CACHE["at"]) < 20:
-            return list(_LIST_CACHE["rows"])
-        try:
-            rows = _google_list(days)
-        except Exception:
-            return []
-        _LIST_CACHE["at"] = now
-        _LIST_CACHE["days"] = days
-        _LIST_CACHE["rows"] = rows
-        return list(rows)
     return _local_list(days)
 
 
