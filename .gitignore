@@ -10,6 +10,8 @@ out/
 *.tsbuildinfo
 backend/data/
 backend/exports/
+/data/
+/exports/
 *.db
 *.log
 .DS_Store

@@ -1,0 +1,20 @@
+{
+  "name": "Jarvis",
+  "install": "bash .cursor/install.sh",
+  "terminals": [
+    {
+      "name": "api",
+      "command": ".venv/bin/uvicorn app.main:app --reload --app-dir backend --host 0.0.0.0 --port 8000",
+      "description": "Jarvis FastAPI backend on http://localhost:8000 (SQLite + local demo mail/calendar)."
+    },
+    {
+      "name": "hud",
+      "command": "cd frontend && npm run dev",
+      "description": "Next.js HUD on http://localhost:3000 (calls the API at http://localhost:8000)."
+    }
+  ],
+  "ports": [
+    { "name": "api", "port": 8000 },
+    { "name": "hud", "port": 3000 }
+  ]
+}
