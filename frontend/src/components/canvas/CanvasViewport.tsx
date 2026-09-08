@@ -220,7 +220,7 @@ export function CanvasViewport({
       return;
     }
 
-    if (currentTool === "note" || currentTool === "text") {
+    if ((currentTool === "note" || currentTool === "text") && !id) {
       interaction.current = { mode: "box", pointerId: event.pointerId, origin: world };
       return;
     }
@@ -488,16 +488,19 @@ export function CanvasViewport({
         setDraft(null);
       }
       if (current.mode === "box") {
-        const rect = rectFromPoints(current.origin, world);
-        const min = 4 / cameraRef.current.z;
-        if (rect.w >= min && rect.h >= min) {
-          const hits = itemsInRect(itemsRef.current, rect);
-          const ids = event.shiftKey
-            ? Array.from(new Set([...selectedRef.current, ...hits.map((item) => item.id)]))
-            : hits.map((item) => item.id);
-          dispatch({ type: "select", ids });
-        } else if (toolRef.current === "note") onCreateNote(current.origin);
+        if (toolRef.current === "note") onCreateNote(current.origin);
         else if (toolRef.current === "text") onCreateText(current.origin);
+        else {
+          const rect = rectFromPoints(current.origin, world);
+          const min = 4 / cameraRef.current.z;
+          if (rect.w >= min && rect.h >= min) {
+            const hits = itemsInRect(itemsRef.current, rect);
+            const ids = event.shiftKey
+              ? Array.from(new Set([...selectedRef.current, ...hits.map((item) => item.id)]))
+              : hits.map((item) => item.id);
+            dispatch({ type: "select", ids });
+          }
+        }
         setBox(null);
       }
       if (current.mode === "draw") {

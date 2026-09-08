@@ -103,6 +103,7 @@ function BoardSurface() {
           color: "amber",
         },
       });
+      setTool("select");
     },
     [dispatch],
   );
@@ -125,6 +126,7 @@ function BoardSurface() {
           size: 28,
         },
       });
+      setTool("select");
     },
     [dispatch],
   );
