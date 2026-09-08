@@ -13,6 +13,8 @@ export type CanvasState = {
   dirty: boolean;
 };
 
+export type CanvasItemPatch = { [K in keyof CanvasItem]?: CanvasItem[K] } & Record<string, unknown>;
+
 export type CanvasAction =
   | { type: "loaded"; board: CanvasBoard }
   | { type: "loadFailed"; error: string }
@@ -20,7 +22,7 @@ export type CanvasAction =
   | { type: "addItem"; item: CanvasItem }
   | { type: "moveItem"; id: string; x: number; y: number }
   | { type: "resizeItem"; id: string; x: number; y: number; w: number; h: number }
-  | { type: "updateItem"; id: string; patch: Partial<CanvasItem> }
+  | { type: "updateItem"; id: string; patch: CanvasItemPatch }
   | { type: "deleteItem"; id: string }
   | { type: "select"; id: string | null }
   | { type: "bringToFront"; id: string }
@@ -119,6 +121,7 @@ export type CanvasActions = {
  */
 const CanvasStateContext = createContext<CanvasState | null>(null);
 const CanvasActionsContext = createContext<CanvasActions | null>(null);
+const CanvasZoomContext = createContext(1);
 
 const SAVE_DEBOUNCE_MS = 600;
 
@@ -178,6 +181,7 @@ export function useCanvasStore(
 
 export const CanvasStateProvider = CanvasStateContext.Provider;
 export const CanvasActionsProvider = CanvasActionsContext.Provider;
+export const CanvasZoomProvider = CanvasZoomContext.Provider;
 
 export function useCanvasState(): CanvasState {
   const value = useContext(CanvasStateContext);
@@ -189,4 +193,12 @@ export function useCanvasActions(): CanvasActions {
   const value = useContext(CanvasActionsContext);
   if (!value) throw new Error("useCanvasActions must be used inside a CanvasActionsProvider");
   return value;
+}
+
+/**
+ * Camera zoom only — pan does not change this value, so PDF cards can
+ * re-rasterize on zoom without subscribing to every camera move.
+ */
+export function useCanvasZoom(): number {
+  return useContext(CanvasZoomContext);
 }

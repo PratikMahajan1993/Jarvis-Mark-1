@@ -3,22 +3,27 @@
 import Link from "next/link";
 import { clampZoom, fitToItems, zoomAt } from "@/lib/canvas/camera";
 import { useCanvasActions, useCanvasState } from "@/lib/canvas/store";
+import type { CanvasTool } from "@/lib/canvas/types";
 
 function ToolButton({
   label,
   onClick,
   title,
+  active,
 }: {
   label: string;
   onClick: () => void;
   title?: string;
+  active?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
       title={title}
-      className="px-3 py-1.5 text-sm text-white/45 transition-colors hover:text-cyan"
+      className={`px-3 py-1.5 text-sm transition-colors ${
+        active ? "text-cyan" : "text-white/45 hover:text-cyan"
+      }`}
     >
       {label}
     </button>
@@ -27,10 +32,14 @@ function ToolButton({
 
 export function CanvasToolbar({
   viewport,
+  tool,
   onAddNote,
+  onTool,
 }: {
   viewport: { width: number; height: number };
+  tool: CanvasTool;
   onAddNote: () => void;
+  onTool: (tool: CanvasTool) => void;
 }) {
   const { board, status, dirty, error } = useCanvasState();
   const { dispatch } = useCanvasActions();
@@ -46,6 +55,12 @@ export function CanvasToolbar({
       </Link>
       <span className="h-4 w-px bg-white/10" />
       <ToolButton label="Note" title="Add a note (or double-click the board)" onClick={onAddNote} />
+      <ToolButton
+        label="Region"
+        title="Drag a rectangle on a drawing or image (R)"
+        active={tool === "region"}
+        onClick={() => onTool(tool === "region" ? "select" : "region")}
+      />
       <span className="h-4 w-px bg-white/10" />
       <ToolButton label="−" title="Zoom out" onClick={() => setCamera(zoomAt(camera, center, camera.z / 1.25))} />
       <button

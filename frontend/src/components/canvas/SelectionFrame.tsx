@@ -2,7 +2,9 @@
 
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { worldToScreen } from "@/lib/canvas/camera";
-import type { CanvasCamera, CanvasItem } from "@/lib/canvas/types";
+import { pdfPageSize } from "@/lib/canvas/pdf";
+import { useCanvasActions } from "@/lib/canvas/store";
+import { sizeForAspect, type CanvasCamera, type CanvasItem, type PdfItem } from "@/lib/canvas/types";
 
 export type ResizeHandle = "nw" | "ne" | "sw" | "se";
 
@@ -47,6 +49,67 @@ export function SelectionFrame({
           className={`pointer-events-auto absolute h-3 w-3 rounded-sm border border-cyan bg-ink ${handle.className}`}
         />
       ))}
+      {item.kind === "pdf" ? <PdfPageBar item={item} /> : null}
+    </div>
+  );
+}
+
+function PdfPageBar({ item }: { item: PdfItem }) {
+  const { dispatch, transport } = useCanvasActions();
+  const last = Math.max(1, item.pageCount || 1);
+  const page = Math.min(last, Math.max(1, item.page || 1));
+
+  const go = (next: number) => {
+    const target = Math.min(last, Math.max(1, next));
+    if (target === page) return;
+    void (async () => {
+      try {
+        const geo = await pdfPageSize(item.fileId, transport.fileUrl(item.fileId), target);
+        const size = sizeForAspect(item.w, item.h, geo.width / geo.height);
+        dispatch({
+          type: "updateItem",
+          id: item.id,
+          patch: {
+            page: target,
+            pageCount: geo.pageCount,
+            naturalW: geo.width,
+            naturalH: geo.height,
+            w: size.w,
+            h: size.h,
+          },
+        });
+      } catch {
+        dispatch({ type: "updateItem", id: item.id, patch: { page: target } });
+      }
+    })();
+  };
+
+  return (
+    <div
+      data-canvas-interactive="true"
+      className="glass pointer-events-auto absolute left-1/2 top-full mt-2 flex -translate-x-1/2 items-center gap-1 rounded-full px-2 py-1"
+    >
+      <button
+        type="button"
+        disabled={page <= 1}
+        onClick={() => go(page - 1)}
+        className="px-2 py-0.5 text-sm text-white/45 transition-colors hover:text-cyan disabled:opacity-30"
+        aria-label="Previous page"
+      >
+        ‹
+      </button>
+      <span className="min-w-[3.5rem] text-center font-display text-sm tracking-widest text-white/50">
+        {page} / {last}
+      </span>
+      <button
+        type="button"
+        disabled={page >= last}
+        onClick={() => go(page + 1)}
+        className="px-2 py-0.5 text-sm text-white/45 transition-colors hover:text-cyan disabled:opacity-30"
+        aria-label="Next page"
+      >
+        ›
+      </button>
     </div>
   );
 }

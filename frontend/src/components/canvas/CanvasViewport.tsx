@@ -3,10 +3,12 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { panBy, screenToWorld, wheelZoomFactor, zoomAt, type Point } from "@/lib/canvas/camera";
+import { worldMarqueeToLocal } from "@/lib/canvas/crop";
 import { useCanvasActions, useCanvasState } from "@/lib/canvas/store";
-import type { CanvasItem } from "@/lib/canvas/types";
+import type { CanvasItem, CanvasTool, ItemLocalRect } from "@/lib/canvas/types";
 import { CanvasBackground } from "./CanvasBackground";
 import { CanvasItemContent } from "./items";
+import { RegionFrame } from "./RegionFrame";
 import { SelectionFrame, type ResizeHandle } from "./SelectionFrame";
 
 /** setPointerCapture throws if the pointer is already gone; the drag can still proceed. */
@@ -30,6 +32,7 @@ type Interaction =
   | { mode: "none" }
   | { mode: "pan"; pointerId: number; from: Point; camera: Point }
   | { mode: "drag"; pointerId: number; id: string; grab: Point }
+  | { mode: "marquee"; pointerId: number; id: string; origin: Point }
   | {
       mode: "resize";
       pointerId: number;
@@ -38,6 +41,8 @@ type Interaction =
       start: { x: number; y: number; w: number; h: number };
       aspect: number | null;
     };
+
+export type CanvasCrop = { itemId: string; rect: ItemLocalRect; page?: number };
 
 const ItemView = memo(function ItemView({ item }: { item: CanvasItem }) {
   return (
@@ -52,9 +57,21 @@ const ItemView = memo(function ItemView({ item }: { item: CanvasItem }) {
 });
 
 export function CanvasViewport({
+  tool,
+  crop,
+  cropBusy,
+  onCropChange,
+  onPlaceCrop,
+  onDownloadCrop,
   onDropFiles,
   onCreateNote,
 }: {
+  tool: CanvasTool;
+  crop: CanvasCrop | null;
+  cropBusy?: boolean;
+  onCropChange: (crop: CanvasCrop | null) => void;
+  onPlaceCrop: () => void;
+  onDownloadCrop: () => void;
   onDropFiles: (files: File[], world: Point) => void;
   onCreateNote: (world: Point) => void;
 }) {
@@ -64,9 +81,19 @@ export function CanvasViewport({
   const interaction = useRef<Interaction>({ mode: "none" });
   const cameraRef = useRef(board.camera);
   const itemsRef = useRef(board.items);
+  const toolRef = useRef(tool);
   const [fileOver, setFileOver] = useState(false);
+  const [draft, setDraft] = useState<{ itemId: string; rect: ItemLocalRect } | null>(null);
   cameraRef.current = board.camera;
   itemsRef.current = board.items;
+  toolRef.current = tool;
+
+  useEffect(() => {
+    if (tool !== "region" && interaction.current.mode === "marquee") {
+      interaction.current = { mode: "none" };
+      setDraft(null);
+    }
+  }, [tool]);
 
   const localPoint = useCallback((event: { clientX: number; clientY: number }): Point => {
     const rect = containerRef.current?.getBoundingClientRect();
@@ -127,6 +154,14 @@ export function CanvasViewport({
     dispatch({ type: "select", id });
     dispatch({ type: "bringToFront", id });
     const world = worldPoint(event);
+
+    if (toolRef.current === "region" && (item.kind === "pdf" || item.kind === "image")) {
+      interaction.current = { mode: "marquee", pointerId: event.pointerId, id, origin: world };
+      setDraft(null);
+      onCropChange(null);
+      return;
+    }
+
     interaction.current = {
       mode: "drag",
       pointerId: event.pointerId,
@@ -163,6 +198,14 @@ export function CanvasViewport({
       return;
     }
 
+    if (current.mode === "marquee") {
+      const item = itemsRef.current.find((candidate) => candidate.id === current.id);
+      if (!item) return;
+      const rect = worldMarqueeToLocal(item, current.origin, worldPoint(event));
+      setDraft(rect ? { itemId: item.id, rect } : null);
+      return;
+    }
+
     const world = worldPoint(event);
     const { start, handle, aspect } = current;
     const right = start.x + start.w;
@@ -191,6 +234,21 @@ export function CanvasViewport({
   const endInteraction = (event: ReactPointerEvent<HTMLDivElement>) => {
     const current = interaction.current;
     if (current.mode !== "none" && current.pointerId === event.pointerId) {
+      if (current.mode === "marquee") {
+        const item = itemsRef.current.find((candidate) => candidate.id === current.id);
+        const rect = item ? worldMarqueeToLocal(item, current.origin, worldPoint(event)) : null;
+        const min = 8 / cameraRef.current.z;
+        if (item && rect && rect.w >= min && rect.h >= min) {
+          onCropChange({
+            itemId: item.id,
+            rect,
+            page: item.kind === "pdf" ? item.page : undefined,
+          });
+        } else {
+          onCropChange(null);
+        }
+        setDraft(null);
+      }
       release(containerRef.current, event.pointerId);
     }
     interaction.current = { mode: "none" };
@@ -213,12 +271,20 @@ export function CanvasViewport({
 
   const selected = board.items.find((item) => item.id === selectedId) ?? null;
   const camera = board.camera;
+  const draftItem = draft ? board.items.find((item) => item.id === draft.itemId) : null;
+  const cropItem = crop ? board.items.find((item) => item.id === crop.itemId) : null;
+  const cursor =
+    interaction.current.mode === "pan"
+      ? "grabbing"
+      : tool === "region"
+        ? "crosshair"
+        : "default";
 
   return (
     <div
       ref={containerRef}
       className="absolute inset-0 touch-none overflow-hidden"
-      style={{ cursor: interaction.current.mode === "pan" ? "grabbing" : "default" }}
+      style={{ cursor }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={endInteraction}
@@ -256,6 +322,22 @@ export function CanvasViewport({
 
       {selected ? (
         <SelectionFrame item={selected} camera={camera} onResizeStart={onResizeStart} />
+      ) : null}
+
+      {draftItem && draft ? (
+        <RegionFrame item={draftItem} region={draft.rect} camera={camera} draft />
+      ) : null}
+
+      {cropItem && crop ? (
+        <RegionFrame
+          item={cropItem}
+          region={crop.rect}
+          camera={camera}
+          busy={cropBusy}
+          onPlace={onPlaceCrop}
+          onDownload={onDownloadCrop}
+          onCancel={() => onCropChange(null)}
+        />
       ) : null}
 
       {fileOver ? (

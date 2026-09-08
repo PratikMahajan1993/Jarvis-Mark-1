@@ -108,3 +108,17 @@ export function fitDroppedSize(naturalW: number, naturalH: number): { w: number;
   const scale = Math.min(1, DROPPED_MAX_EDGE / Math.max(width, height));
   return { w: Math.round(width * scale), h: Math.round(height * scale) };
 }
+
+export type CanvasTool = "select" | "region";
+
+export type ItemLocalRect = { x: number; y: number; w: number; h: number };
+
+/** Keep the current longest edge and adopt a new aspect ratio (width / height). */
+export function sizeForAspect(w: number, h: number, aspect: number): { w: number; h: number } {
+  const ratio = aspect > 0 ? aspect : 1;
+  const long = Math.max(w, h, 40);
+  if (ratio >= 1) {
+    return { w: Math.round(long), h: Math.max(40, Math.round(long / ratio)) };
+  }
+  return { w: Math.max(40, Math.round(long * ratio)), h: Math.round(long) };
+}
