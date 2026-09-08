@@ -155,13 +155,23 @@ def _imap_search(query: str, unread_only: bool, limit: int) -> list[dict[str, An
     return messages
 
 
+def _merge_gmail_fields(record: dict[str, Any]) -> dict[str, Any]:
+    row = upsert_email(record)
+    for key in ("attachments", "gmail_id", "message_id", "references"):
+        if record.get(key):
+            row[key] = record[key]
+    if not row.get("attachments"):
+        row["attachments"] = record.get("attachments") or []
+    return row
+
+
 def search_emails(query: str = "", unread_only: bool = False, limit: int = 8) -> list[dict[str, Any]]:
     from . import gmail as gmail_conn
 
     if gmail_conn.live():
         try:
             rows = gmail_conn.list_messages(query=query, unread_only=unread_only, limit=limit)
-            return [upsert_email(row) for row in rows]
+            return [_merge_gmail_fields(row) for row in rows]
         except Exception:
             pass
     if settings.email_backend == "imap" and settings.imap_host and settings.imap_user:
@@ -184,19 +194,17 @@ def search_emails(query: str = "", unread_only: bool = False, limit: int = 8) ->
 def get_email(email_id: str) -> dict[str, Any] | None:
     if not email_id:
         return None
-    with connect() as conn:
-        row = conn.execute("SELECT * FROM emails WHERE id = ?", (email_id,)).fetchone()
-    if row:
-        return dict(row)
     from . import gmail as gmail_conn
 
     if gmail_conn.live() and str(email_id).startswith("gmail-"):
         try:
             found = gmail_conn.get_message(str(email_id)[6:])
-            return upsert_email(found) if found else None
+            return _merge_gmail_fields(found) if found else None
         except Exception:
-            return None
-    return None
+            pass
+    with connect() as conn:
+        row = conn.execute("SELECT * FROM emails WHERE id = ?", (email_id,)).fetchone()
+    return dict(row) if row else None
 
 
 def mark_read(email_id: str) -> None:
@@ -233,20 +241,25 @@ def send_email(
     body: str,
     source_id: str | None = None,
     thread_id: str = "",
+    attachment_paths: list[str] | None = None,
 ) -> dict[str, Any]:
     from . import gmail as gmail_conn
 
     source = get_email(source_id) if source_id else None
     reply_thread = thread_id or (source.get("thread_id") if source else "")
+    reply_message_id = (source.get("message_id") if source else "") or ""
+    reply_references = (source.get("references") if source else "") or ""
     if gmail_conn.live():
         record = gmail_conn.send_message(
             to_addr,
             subject,
             body,
             thread_id=reply_thread or "",
-            in_reply_to=source_id or "",
+            in_reply_to=reply_message_id,
+            references=reply_references,
+            attachment_paths=attachment_paths,
         )
-        upsert_email(record)
+        _merge_gmail_fields(record)
         if source_id:
             mark_read(source_id)
         return record
@@ -265,6 +278,41 @@ def send_email(
     upsert_email(record)
     if source_id:
         mark_read(source_id)
+    return record
+
+
+def forward_email(
+    to_addr: str,
+    source_id: str,
+    note: str = "",
+    body: str = "",
+) -> dict[str, Any]:
+    from . import gmail as gmail_conn
+
+    source = get_email(source_id)
+    if not source:
+        raise ValueError("Source message not found.")
+    forward_note = note or body
+    if gmail_conn.live():
+        record = gmail_conn.forward_message(to_addr, source, note=forward_note)
+        _merge_gmail_fields(record)
+        return record
+    email_id = f"sent-{uuid.uuid4().hex[:10]}"
+    subject = source.get("subject") or ""
+    if not subject.lower().startswith("fwd:"):
+        subject = f"Fwd: {subject}".strip()
+    record = {
+        "id": email_id,
+        "sender": settings.google_account or "you@jarvis.local",
+        "to_addr": to_addr,
+        "subject": subject,
+        "body": forward_note or source.get("body") or "",
+        "unread": 0,
+        "created_at": utc_now(),
+        "folder": "SENT",
+        "thread_id": source.get("thread_id") or email_id,
+    }
+    upsert_email(record)
     return record
 
 

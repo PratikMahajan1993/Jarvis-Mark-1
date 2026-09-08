@@ -2,15 +2,33 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
-import { canListen, claimGlanceSpeech, classifyDecision, silence, speak, startListening, startWakeWatch, stopListening, stopWakeWatch } from "@/lib/voice";
-import type { Artifact, AuditEntry, ChatResponse, Health, PendingAction, Preferences, Scene } from "@/lib/types";
+import { canListen, claimGlanceSpeech, classifyDecision, isWakeWatching, silence, speak, startListening, startWakeWatch, stopListening, stopWakeWatch } from "@/lib/voice";
+import type { Artifact, AuditEntry, ChatResponse, Health, MailAttachment, PendingAction, Preferences, Scene } from "@/lib/types";
 import { ArtifactTray } from "./ArtifactTray";
 import { Composer } from "./Composer";
 import { ConfirmBar } from "./ConfirmBar";
+import { DrawingViewer } from "./DrawingViewer";
 import { SceneBoard } from "./SceneBoard";
 import { VoiceOrb } from "./VoiceOrb";
+import {
+  isViewCommand,
+  matchViewAttachment,
+  parseViewerCommand,
+  sceneAttachments,
+  type ViewerCommand,
+} from "@/lib/viewerMatch";
 
 const EMPTY_SCENE: Scene = { title: "", subtitle: null, widgets: [] };
+const ALWAYS_ON_MIC_KEY = "jarvis.alwaysOnMic";
+
+function readAlwaysOnMic(): boolean {
+  if (typeof window === "undefined") return true;
+  try {
+    return window.localStorage.getItem(ALWAYS_ON_MIC_KEY) !== "false";
+  } catch {
+    return true;
+  }
+}
 
 function Clock({ timezone }: { timezone: string }) {
   const [now, setNow] = useState("");
@@ -30,8 +48,8 @@ function Clock({ timezone }: { timezone: string }) {
 }
 
 export function HudShell() {
-  const [input, setInput] = useState("");
   const [compose, setCompose] = useState(false);
+  const [turns, setTurns] = useState<{ role: string; text: string }[]>([]);
   const [busy, setBusy] = useState(false);
   const [listening, setListening] = useState(false);
   const [scene, setScene] = useState<Scene>(EMPTY_SCENE);
@@ -51,10 +69,17 @@ export function HudShell() {
   const [watching, setWatching] = useState(false);
   const [pageOpen, setPageOpen] = useState(true);
   const [talking, setTalking] = useState(false);
+  const [alwaysOnMic, setAlwaysOnMic] = useState(readAlwaysOnMic);
+  const [viewerAttachment, setViewerAttachment] = useState<MailAttachment | null>(null);
+  const [viewerVoiceCmd, setViewerVoiceCmd] = useState<ViewerCommand | null>(null);
+  const [viewerVoiceSeq, setViewerVoiceSeq] = useState(0);
   const fileTimer = useRef<number | null>(null);
   const lastWhisper = useRef("");
   const lastWatchSpeak = useRef("");
   const idleSince = useRef(Date.now());
+  const announceAt = useRef(Date.now() + 20000);
+  const restored = useRef(false);
+  const applyResponseRef = useRef<(result: ChatResponse, spoken?: boolean) => void>(() => {});
   const voiceEnabledRef = useRef(true);
   const busyRef = useRef(false);
   const listeningRef = useRef(false);
@@ -70,6 +95,11 @@ export function HudShell() {
   const advanceThought = useRef<() => void>(() => {});
   const nameRef = useRef("Jarvis");
   const handleWake = useRef<(rest: string) => void>(() => {});
+  const sceneRef = useRef(scene);
+  const viewerRef = useRef<MailAttachment | null>(null);
+
+  sceneRef.current = scene;
+  viewerRef.current = viewerAttachment;
 
   const applyResponse = useCallback((result: ChatResponse, spoken = true) => {
     setScene(result.scene || EMPTY_SCENE);
@@ -82,6 +112,9 @@ export function HudShell() {
     setMore(result.more || 0);
     setWatching(Boolean(result.watching));
     setShowFiles((result.artifacts || []).length > 0);
+    if (result.speak) {
+      setTurns((current) => [...current.slice(-4), { role: "jarvis", text: result.speak }]);
+    }
     if (fileTimer.current) window.clearTimeout(fileTimer.current);
     fileTimer.current = window.setTimeout(() => setShowFiles(false), 12000);
     const token = ++speakToken.current;
@@ -100,7 +133,7 @@ export function HudShell() {
         window.setTimeout(() => {
           if (token !== speakToken.current) return;
           advanceThought.current();
-        }, 900);
+        }, 200);
       }
     };
     if (result.speak && spoken && prefs?.voice_enabled !== false) {
@@ -118,6 +151,7 @@ export function HudShell() {
       setTalking(false);
     }
   }, [prefs?.voice_enabled]);
+  applyResponseRef.current = applyResponse;
 
   const refreshSide = useCallback(async () => {
     try {
@@ -153,7 +187,14 @@ export function HudShell() {
   }, [prefs?.assistant_name]);
 
   useEffect(() => {
-    const onVis = () => setPageOpen(document.visibilityState === "visible");
+    const onVis = () => {
+      const open = document.visibilityState === "visible";
+      setPageOpen(open);
+      if (open) {
+        idleSince.current = Date.now();
+        announceAt.current = Math.max(announceAt.current, Date.now() + 8000);
+      }
+    };
     onVis();
     document.addEventListener("visibilitychange", onVis);
     return () => document.removeEventListener("visibilitychange", onVis);
@@ -162,30 +203,45 @@ export function HudShell() {
   useEffect(() => () => stopListening(), []);
 
   useEffect(() => {
+    let cancelled = false;
     api.health().then(setHealth).catch(() => setHealth({ ok: false, ollama: false, model: "unknown", models: [] }));
     void refreshSide().then(async () => {
-      if (pendingIdRef.current) listenForConfirm.current(pendingIdRef.current);
+      if (cancelled) return;
       try {
         const last = await api.session();
-        if (!last?.scene?.title && !last?.speak) return;
-        applyResponse(
-          {
-            speak: last.speak || "",
-            reply: last.reply || last.speak || "",
-            scene: last.scene || EMPTY_SCENE,
-            artifacts: last.artifacts || [],
-            pending: last.pending || [],
-            offline: Boolean(last.offline),
-            more: last.more || 0,
-            watching: Boolean(last.watching),
-          },
-          false,
-        );
+        if (cancelled) return;
+        if (last?.scene?.title || last?.reply) {
+          applyResponseRef.current(
+            {
+              speak: "",
+              reply: last.reply || "",
+              scene: last.scene || EMPTY_SCENE,
+              artifacts: last.artifacts || [],
+              pending: last.pending || [],
+              offline: Boolean(last.offline),
+              more: 0,
+              watching: false,
+            },
+            false,
+          );
+        }
       } catch {
         /* first launch has no saved board */
       }
+      try {
+        await api.ackWatch();
+      } catch {
+        /* no live watch */
+      }
+      if (cancelled) return;
+      restored.current = true;
+      announceAt.current = Date.now() + 20000;
+      idleSince.current = Date.now();
     });
-  }, [refreshSide, applyResponse]);
+    return () => {
+      cancelled = true;
+    };
+  }, [refreshSide]);
 
   useEffect(() => {
     let cancelled = false;
@@ -194,6 +250,7 @@ export function HudShell() {
         const next = await api.glance();
         if (cancelled) return;
         setGlance(next.line || "");
+        if (!restored.current || Date.now() < announceAt.current) return;
         const geminiReady = Boolean(next.key?.startsWith("gemini:") && next.speak);
         const occupied =
           busyRef.current ||
@@ -201,10 +258,10 @@ export function HudShell() {
           composeRef.current ||
           hotRef.current ||
           pendingRef.current ||
-          moreRef.current > 0;
+          moreRef.current > 0 ||
+          Boolean(viewerRef.current);
         const current = replyRef.current;
         const holdingGlance = !current || current === lastWhisper.current;
-        if (!geminiReady && (occupied || !holdingGlance)) return;
         if (geminiReady) {
           stopListening();
           setListening(false);
@@ -215,6 +272,7 @@ export function HudShell() {
           }
           return;
         }
+        if (occupied || !holdingGlance) return;
         if (next.whisper) {
           lastWhisper.current = next.whisper;
           setReply(next.whisper);
@@ -240,31 +298,74 @@ export function HudShell() {
     };
   }, []);
 
+  const toggleAlwaysOnMic = useCallback(() => {
+    setAlwaysOnMic((current) => {
+      const next = !current;
+      try {
+        window.localStorage.setItem(ALWAYS_ON_MIC_KEY, String(next));
+      } catch {
+        /* ignore */
+      }
+      if (!next) {
+        stopWakeWatch();
+        setHot(false);
+      }
+      return next;
+    });
+  }, []);
+
   useEffect(() => {
-    if (!pageOpen || busy || listening || compose || talking || pending.length || more || watching || panel !== "none") {
+    if (!alwaysOnMic) {
+      stopWakeWatch();
+      setHot(false);
+      return;
+    }
+    if (!pageOpen || busy || listening || talking || pending.length || more || watching || panel !== "none") {
       stopWakeWatch();
       return;
     }
     if (!canListen()) return;
     let cancelled = false;
-    const timer = window.setTimeout(() => {
+    let delay = 0;
+    const arm = (immediate: boolean) => {
       if (cancelled) return;
-      void startWakeWatch({
-        name: () => nameRef.current,
-        onHot: () => {
-          if (!cancelled) setHot(true);
-        },
-        onWake: (rest) => {
-          if (!cancelled) handleWake.current(rest);
-        },
-      });
-    }, 550);
+      const start = () => {
+        if (cancelled) return;
+        void startWakeWatch({
+          name: () => nameRef.current,
+          onHot: () => {
+            if (!cancelled) setHot(true);
+          },
+          onWake: (rest) => {
+            if (!cancelled) handleWake.current(rest);
+          },
+          onError: (message) => {
+            if (!cancelled && message) setError(message);
+          },
+        });
+      };
+      if (immediate) {
+        start();
+        return;
+      }
+      window.clearTimeout(delay);
+      delay = window.setTimeout(start, 200);
+    };
+    arm(false);
+    const onGesture = () => {
+      if (cancelled || isWakeWatching()) return;
+      arm(true);
+    };
+    window.addEventListener("pointerdown", onGesture);
+    window.addEventListener("keydown", onGesture);
     return () => {
       cancelled = true;
-      window.clearTimeout(timer);
+      window.clearTimeout(delay);
+      window.removeEventListener("pointerdown", onGesture);
+      window.removeEventListener("keydown", onGesture);
       stopWakeWatch();
     };
-  }, [pageOpen, busy, listening, compose, talking, pending.length, more, watching, panel]);
+  }, [alwaysOnMic, pageOpen, busy, listening, talking, pending.length, more, watching, panel]);
 
   useEffect(() => {
     let cancelled = false;
@@ -273,6 +374,10 @@ export function HudShell() {
         const next = await api.watch();
         if (cancelled) return;
         if (next.watching) setWatching(true);
+        if (!restored.current) {
+          if (!next.watching && !next.ready) setWatching(false);
+          return;
+        }
         if (!next.ready || !next.speak) {
           if (!next.watching && !next.ready) setWatching(false);
           return;
@@ -287,7 +392,7 @@ export function HudShell() {
           setHot(false);
         }
         setWatching(false);
-        applyResponse(
+        applyResponseRef.current(
           {
             speak: next.speak,
             reply: next.speak,
@@ -300,6 +405,11 @@ export function HudShell() {
           },
           spoken,
         );
+        try {
+          await api.ackWatch();
+        } catch {
+          /* already shown */
+        }
       } catch {
         /* watch is optional */
       }
@@ -310,11 +420,74 @@ export function HudShell() {
       cancelled = true;
       window.clearInterval(id);
     };
-  }, [applyResponse]);
+  }, []);
+
+  const whisper = useCallback((line: string) => {
+    lastWhisper.current = line;
+    setReply(line);
+  }, []);
+
+  const closeViewer = useCallback(() => {
+    setViewerAttachment(null);
+    setViewerVoiceCmd(null);
+  }, []);
+
+  const openViewer = useCallback((item: MailAttachment) => {
+    setViewerAttachment(item);
+    setViewerVoiceCmd(null);
+    whisper(`Viewing ${item.local_name || item.filename}.`);
+  }, [whisper]);
+
+  const runViewerVoice = useCallback(
+    (text: string): boolean => {
+      const cmd = parseViewerCommand(text);
+      if (cmd) {
+        if (cmd === "close") {
+          closeViewer();
+          whisper("Closed.");
+          return true;
+        }
+        setViewerVoiceCmd(cmd);
+        setViewerVoiceSeq((seq) => seq + 1);
+        return true;
+      }
+      return false;
+    },
+    [closeViewer, whisper],
+  );
+
+  const tryViewCommand = useCallback(
+    (text: string): boolean => {
+      if (!isViewCommand(text)) return false;
+      const items = sceneAttachments(sceneRef.current);
+      if (!items.length) return false;
+      const { attachment, whisper: line } = matchViewAttachment(text, items);
+      if (line) {
+        whisper(line);
+        if (voiceEnabledRef.current) speak(line, true);
+        return true;
+      }
+      if (attachment) {
+        openViewer(attachment);
+        return true;
+      }
+      return false;
+    },
+    [openViewer, whisper],
+  );
+
+  const interceptMessage = useCallback(
+    (text: string): boolean => {
+      if (viewerRef.current) return runViewerVoice(text);
+      return tryViewCommand(text);
+    },
+    [runViewerVoice, tryViewCommand],
+  );
 
   const send = useCallback(async (text: string) => {
     const message = text.trim();
     if (!message || busy) return;
+    if (interceptMessage(message)) return;
     const waiting = pendingIdRef.current;
     const decision = waiting ? classifyDecision(message) : null;
     speakToken.current += 1;
@@ -326,8 +499,8 @@ export function HudShell() {
     stopListening();
     setListening(false);
     setHot(false);
-    setInput("");
     setReply("…");
+    setTurns((current) => [...current.slice(-4), { role: "you", text: message }]);
     try {
       const result = decision !== null && waiting
         ? await api.confirm(waiting, decision === "yes")
@@ -339,7 +512,29 @@ export function HudShell() {
     } finally {
       setBusy(false);
     }
-  }, [applyResponse, busy, refreshSide]);
+  }, [applyResponse, busy, interceptMessage, refreshSide]);
+
+  const runAttachmentAction = useCallback(
+    async (kind: "save" | "reply", emailId: string, attachmentIds: string[], filenames: string[]) => {
+      if (!emailId || !filenames.length || busy) return;
+      speakToken.current += 1;
+      setBusy(true);
+      setError("");
+      try {
+        const result =
+          kind === "save"
+            ? await api.saveMailAttachments(emailId, attachmentIds, filenames)
+            : await api.replyWithAttachments(emailId, attachmentIds, filenames);
+        applyResponse(result);
+        await refreshSide();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Attachment action failed.");
+      } finally {
+        setBusy(false);
+      }
+    },
+    [applyResponse, busy, refreshSide],
+  );
 
   const decide = useCallback(async (id: string, approved: boolean) => {
     speakToken.current += 1;
@@ -432,7 +627,9 @@ export function HudShell() {
       stopListening();
       setListening(false);
       setHot(false);
-      setReply("");
+      const line = "I didn't catch that.";
+      setReply(line);
+      if (voiceEnabledRef.current) speak(line, true);
     }, 12000);
     await startListening({
       onPartial: (text) => setReply(text),
@@ -463,6 +660,7 @@ export function HudShell() {
     setHot(false);
     if (rest) {
       setListening(false);
+      if (interceptMessage(rest)) return;
       void send(rest);
       return;
     }
@@ -510,10 +708,19 @@ export function HudShell() {
       if (event.key === "Escape") {
         confirmGen.current += 1;
         speakToken.current += 1;
-        stopListening();
-        setListening(false);
+        silence();
+        if (listeningRef.current) {
+          stopListening();
+          setListening(false);
+        }
         setHot(false);
         setCompose(false);
+        if (viewerRef.current) {
+          closeViewer();
+          if (typing) target.blur();
+          return;
+        }
+        if (typing) target.blur();
         setPanel("none");
         setError("");
         return;
@@ -546,15 +753,10 @@ export function HudShell() {
         return;
       }
       if (pendingIdRef.current) return;
-      if (!typing && !compose && event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
-        silence();
-        setCompose(true);
-        setInput(event.key);
-      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [compose, decide, startListen]);
+  }, [closeViewer, compose, decide, startListen]);
 
   const mood = listening || hot ? "listen" : busy ? "think" : "idle";
   const density = prefs?.hud_density === "dense";
@@ -581,6 +783,27 @@ export function HudShell() {
         </button>
         <div className="flex items-center gap-4">
           {glance ? <p className="hidden text-sm text-white/25 md:block">{glance}</p> : null}
+          <button
+            type="button"
+            onClick={toggleAlwaysOnMic}
+            className={`flex items-center gap-1.5 text-[11px] uppercase tracking-[0.14em] transition-colors ${
+              alwaysOnMic ? "text-cyan/55 hover:text-cyan/80" : "text-white/25 hover:text-white/45"
+            }`}
+            aria-pressed={alwaysOnMic}
+            aria-label={alwaysOnMic ? "Always-on mic on" : "Always-on mic off"}
+            title={
+              alwaysOnMic
+                ? "Always listening for wake word — click to turn off"
+                : "Wake word off — press Space or tap the orb to listen"
+            }
+          >
+            <span
+              className={`inline-block h-1.5 w-1.5 rounded-full ${
+                alwaysOnMic ? "bg-cyan/70" : "bg-white/20"
+              }`}
+            />
+            {alwaysOnMic ? "Mic always on" : "Mic off"}
+          </button>
           <Clock timezone={prefs?.timezone || "Asia/Kolkata"} />
           <button
             type="button"
@@ -592,14 +815,36 @@ export function HudShell() {
       </header>
 
       <main className="relative z-0 min-h-0 flex-1 overflow-auto">
-        <SceneBoard scene={scene} dense={density} />
+        <SceneBoard
+          scene={scene}
+          dense={density}
+          busy={busy}
+          onSaveAttachments={(emailId, attachmentIds, filenames) => void runAttachmentAction("save", emailId, attachmentIds, filenames)}
+          onReplyAttachments={(emailId, attachmentIds, filenames) => void runAttachmentAction("reply", emailId, attachmentIds, filenames)}
+          onViewAttachment={openViewer}
+        />
       </main>
 
       <footer className="relative z-10 flex shrink-0 flex-col items-center gap-3 border-t border-white/5 bg-[#020508] px-6 pb-8 pt-3">
         <p className="whisper max-h-16 max-w-2xl overflow-auto text-center text-xl text-white/70">
           {error || reply}
         </p>
-        <Composer value={input} onChange={setInput} onSubmit={() => send(input)} busy={busy} open={compose} />
+        {turns.length ? (
+          <p className="max-w-2xl text-center text-[11px] leading-5 text-white/25">
+            {turns.slice(-3).map((turn, index) => (
+              <span key={`${turn.role}-${index}`}>
+                {index ? " · " : ""}
+                {turn.role === "you" ? "You" : "Jarvis"}: {turn.text.slice(0, 72)}
+                {turn.text.length > 72 ? "…" : ""}
+              </span>
+            ))}
+          </p>
+        ) : null}
+        <Composer
+          onSubmit={(value) => void send(value)}
+          onFocusChange={setCompose}
+          busy={busy}
+        />
         <div onMouseEnter={() => artifacts.length && setShowFiles(true)}>
           <VoiceOrb mood={mood} onClick={startListen} />
         </div>
@@ -617,6 +862,19 @@ export function HudShell() {
       ) : null}
 
       <ConfirmBar actions={pending} onDecide={decide} listening={listening} />
+
+      {viewerAttachment ? (
+        <DrawingViewer
+          attachment={viewerAttachment}
+          onClose={closeViewer}
+          onWhisper={whisper}
+          onSaved={async () => {
+            await refreshSide();
+          }}
+          voiceCommand={viewerVoiceCmd}
+          voiceSeq={viewerVoiceSeq}
+        />
+      ) : null}
 
       {panel !== "none" ? (
         <div className="absolute inset-0 z-20 bg-black/55" onClick={() => setPanel("none")}>
@@ -651,19 +909,37 @@ export function HudShell() {
 }
 
 function GoogleConnect() {
-  const [status, setStatus] = useState<{ configured: boolean; connected: boolean; account: string } | null>(null);
+  const [status, setStatus] = useState<{
+    configured: boolean;
+    connected: boolean;
+    calendar?: boolean;
+    calendar_list?: boolean;
+    account: string;
+  } | null>(null);
   useEffect(() => {
     api.googleStatus().then(setStatus).catch(() => setStatus(null));
   }, []);
   if (!status) return null;
+  const calendarOn = Boolean(status.calendar);
+  const allCalendars = Boolean(status.calendar_list);
   return (
     <div className="border-t border-white/10 pt-4 text-sm text-white/50">
-      <p>Gmail</p>
+      <p>Google</p>
       <p className="mt-1 text-white/70">
-        {status.connected ? `Connected as ${status.account}` : status.configured ? "Not connected" : "Add Google client keys to .env"}
+        {status.connected
+          ? `Connected as ${status.account}${calendarOn ? " · Calendar on" : " · Calendar needs reconnect"}${calendarOn && !allCalendars ? " · primary only" : ""}`
+          : status.configured
+            ? "Not connected"
+            : "Add Google client keys to .env"}
       </p>
       {status.configured && !status.connected ? (
         <a href={api.googleAuthUrl()} className="mt-2 inline-block text-cyan">Connect Gmail</a>
+      ) : null}
+      {status.connected && !calendarOn ? (
+        <a href={api.googleAuthUrl()} className="mt-2 inline-block text-cyan">Add Calendar</a>
+      ) : null}
+      {status.connected && calendarOn && !allCalendars ? (
+        <a href={api.googleAuthUrl()} className="mt-2 block text-cyan">Allow all calendars</a>
       ) : null}
     </div>
   );

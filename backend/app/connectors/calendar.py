@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 import uuid
 from datetime import datetime, timedelta
 from typing import Any
@@ -7,6 +8,9 @@ from zoneinfo import ZoneInfo
 
 from ..config import settings
 from ..db import connect
+from . import google_auth
+
+_LIST_CACHE: dict[str, Any] = {"at": 0.0, "days": 0, "rows": []}
 
 
 def _tz() -> ZoneInfo:
@@ -14,6 +18,139 @@ def _tz() -> ZoneInfo:
         return ZoneInfo(settings.tz)
     except Exception:
         return ZoneInfo("Asia/Kolkata")
+
+
+def live() -> bool:
+    return google_auth.has_calendar()
+
+
+def parse_when(value: str) -> datetime:
+    moment = datetime.fromisoformat((value or "").replace("Z", "+00:00"))
+    if moment.tzinfo is None:
+        return moment.replace(tzinfo=_tz())
+    return moment.astimezone(_tz())
+
+
+def clock(value: str) -> str:
+    if not value:
+        return ""
+    try:
+        return parse_when(value).strftime("%H:%M")
+    except Exception:
+        return value[11:16] if len(value) > 16 else value
+
+
+def _invalidate_cache() -> None:
+    _LIST_CACHE["at"] = 0.0
+
+
+def _service():
+    return google_auth.google_service("calendar", "v3")
+
+
+def _google_fail(exc: BaseException) -> str:
+    text = str(exc).lower()
+    if "accessnotconfigured" in text or "has not been used" in text or "is disabled" in text:
+        return "Enable the Google Calendar API in Cloud Console, then try again."
+    if "insufficient" in text or "invalid_grant" in text:
+        return "Calendar is not connected. Reconnect Google in preferences."
+    return "Calendar did not take it."
+
+
+def _normalize_google(event: dict[str, Any]) -> dict[str, Any] | None:
+    if (event.get("status") or "").lower() == "cancelled":
+        return None
+    start_block = event.get("start") or {}
+    end_block = event.get("end") or {}
+    start_raw = start_block.get("dateTime") or start_block.get("date") or ""
+    end_raw = end_block.get("dateTime") or end_block.get("date") or start_raw
+    if not start_raw:
+        return None
+    try:
+        start_at = parse_when(start_raw if "T" in start_raw else f"{start_raw}T00:00:00").isoformat()
+        end_at = parse_when(end_raw if "T" in end_raw else f"{end_raw}T00:00:00").isoformat()
+    except Exception:
+        return None
+    event_id = event.get("id") or uuid.uuid4().hex[:10]
+    return {
+        "id": f"gcal-{event_id}",
+        "title": event.get("summary") or "(No title)",
+        "start_at": start_at,
+        "end_at": end_at,
+        "location": event.get("location") or "",
+        "notes": event.get("description") or "",
+    }
+
+
+def _calendar_ids() -> list[str]:
+    if not google_auth.has_calendar_list():
+        return ["primary"]
+    try:
+        listed = _service().calendarList().list(maxResults=50).execute()
+    except Exception:
+        return ["primary"]
+    ids: list[str] = []
+    for item in listed.get("items") or []:
+        if item.get("selected") is False:
+            continue
+        cal_id = (item.get("id") or "").strip()
+        if cal_id:
+            ids.append(cal_id)
+    return ids or ["primary"]
+
+
+def _google_list(days: int) -> list[dict[str, Any]]:
+    start = datetime.now(_tz()).replace(hour=0, minute=0, second=0, microsecond=0)
+    end = start + timedelta(days=max(days, 1))
+    rows: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for calendar_id in _calendar_ids():
+        listed = (
+            _service()
+            .events()
+            .list(
+                calendarId=calendar_id,
+                timeMin=start.isoformat(),
+                timeMax=end.isoformat(),
+                singleEvents=True,
+                orderBy="startTime",
+                maxResults=40,
+            )
+            .execute()
+        )
+        for item in listed.get("items") or []:
+            row = _normalize_google(item)
+            if not row or row["id"] in seen:
+                continue
+            seen.add(row["id"])
+            rows.append(row)
+    rows.sort(key=lambda item: item.get("start_at") or "")
+    return rows
+
+
+def _google_create(
+    title: str,
+    start_at: str,
+    end_at: str,
+    location: str = "",
+    notes: str = "",
+) -> dict[str, Any]:
+    zone = str(_tz())
+    start = parse_when(start_at)
+    end = parse_when(end_at)
+    body = {
+        "summary": title,
+        "location": location or "",
+        "description": notes or "",
+        "start": {"dateTime": start.isoformat(), "timeZone": zone},
+        "end": {"dateTime": end.isoformat(), "timeZone": zone},
+    }
+    created = _service().events().insert(calendarId="primary", body=body).execute()
+    row = _normalize_google(created)
+    if not row:
+        raise RuntimeError("Calendar did not take it.")
+    _invalidate_cache()
+    return row
 
 
 def seed_calendar() -> None:
@@ -66,7 +203,7 @@ def seed_calendar() -> None:
         )
 
 
-def list_events(days: int = 2) -> list[dict[str, Any]]:
+def _local_list(days: int) -> list[dict[str, Any]]:
     start = datetime.now(_tz()).replace(hour=0, minute=0, second=0, microsecond=0)
     end = start + timedelta(days=days)
     with connect() as conn:
@@ -81,6 +218,47 @@ def list_events(days: int = 2) -> list[dict[str, Any]]:
     return [dict(row) for row in rows]
 
 
+def calendar_note(empty: bool = False) -> str:
+    if google_auth.connected() and not live():
+        return "Reconnect Google in preferences (**Add Calendar**) so briefing uses your real day."
+    if live() and not google_auth.has_calendar_list() and empty:
+        return "I can only see the primary calendar, and it is empty today. Allow all calendars in preferences if your day lives on another calendar."
+    return ""
+
+
+def list_events(days: int = 2) -> list[dict[str, Any]]:
+    if google_auth.connected() and not live():
+        return []
+    if live():
+        now = time.monotonic()
+        if float(_LIST_CACHE["at"]) and _LIST_CACHE["days"] == days and now - float(_LIST_CACHE["at"]) < 20:
+            return list(_LIST_CACHE["rows"])
+        try:
+            rows = _google_list(days)
+        except Exception:
+            return []
+        _LIST_CACHE["at"] = now
+        _LIST_CACHE["days"] = days
+        _LIST_CACHE["rows"] = rows
+        return list(rows)
+    return _local_list(days)
+
+
+def upcoming(days: int = 2) -> list[dict[str, Any]]:
+    now = datetime.now(_tz())
+    rows = []
+    for event in list_events(days):
+        raw_end = event.get("end_at") or event.get("start_at") or ""
+        try:
+            end = parse_when(raw_end)
+        except Exception:
+            continue
+        if end < now:
+            continue
+        rows.append(event)
+    return rows
+
+
 def create_event(
     title: str,
     start_at: str,
@@ -88,6 +266,15 @@ def create_event(
     location: str = "",
     notes: str = "",
 ) -> dict[str, Any]:
+    if google_auth.connected() or live():
+        if not live():
+            raise RuntimeError("Calendar is not connected. Reconnect Google in preferences.")
+        try:
+            return _google_create(title, start_at, end_at, location, notes)
+        except RuntimeError:
+            raise
+        except Exception as exc:
+            raise RuntimeError(_google_fail(exc)) from exc
     record = {
         "id": f"cal-{uuid.uuid4().hex[:10]}",
         "title": title,

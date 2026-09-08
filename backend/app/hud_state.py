@@ -23,6 +23,8 @@ def remember_hud(session_id: str, payload: dict[str, Any]) -> None:
             "watching": bool(payload.get("watching")),
             "artifacts": payload.get("artifacts") or [],
             "pending": payload.get("pending") or [],
+            "attachments": payload.get("attachments") or [],
+            "mail_id": payload.get("mail_id"),
             "more": payload.get("more") or 0,
             "offline": bool(payload.get("offline")),
         },
@@ -30,4 +32,15 @@ def remember_hud(session_id: str, payload: dict[str, Any]) -> None:
 
 
 def load_hud(session_id: str) -> dict[str, Any]:
-    return db.get_hud_state(session_id)
+    data = db.get_hud_state(session_id)
+    if not data:
+        return {"restore": True, "speak": "", "reply": "", "scene": {}, "watching": False, "more": 0}
+    reply = str(data.get("reply") or data.get("speak") or "").strip()
+    return {
+        **data,
+        "reply": reply,
+        "speak": "",
+        "restore": True,
+        "watching": False,
+        "more": 0,
+    }

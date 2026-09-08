@@ -1,15 +1,27 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any
 
 from ..config import settings
 
+os.environ.setdefault("OAUTHLIB_RELAX_TOKEN_SCOPE", "1")
+
+GMAIL_SEND = "https://www.googleapis.com/auth/gmail.send"
+GMAIL_READONLY = "https://www.googleapis.com/auth/gmail.readonly"
+DRIVE_FILE = "https://www.googleapis.com/auth/drive.file"
+CALENDAR_EVENTS = "https://www.googleapis.com/auth/calendar.events"
+CALENDAR_READONLY = "https://www.googleapis.com/auth/calendar.readonly"
+CALENDAR_FULL = "https://www.googleapis.com/auth/calendar"
+
 SCOPES = (
-    "https://www.googleapis.com/auth/gmail.send",
-    "https://www.googleapis.com/auth/gmail.readonly",
-    "https://www.googleapis.com/auth/drive.file",
+    GMAIL_SEND,
+    GMAIL_READONLY,
+    DRIVE_FILE,
+    CALENDAR_EVENTS,
+    CALENDAR_READONLY,
 )
 
 
@@ -99,13 +111,40 @@ def finish_auth(code: str, state: str = "") -> None:
         state_path().unlink()
 
 
+def token_scopes() -> list[str]:
+    path = token_path()
+    if not path.is_file():
+        return []
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    raw = data.get("scopes") or []
+    if isinstance(raw, str):
+        return [item for item in raw.split() if item]
+    if isinstance(raw, list):
+        return [str(item) for item in raw if item]
+    return []
+
+
+def has_calendar() -> bool:
+    granted = set(token_scopes())
+    return bool(granted & {CALENDAR_EVENTS, CALENDAR_FULL, CALENDAR_READONLY})
+
+
+def has_calendar_list() -> bool:
+    granted = set(token_scopes())
+    return bool(granted & {CALENDAR_FULL, CALENDAR_READONLY})
+
+
 def credentials():
     from google.auth.transport.requests import Request
     from google.oauth2.credentials import Credentials
 
     if not token_path().is_file():
         return None
-    creds = Credentials.from_authorized_user_file(str(token_path()), scopes=list(SCOPES))
+    granted = token_scopes() or list(SCOPES)
+    creds = Credentials.from_authorized_user_file(str(token_path()), scopes=granted)
     if creds and creds.expired and creds.refresh_token:
         creds.refresh(Request())
         token_path().write_text(creds.to_json(), encoding="utf-8")
@@ -125,6 +164,8 @@ def status() -> dict[str, Any]:
     return {
         "configured": configured(),
         "connected": connected(),
+        "calendar": has_calendar(),
+        "calendar_list": has_calendar_list(),
         "account": settings.google_account,
         "task_to": settings.gemini_task_to or settings.google_account,
     }

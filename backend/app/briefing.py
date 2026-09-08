@@ -1,11 +1,74 @@
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from . import db
 from .connectors import calendar as calendar_conn
 from .connectors import email as email_conn
+from .familiarity import display_name, first_name
+
+_SKIP_SUBSTR = (
+    "amazon",
+    "linkedin",
+    "noreply",
+    "no-reply",
+    "newsletter",
+    "marketing",
+    "notification",
+    "notifications",
+    "au small finance",
+    "ausmallfinance",
+    "bank",
+    "billing@",
+    "donotreply",
+    "do-not-reply",
+    "mailer-daemon",
+    "facebook",
+    "twitter",
+    "instagram",
+    "promo",
+    "unsubscribe",
+    "google alerts",
+    "github",
+    "slack",
+    "zoom.us",
+    "calendar-notification",
+    "flipkart",
+    "myntra",
+    "swiggy",
+    "zomato",
+    "cred",
+    "paytm",
+)
+
+_BRAND_ONLY = re.compile(
+    r"^(billing|support|info|hello|team|admin|service|sales|news|"
+    r"accounts|security|updates|notify|notification)s?$",
+    re.I,
+)
+
+_BRAND_TOKENS = frozenset({
+    "team", "inc", "ltd", "llc", "corp", "bank", "finance", "billing", "support",
+    "adobe", "cursor", "ollama", "google", "microsoft", "apple", "amazon", "linkedin",
+    "newsletter", "notification", "updates", "mail", "service", "account", "security",
+    "acrobat", "github", "slack", "notion", "figma", "dropbox", "zoom", "labs",
+    "group", "media", "marketing", "store", "shop", "pay", "wallet", "cloud",
+})
+
+_ORG_SUFFIX = frozenset({
+    "team", "inc", "ltd", "llc", "corp", "bank", "finance", "labs", "group", "media",
+    "store", "shop", "cloud", "pay", "wallet", "service", "services", "support",
+})
+
+_COMPANY_TOKENS = frozenset({
+    "technology", "technologies", "india", "industries", "industry", "solutions",
+    "systems", "digital", "global", "international", "enterprises", "enterprise",
+    "consulting", "consultancy", "pvt", "private", "limited",
+})
+
+_PRIORITY_CAP = 6
 
 
 def _tz() -> ZoneInfo:
@@ -25,65 +88,183 @@ def greeting_slot() -> str:
     return "Evening"
 
 
-def build_briefing() -> dict:
+def _sender_skipped(sender: str) -> bool:
+    match = re.search(r"<([^>]+)>", sender or "")
+    email = match.group(1) if match else ""
+    blob = f"{sender} {email}".lower()
+    return any(skip in blob for skip in _SKIP_SUBSTR)
+
+
+def _looks_like_person(sender: str) -> bool:
+    name = display_name(sender)
+    if not name or _sender_skipped(sender):
+        return False
+    email_match = re.search(r"<([^>]+)>", sender or "")
+    email = (email_match.group(1) if email_match else "").lower()
+    if not email and "@" in name:
+        email = name.lower()
+    local = email.split("@")[0] if "@" in email else ""
+    if local and any(token in local for token in ("noreply", "no-reply", "donotreply", "newsletter", "marketing", "notification", "bot", "daemon")):
+        return False
+    if "@" in name and "<" not in (sender or ""):
+        if re.match(r"^[a-z][a-z'.-]*\.[a-z][a-z'.-]+", local, re.I):
+            return True
+        if re.match(r"^[a-z]{3,15}$", local, re.I) and local not in _BRAND_TOKENS:
+            return True
+        return False
+    tokens = [part for part in re.split(r"\s+", name) if part]
+    if not tokens:
+        return False
+    lower_tokens = [token.lower().strip('"') for token in tokens]
+    if any(token in _BRAND_TOKENS or token in _COMPANY_TOKENS for token in lower_tokens):
+        return False
+    if len(tokens) >= 2:
+        if lower_tokens[-1] in _ORG_SUFFIX:
+            return False
+        if len(tokens) > 2:
+            return False
+        if tokens[0][:1].isupper() and tokens[1][:1].isupper() and not tokens[1].isupper():
+            return True
+        return False
+    if len(tokens) == 1:
+        word = tokens[0].strip('"')
+        if _BRAND_ONLY.match(word) or word.lower() in _BRAND_TOKENS:
+            return False
+        if word.isupper() and len(word) > 1:
+            return False
+        if word[:1].isupper() and word[1:].islower() and len(word) >= 3:
+            return True
+    return False
+
+
+def _person_label(sender: str) -> str:
+    name = display_name(sender)
+    if "@" in name and "<" not in (sender or ""):
+        local = name.split("@")[0]
+        if "." in local:
+            return local.split(".")[0].replace("_", " ").title()
+        return local.replace("_", " ").title()
+    return name
+
+
+def filter_priority_mail(rows: list[dict]) -> list[dict]:
+    out: list[dict] = []
+    seen: set[str] = set()
+    for row in rows:
+        sender = str(row.get("sender") or "")
+        key = sender.lower()
+        if key in seen:
+            continue
+        if _looks_like_person(sender):
+            out.append(row)
+            seen.add(key)
+        if len(out) >= _PRIORITY_CAP:
+            break
+    return out
+
+
+def gather_briefing_facts() -> dict:
     prefs = db.get_preferences()
-    mails = email_conn.search_emails(unread_only=False, limit=6)
-    unread = [mail for mail in mails if mail.get("unread")]
-    events = calendar_conn.list_events(days=1)
-    inbox_files = db.list_inbox_files(4)
-    memories = db.list_memories("default", 4)
-    next_event = events[0]["title"] if events else "Clear calendar"
+    unread_total = email_conn.unread_count()
+    unread = email_conn.search_emails(unread_only=True, limit=24)
+    priority_mail = filter_priority_mail(unread)
+    upcoming = calendar_conn.upcoming(days=1)
+    next_event = upcoming[0] if upcoming else None
     slot = greeting_slot()
-    name = prefs.get("display_name") or "Sir"
-    speak = (
-        f"{slot}, {name}. {len(unread)} unread "
-        f"{'message' if len(unread) == 1 else 'messages'} "
-        f"and {len(events)} event{'s' if len(events) != 1 else ''} on the board. "
-        f"Next up: {next_event}."
-    )
-    widgets = [
-        {"type": "kpi", "label": "Unread", "value": len(unread), "hint": "Inbox"},
-        {"type": "kpi", "label": "Today", "value": len(events), "hint": "Calendar"},
-        {"type": "kpi", "label": "Inbox files", "value": len(inbox_files), "hint": "Dropped docs"},
-        {
-            "type": "table",
-            "title": "Priority mail",
-            "columns": ["From", "Subject"],
-            "rows": [[mail["sender"], mail["subject"]] for mail in unread[:5] or mails[:5]],
-        },
-        {
-            "type": "timeline",
-            "title": "Today",
-            "items": [
-                {
-                    "time": event["start_at"][11:16] if len(event["start_at"]) > 16 else event["start_at"],
-                    "title": event["title"],
-                    "detail": event.get("location") or "",
-                }
-                for event in events
-            ],
-        },
-    ]
-    if memories:
+    return {
+        "slot": slot,
+        "name": prefs.get("display_name") or "Sir",
+        "unread_total": unread_total,
+        "priority_mail": priority_mail,
+        "next_event": next_event,
+        "date_subtitle": datetime.now(_tz()).strftime("%A | %d %b %Y"),
+    }
+
+
+def briefing_notes(facts: dict) -> str:
+    lines: list[str] = []
+    for mail in facts.get("priority_mail") or []:
+        sender = _person_label(str(mail.get("sender") or ""))
+        lines.append(f"mail|{sender}|{mail.get('subject') or ''}")
+    nxt = facts.get("next_event")
+    if isinstance(nxt, dict) and nxt.get("title"):
+        lines.append(
+            f"next|{nxt.get('title') or ''}|{calendar_conn.clock(str(nxt.get('start_at') or ''))}"
+        )
+    total = facts.get("unread_total")
+    if total:
+        lines.append(f"unread_total|{total}")
+    lines.append(f"slot|{facts.get('slot') or ''}")
+    lines.append(f"name|{facts.get('name') or ''}")
+    return "\n".join(lines)
+
+
+def fallback_briefing_speak(facts: dict) -> str:
+    slot = str(facts.get("slot") or greeting_slot())
+    name = str(facts.get("name") or "Sir")
+    priority = facts.get("priority_mail") or []
+    next_event = facts.get("next_event") if isinstance(facts.get("next_event"), dict) else None
+    unread_total = int(facts.get("unread_total") or 0)
+
+    parts = [f"{slot}, {name}."]
+    if priority:
+        names: list[str] = []
+        for mail in priority[:4]:
+            who = _person_label(str(mail.get("sender") or ""))
+            first = first_name(who) or who
+            if first and first not in names:
+                names.append(first)
+        if names:
+            if len(names) == 1:
+                parts.append(f"{names[0]} is waiting on you.")
+            elif len(names) == 2:
+                parts.append(f"{names[0]} and {names[1]} are waiting on you.")
+            else:
+                parts.append(f"{names[0]}, {names[1]}, and others at work need you.")
+        if len(priority) >= 4 and unread_total > len(priority):
+            parts.append(f"{len(priority)} work threads in the unread pile.")
+    else:
+        parts.append("Nobody at work is waiting on mail.")
+
+    if next_event and next_event.get("title"):
+        title = str(next_event["title"])
+        clock = calendar_conn.clock(str(next_event.get("start_at") or ""))
+        if clock:
+            parts.append(f"Next up: {title} at {clock}.")
+        else:
+            parts.append(f"Next up: {title}.")
+    return " ".join(parts)
+
+
+def briefing_scene(facts: dict, speak: str) -> dict:
+    widgets: list[dict] = []
+    priority = facts.get("priority_mail") or []
+    if priority:
         widgets.append(
             {
-                "type": "markdown",
-                "title": "Session memory",
-                "text": "\n".join(f"- **{item['key']}**: {item['value']}" for item in memories),
+                "type": "table",
+                "title": "Who needs you",
+                "columns": ["From", "Subject"],
+                "rows": [
+                    [_person_label(str(mail.get("sender") or "")), str(mail.get("subject") or "")]
+                    for mail in priority
+                ],
             }
         )
-    scene = {
-        "title": f"{slot} briefing",
-        "subtitle": datetime.now(_tz()).strftime("%A | %d %b %Y"),
+    if speak:
+        widgets.append({"type": "quote", "text": speak, "cite": "Jarvis"})
+    return {
+        "title": f"{facts.get('slot') or greeting_slot()} briefing",
+        "subtitle": facts.get("date_subtitle") or datetime.now(_tz()).strftime("%A | %d %b %Y"),
         "widgets": widgets,
     }
-    return {
-        "speak": speak,
-        "scene": scene,
-        "unread": unread,
-        "events": events,
-        "files": inbox_files,
-    }
+
+
+def build_briefing() -> dict:
+    facts = gather_briefing_facts()
+    speak = fallback_briefing_speak(facts)
+    scene = briefing_scene(facts, speak)
+    return {"speak": speak, "scene": scene, **facts}
 
 
 _WORDS = {
@@ -114,13 +295,6 @@ _WORDS = {
 }
 
 
-def _parse_when(value: str) -> datetime:
-    moment = datetime.fromisoformat(value)
-    if moment.tzinfo is None:
-        return moment.replace(tzinfo=_tz())
-    return moment.astimezone(_tz())
-
-
 def _minutes_phrase(minutes: int) -> str:
     if minutes in _WORDS:
         return _WORDS[minutes]
@@ -143,25 +317,20 @@ def build_glance() -> dict:
         }
     now = datetime.now(_tz())
     upcoming = []
-    for event in calendar_conn.list_events(days=2):
+    for event in calendar_conn.upcoming(days=2):
         try:
-            start = _parse_when(event["start_at"])
-            end = _parse_when(event["end_at"]) if event.get("end_at") else start
+            start = calendar_conn.parse_when(event["start_at"])
+            end = calendar_conn.parse_when(event["end_at"]) if event.get("end_at") else start
         except Exception:
             continue
-        if end < now:
-            continue
         upcoming.append((start, end, event))
-    upcoming.sort(key=lambda item: item[0])
-    unread = email_conn.unread_count()
 
     if not upcoming:
-        line = f"{unread} unread" if unread else ""
         return {
-            "line": line,
-            "whisper": f"{unread} unread messages." if unread >= 3 else "",
+            "line": "",
+            "whisper": "",
             "speak": "",
-            "key": f"mail:{unread}" if unread >= 3 else "",
+            "key": "",
             "minutes": None,
         }
 

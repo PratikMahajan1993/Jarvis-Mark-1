@@ -12,14 +12,14 @@ from ..connectors import drive as drive_conn
 from ..connectors import email as email_conn
 from ..connectors import search as search_conn
 from ..config import settings
-from ..familiarity import get_set, note_tool, speak_for_tool
+from ..familiarity import get_set, note_tool, speak_calendar, speak_for_tool
 from . import documents
 
 
 def _briefing_payload() -> dict[str, Any]:
-    from ..briefing import build_briefing
+    from ..briefing import gather_briefing_facts
 
-    return build_briefing()
+    return gather_briefing_facts()
 
 
 DEFAULT_GEMINI_REPLY = "Short facts. If there are numbers, include a small table."
@@ -51,13 +51,79 @@ def _open_path(path: str) -> bool:
         return False
 
 
-def _drive_file_line(session_id: str, link: str = "", title: str = "") -> str:
-    if link:
-        return link
-    if title:
-        return title
-    drive = (get_set(session_id).get("drive") or {})
-    return (drive.get("link") or drive.get("title") or "").strip()
+def _local_file(session_id: str, artifact_id: str = "", inbox_id: str = "") -> tuple[str, str]:
+    if artifact_id:
+        item = db.get_artifact(artifact_id)
+        if item and item.get("path"):
+            return item["path"], item.get("name") or ""
+    if inbox_id:
+        item = db.get_inbox_file(inbox_id)
+        if item and item.get("path"):
+            return item["path"], item.get("name") or ""
+    artifact = get_set(session_id).get("artifact") or {}
+    if artifact.get("id"):
+        item = db.get_artifact(str(artifact["id"]))
+        if item and item.get("path"):
+            return item["path"], item.get("name") or artifact.get("title") or ""
+    files = db.list_inbox_files(1)
+    if files and files[0].get("path"):
+        return files[0]["path"], files[0].get("name") or ""
+    return "", ""
+
+
+def _guess_file_title(steps: str, given: str = "") -> str:
+    if str(given or "").strip():
+        return str(given).strip()
+    text = steps or ""
+    match = re.search(
+        r"\b(?:the\s+)?([A-Za-z][A-Za-z'-]+)\s+(?:spread\s*)?sheet\b"
+        r"|\b(?:the\s+)?([A-Za-z][A-Za-z'-]+)\s+(?:pdf|xlsx|file|workbook|quotation|quote)\b",
+        text,
+        re.I,
+    )
+    if match:
+        word = (match.group(1) or match.group(2) or "").strip()
+        if word.lower() not in {"this", "that", "the", "a", "an", "my", "our"}:
+            return word
+    return ""
+
+
+def _ensure_drive_file(session_id: str, link: str = "", title: str = "") -> tuple[str, str]:
+    """Return (drive_url_or_empty, error_speak). Uploads a local file when needed."""
+    from ..familiarity import remember_drive
+
+    if str(link or "").startswith("http"):
+        return str(link).strip(), ""
+    drive = get_set(session_id).get("drive") or {}
+    if str(drive.get("link") or "").startswith("http"):
+        return str(drive["link"]).strip(), ""
+    query = (title or drive.get("title") or drive.get("name") or "").strip()
+    if not query:
+        artifact = get_set(session_id).get("artifact") or {}
+        query = str(artifact.get("title") or artifact.get("name") or "").strip()
+    path, name = _local_file(session_id)
+    if not query and not path:
+        return "", ""
+    if not drive_conn.live():
+        return "", "Drive is not connected."
+    if query:
+        try:
+            rows = drive_conn.find_by_title(query)
+        except Exception:
+            rows = []
+        if rows and rows[0].get("link") and len({row.get("name") for row in rows}) == 1:
+            remember_drive(session_id, rows[0])
+            return str(rows[0]["link"]), ""
+        if len(rows) > 1 and not path:
+            return "", "Two files could match. Say the exact title."
+    if not path:
+        return "", ""
+    try:
+        uploaded = drive_conn.upload_file(path, name or query)
+    except Exception:
+        return "", "Drive did not take the file."
+    remember_drive(session_id, uploaded)
+    return str(uploaded.get("link") or ""), ""
 
 
 def _ok(
@@ -65,8 +131,15 @@ def _ok(
     scene: dict[str, Any] | None = None,
     pending: dict[str, Any] | None = None,
     speak: str | None = None,
+    attachments: list[dict[str, Any]] | None = None,
+    mail_id: str | None = None,
 ) -> dict[str, Any]:
-    return {"ok": True, "data": data, "scene": scene, "pending": pending, "speak": speak}
+    out: dict[str, Any] = {"ok": True, "data": data, "scene": scene, "pending": pending, "speak": speak}
+    if attachments is not None:
+        out["attachments"] = attachments
+    if mail_id:
+        out["mail_id"] = mail_id
+    return out
 
 
 HANDLERS: dict[str, Callable[..., dict[str, Any]]] = {}
@@ -94,7 +167,7 @@ def execute_tool(name: str, args: dict[str, Any], session_id: str) -> dict[str, 
 
 def _get_briefing(session_id: str, **_: Any) -> dict[str, Any]:
     payload = _briefing_payload()
-    return _ok(payload, scene=payload["scene"])
+    return _ok(payload, scene=None, speak=None)
 
 
 def _search_emails(session_id: str, query: str = "", unread_only: bool = False, **_: Any) -> dict[str, Any]:
@@ -126,24 +199,31 @@ def _draft_email(
     subject: str,
     body: str,
     in_reply_to: str = "",
+    attachment_paths: list[str] | None = None,
     **_: Any,
 ) -> dict[str, Any]:
     prefs = db.get_preferences()
     if prefs.get("sign_off") and prefs["sign_off"] not in body:
         body = f"{body.rstrip()}\n\n{prefs['sign_off']}"
     draft = email_conn.create_draft(to, subject, body)
+    source = email_conn.get_email(in_reply_to) if in_reply_to else None
+    thread_id = (source.get("thread_id") if source else "") or ""
     if in_reply_to:
         email_conn.mark_read(in_reply_to)
         db.add_memory(session_id, "last_email", in_reply_to)
     db.add_memory(session_id, "last_draft", draft["id"])
+    widgets: list[dict[str, Any]] = [
+        {"type": "kpi", "label": "To", "value": to},
+        {"type": "markdown", "title": "Draft", "text": f"**{subject}**\n\n{body}"},
+    ]
+    paths = [path for path in (attachment_paths or []) if path]
+    if paths:
+        widgets.append({"type": "markdown", "title": "Attachments", "text": ", ".join(Path(path).name for path in paths)})
+    widgets.append({"type": "quote", "text": "Confirm in the bar below to send.", "cite": "Jarvis"})
     scene = {
         "title": "Draft ready",
         "subtitle": subject,
-        "widgets": [
-            {"type": "kpi", "label": "To", "value": to},
-            {"type": "markdown", "title": "Draft", "text": f"**{subject}**\n\n{body}"},
-            {"type": "quote", "text": "Confirm in the bar below to send.", "cite": "Jarvis"},
-        ],
+        "widgets": widgets,
     }
     pending = db.add_pending(
         f"send-{draft['id']}",
@@ -151,9 +231,64 @@ def _draft_email(
         "email_send",
         f"Send: {subject}",
         f"To {to}",
-        {"to": to, "subject": subject, "body": body, "source_id": in_reply_to},
+        {
+            "to": to,
+            "subject": subject,
+            "body": body,
+            "source_id": in_reply_to,
+            "thread_id": thread_id,
+            "attachment_paths": paths,
+        },
     )
     return _ok(draft, scene=scene, pending=pending)
+
+
+def _forward_email(
+    session_id: str,
+    to: str,
+    email_id: str = "",
+    query: str = "",
+    note: str = "",
+    body: str = "",
+    **_: Any,
+) -> dict[str, Any]:
+    mail = email_conn.get_email(email_id) if email_id else None
+    if not mail and query:
+        rows = email_conn.search_emails(query=query, limit=1)
+        mail = rows[0] if rows else None
+    if not mail:
+        scene = {
+            "title": "No mail",
+            "widgets": [{"type": "markdown", "text": "I do not have that message to forward."}],
+        }
+        return _ok({"empty": True}, scene=scene, speak="I do not have that mail.")
+    forward_note = note or body
+    subject = mail.get("subject") or ""
+    if not subject.lower().startswith("fwd:"):
+        subject = f"Fwd: {subject}".strip()
+    pending = db.add_pending(
+        f"fwd-{mail.get('id')}-{db.utc_now()}",
+        session_id,
+        "email_forward",
+        f"Forward: {subject}",
+        f"To {to}",
+        {
+            "to": to,
+            "source_id": mail.get("id") or "",
+            "subject": subject,
+            "note": forward_note,
+        },
+    )
+    scene = {
+        "title": "Forward ready",
+        "subtitle": subject,
+        "widgets": [
+            {"type": "kpi", "label": "To", "value": to},
+            {"type": "markdown", "title": "Note", "text": forward_note or "(no note)"},
+            {"type": "quote", "text": "Confirm in the bar below to send.", "cite": "Jarvis"},
+        ],
+    }
+    return _ok({"to": to, "source_id": mail.get("id"), "subject": subject}, scene=scene, pending=pending)
 
 
 def _send_email(
@@ -177,6 +312,7 @@ def _send_email(
 
 def _list_calendar(session_id: str, days: int = 2, **_: Any) -> dict[str, Any]:
     events = calendar_conn.list_events(days=days)
+    next_up = calendar_conn.upcoming(days=days)
     scene = {
         "title": "Schedule",
         "subtitle": f"Next {days} day(s)",
@@ -187,7 +323,7 @@ def _list_calendar(session_id: str, days: int = 2, **_: Any) -> dict[str, Any]:
                 "title": "Upcoming",
                 "items": [
                     {
-                        "time": event["start_at"][11:16] if len(event["start_at"]) > 16 else event["start_at"],
+                        "time": calendar_conn.clock(event.get("start_at") or ""),
                         "title": event["title"],
                         "detail": event.get("location") or event.get("notes") or "",
                     }
@@ -196,7 +332,7 @@ def _list_calendar(session_id: str, days: int = 2, **_: Any) -> dict[str, Any]:
             },
         ],
     }
-    return _ok(events, scene=scene)
+    return _ok(events, scene=scene, speak=speak_calendar(next_up))
 
 
 def _create_calendar_event(
@@ -226,7 +362,7 @@ def _create_calendar_event(
         "title": "Event draft",
         "subtitle": title,
         "widgets": [
-            {"type": "kpi", "label": "Starts", "value": start_at[11:16] if len(start_at) > 16 else start_at},
+            {"type": "kpi", "label": "Starts", "value": calendar_conn.clock(start_at)},
             {"type": "markdown", "text": f"**{title}**\n\n{location}\n\n{notes}"},
         ],
     }
@@ -327,43 +463,118 @@ def _review_inbox(session_id: str, name: str = "", **_: Any) -> dict[str, Any]:
 
 
 def _research(session_id: str, query: str, **_: Any) -> dict[str, Any]:
-    hits = search_conn.search_web(query)
-    db.add_memory(session_id, "last_research", query)
-    citations = "\n".join(f"- [{hit['title']}]({hit['url']}) — {hit['snippet']}" for hit in hits)
+    brief = search_conn.brief_research(query)
+    topic = brief.get("query") or query
+    db.add_memory(session_id, "last_research", topic)
+    hits = brief.get("hits") or []
+    speak = f"I opened {len(hits)} pages on {topic}." if hits else "I found nothing useful."
     scene = {
-        "title": "Research",
-        "subtitle": query,
-        "widgets": [
-            {"type": "kpi", "label": "Sources", "value": len(hits)},
-            {"type": "markdown", "title": "Cited briefing", "text": citations or "No sources found."},
-        ],
+        "title": (topic[:1].upper() + topic[1:]) if topic else "Research",
+        "subtitle": None,
+        "widgets": [{"type": "quote", "text": speak, "cite": "Jarvis"}],
     }
-    return _ok(hits, scene=scene)
+    return _ok(brief, scene=scene, speak=speak)
 
 
-def _read_email(session_id: str, email_id: str = "", query: str = "", **_: Any) -> dict[str, Any]:
+def _read_email(session_id: str, email_id: str = "", query: str = "", last: bool = False, **_: Any) -> dict[str, Any]:
+    from ..mail_attachments import build_mail_scene, merge_attachment_status, remember_mail_context
+
     mail = email_conn.get_email(email_id) if email_id else None
     if not mail and query:
-        rows = email_conn.search_emails(query=query, limit=1)
+        hint = query.strip()
+        rows: list[dict[str, Any]] = []
+        if hint.lower().startswith("from:"):
+            rows = email_conn.search_emails(query=hint, limit=5)
+        elif re.fullmatch(r"[A-Za-z][A-Za-z'-]+", hint):
+            rows = email_conn.search_emails(query=f"from:{hint}", limit=5) or email_conn.search_emails(query=hint, limit=5)
+        else:
+            rows = email_conn.search_emails(query=hint, limit=5)
+        lowered = hint.lower().replace("from:", "").strip()
+        for row in rows:
+            sender = (row.get("sender") or "").lower()
+            if lowered and lowered in sender:
+                mail = row
+                break
+        if not mail and rows:
+            mail = rows[0]
+    if not mail and last and not (query or "").strip():
+        rows = email_conn.search_emails(limit=1)
         mail = rows[0] if rows else None
     if not mail:
         scene = {
             "title": "No mail",
             "widgets": [{"type": "markdown", "text": "I do not have that message."}],
         }
-        return _ok({"empty": True}, scene=scene, speak="I do not have that mail.")
-    name = (mail["sender"] or "").split("<")[0].strip()
-    from ..tables import widgets_from_body
-
-    scene = {
-        "title": name.split()[0] if name else "Mail",
-        "subtitle": mail["subject"],
-        "widgets": [
-            {"type": "kpi", "label": "From", "value": name},
-            *widgets_from_body(mail.get("body") or "", mail.get("subject") or ""),
-        ],
+        who = (query or "").replace("from:", "").strip()
+        speak = f"I do not have mail from {who}." if who and " " not in who else "I do not have that mail."
+        return _ok({"empty": True}, scene=scene, speak=speak)
+    attachments = merge_attachment_status(session_id, mail)
+    remember_mail_context(session_id, mail, attachments)
+    payload = {
+        **mail,
+        "attachments": attachments,
     }
-    return _ok(mail, scene=scene)
+    scene = build_mail_scene(mail, attachments)
+    return _ok(payload, scene=scene, mail_id=mail.get("id"), attachments=attachments)
+
+
+def _save_mail_attachments(
+    session_id: str,
+    email_id: str = "",
+    attachment_ids: list[str] | None = None,
+    filenames: list[str] | None = None,
+    query: str = "",
+    **_: Any,
+) -> dict[str, Any]:
+    from ..mail_attachments import save_attachments
+
+    result = save_attachments(
+        session_id,
+        email_id=email_id,
+        attachment_ids=attachment_ids or None,
+        filenames=filenames or None,
+        query=query,
+    )
+    if not result.get("ok"):
+        return _ok(result.get("data") or {"empty": True}, scene=result.get("scene"), speak=result.get("speak"))
+    return _ok(
+        result.get("data"),
+        scene=result.get("scene"),
+        speak=result.get("speak"),
+        mail_id=result.get("mail_id"),
+        attachments=result.get("attachments"),
+    )
+
+
+def _reply_with_attachments(
+    session_id: str,
+    email_id: str = "",
+    attachment_ids: list[str] | None = None,
+    filenames: list[str] | None = None,
+    query: str = "",
+    body: str = "",
+    **_: Any,
+) -> dict[str, Any]:
+    from ..mail_attachments import draft_reply_with_attachments
+
+    result = draft_reply_with_attachments(
+        session_id,
+        email_id=email_id,
+        attachment_ids=attachment_ids or None,
+        filenames=filenames or None,
+        query=query,
+        body=body,
+    )
+    if not result.get("ok"):
+        return _ok(result.get("data") or {"empty": True}, scene=result.get("scene"), speak=result.get("speak"))
+    return _ok(
+        result.get("data"),
+        scene=result.get("scene"),
+        pending=result.get("pending"),
+        speak=result.get("speak"),
+        mail_id=result.get("mail_id"),
+        attachments=result.get("attachments"),
+    )
 
 
 def _show_artifact(session_id: str, artifact_id: str = "", **_: Any) -> dict[str, Any]:
@@ -391,30 +602,19 @@ def _drive_upload(session_id: str, artifact_id: str = "", inbox_id: str = "", **
     if not drive_conn.live():
         scene = {"title": "Drive is not connected", "widgets": [{"type": "quote", "text": "Connect Gmail in preferences first.", "cite": "Jarvis"}]}
         return _ok({"empty": True}, scene=scene, speak="Drive is not connected.")
-    path = ""
-    title = ""
-    if artifact_id:
-        item = db.get_artifact(artifact_id)
-        if item:
-            path, title = item.get("path") or "", item.get("name") or ""
-    if not path and inbox_id:
-        item = db.get_inbox_file(inbox_id)
-        if item:
-            path, title = item.get("path") or "", item.get("name") or ""
-    if not path:
-        artifact = (get_set(session_id).get("artifact") or {})
-        if artifact.get("id"):
-            item = db.get_artifact(str(artifact["id"]))
-            if item:
-                path, title = item.get("path") or "", item.get("name") or ""
-    if not path:
-        files = db.list_inbox_files(1)
-        if files and files[0].get("path"):
-            path, title = files[0]["path"], files[0]["name"]
+    path, title = _local_file(session_id, artifact_id, inbox_id)
     if not path:
         scene = {"title": "Nothing to upload", "widgets": [{"type": "quote", "text": "Make a file or drop one first.", "cite": "Jarvis"}]}
         return _ok({"empty": True}, scene=scene, speak="I do not have a file to put on Drive.")
-    uploaded = drive_conn.upload_file(path, title)
+    existing = []
+    if title:
+        try:
+            existing = drive_conn.find_by_title(title)
+        except Exception:
+            existing = []
+    match = next((row for row in existing if (row.get("link") or "").startswith("http")), None)
+    uploaded = match or drive_conn.upload_file(path, title)
+    reused = bool(match)
     scene = {
         "title": uploaded.get("title") or "Drive",
         "subtitle": uploaded.get("link") or "",
@@ -423,7 +623,7 @@ def _drive_upload(session_id: str, artifact_id: str = "", inbox_id: str = "", **
             {"type": "markdown", "text": uploaded.get("link") or ""},
         ],
     }
-    return _ok(uploaded, scene=scene)
+    return _ok(uploaded, scene=scene, speak=f"The {uploaded.get('title') or title} is already on Drive." if reused else None)
 
 
 def _drive_find(session_id: str, title: str = "", **_: Any) -> dict[str, Any]:
@@ -433,11 +633,12 @@ def _drive_find(session_id: str, title: str = "", **_: Any) -> dict[str, Any]:
     rows = drive_conn.find_by_title(query) if query else []
     if not rows:
         return _ok({"empty": True}, scene={"title": "Not on Drive", "widgets": []}, speak="I could not find that on Drive.")
-    if len(rows) > 1 and query:
-        names = ", ".join(row["name"] for row in rows[:3])
+    unique = {str(row.get("name") or "") for row in rows}
+    if len(rows) > 1 and query and len(unique) > 1:
+        listed = ", ".join(row["name"] for row in rows[:3])
         return _ok(
             {"matches": rows},
-            scene={"title": "Say which file", "widgets": [{"type": "quote", "text": names, "cite": "Drive"}]},
+            scene={"title": "Say which file", "widgets": [{"type": "quote", "text": listed, "cite": "Drive"}]},
             speak="Two files could match. Say the exact title.",
         )
     found = rows[0]
@@ -457,13 +658,16 @@ def _task_for_gemini(
     file_title: str = "",
     **_: Any,
 ) -> dict[str, Any]:
-    file_line = _drive_file_line(session_id, file_link, file_title)
+    file_line, error = _ensure_drive_file(session_id, file_link, _guess_file_title(steps, file_title))
+    if error:
+        scene = {"title": "Say that again", "widgets": [{"type": "quote", "text": error, "cite": "Jarvis"}]}
+        return _ok({"empty": True}, scene=scene, speak=error)
+    needs_file = bool(re.search(r"\b(pdf|image|scan|sheet|xlsx|file|drive|photo|picture|spreadsheet)\b", (steps or "").lower()))
     if not file_line:
         artifact = get_set(session_id).get("artifact") or {}
         file_line = str(artifact.get("title") or artifact.get("name") or "").strip()
-    needs_file = bool(re.search(r"\b(pdf|image|scan|sheet|xlsx|file|drive|photo|picture)\b", (steps or "").lower()))
-    if needs_file and not file_line:
-        speak = "I need a Drive link or the exact file title first."
+    if needs_file and not str(file_line).startswith("http"):
+        speak = "I need that file on Drive first. Make it, drop it, or say the exact title."
         scene = {"title": "Say that again", "widgets": [{"type": "quote", "text": speak, "cite": "Jarvis"}]}
         return _ok({"empty": True}, scene=scene, speak=speak)
     body = gemini_body(file_line, steps or "Follow the spoken ask.", reply_format)
@@ -533,6 +737,7 @@ HANDLERS.update(
         "search_emails": _search_emails,
         "draft_email": _draft_email,
         "send_email": _send_email,
+        "forward_email": _forward_email,
         "list_calendar": _list_calendar,
         "create_calendar_event": _create_calendar_event,
         "create_spreadsheet": _create_spreadsheet,
@@ -541,6 +746,8 @@ HANDLERS.update(
         "review_inbox": _review_inbox,
         "research": _research,
         "read_email": _read_email,
+        "save_mail_attachments": _save_mail_attachments,
+        "reply_with_attachments": _reply_with_attachments,
         "show_artifact": _show_artifact,
         "drive_upload": _drive_upload,
         "drive_find": _drive_find,
@@ -606,6 +813,24 @@ TOOL_SCHEMAS = [
                     "in_reply_to": {"type": "string"},
                 },
                 "required": ["to", "subject", "body"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "forward_email",
+            "description": "Forward a message to someone. Never sends immediately; user must confirm.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "to": {"type": "string"},
+                    "email_id": {"type": "string"},
+                    "query": {"type": "string"},
+                    "note": {"type": "string"},
+                    "body": {"type": "string"},
+                },
+                "required": ["to"],
             },
         },
     },
@@ -707,6 +932,40 @@ TOOL_SCHEMAS = [
                 "properties": {
                     "email_id": {"type": "string"},
                     "query": {"type": "string"},
+                    "last": {"type": "boolean"},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "save_mail_attachments",
+            "description": "Save selected Gmail attachments locally under exports and upload to Drive.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "email_id": {"type": "string"},
+                    "attachment_ids": {"type": "array", "items": {"type": "string"}},
+                    "filenames": {"type": "array", "items": {"type": "string"}},
+                    "query": {"type": "string", "description": "Natural language file hint, e.g. piston PDF"},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "reply_with_attachments",
+            "description": "Draft a reply with saved mail attachments. Sending still requires confirmation.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "email_id": {"type": "string"},
+                    "attachment_ids": {"type": "array", "items": {"type": "string"}},
+                    "filenames": {"type": "array", "items": {"type": "string"}},
+                    "query": {"type": "string"},
+                    "body": {"type": "string"},
                 },
             },
         },
@@ -726,7 +985,7 @@ TOOL_SCHEMAS = [
         "type": "function",
         "function": {
             "name": "research",
-            "description": "Search the web and return cited sources.",
+            "description": "Search the public web and read the pages. Use for prices, news, facts, or anything that needs the internet. Pass the topic as query, e.g. aluminium prices in India.",
             "parameters": {
                 "type": "object",
                 "properties": {"query": {"type": "string"}},

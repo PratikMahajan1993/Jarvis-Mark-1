@@ -152,6 +152,22 @@ def _mark_ready(item: dict[str, Any], reply: dict[str, Any]) -> None:
     db.set_watch(item["session_id"], item["kind"], item["thread_id"], item.get("after_id") or "", "ready", payload)
     if item["session_id"] != "default":
         db.set_watch("default", item["kind"], item["thread_id"], item.get("after_id") or "", "ready", payload)
+    from .hud_state import remember_hud
+
+    scene = {
+        "title": name,
+        "subtitle": reply.get("subject") or "Task for Gemini",
+        "widgets": [{"type": "kpi", "label": "From", "value": name}, {"type": "markdown", "title": "Reply", "text": reply.get("body") or ""}],
+    }
+    remember_hud(
+        item["session_id"],
+        {"speak": speak, "reply": speak, "scene": scene, "watching": False, "artifacts": [], "pending": [], "more": 0},
+    )
+    if item["session_id"] != "default":
+        remember_hud(
+            "default",
+            {"speak": speak, "reply": speak, "scene": scene, "watching": False, "artifacts": [], "pending": [], "more": 0},
+        )
 
 
 def _hud_item(session_id: str) -> dict[str, Any] | None:
@@ -187,6 +203,8 @@ def watch_payload(session_id: str) -> dict[str, Any]:
     mail = payload.get("mail") if isinstance(payload.get("mail"), dict) else {}
     if status == "waiting":
         return {"watching": True, "ready": False, "status": "waiting"}
+    if status == "seen":
+        return {"watching": False, "ready": False, "status": "seen"}
     if status == "ready":
         who = first_name(mail.get("sender") or "") or "Gemini"
         if who.lower() in {"pratik", "you", "me"}:
@@ -213,17 +231,20 @@ def watch_payload(session_id: str) -> dict[str, Any]:
                 *widgets_from_body(body, mail.get("subject") or "Reply"),
             ],
         }
-        from .hud_state import remember_hud
+        if not payload.get("hud"):
+            from .hud_state import remember_hud
 
-        remember_hud(
-            item["session_id"],
-            {"speak": speak, "reply": speak, "scene": scene, "watching": False, "artifacts": [], "pending": [], "more": 0},
-        )
-        if item["session_id"] != "default":
             remember_hud(
-                "default",
+                item["session_id"],
                 {"speak": speak, "reply": speak, "scene": scene, "watching": False, "artifacts": [], "pending": [], "more": 0},
             )
+            if item["session_id"] != "default":
+                remember_hud(
+                    "default",
+                    {"speak": speak, "reply": speak, "scene": scene, "watching": False, "artifacts": [], "pending": [], "more": 0},
+                )
+            payload = {**payload, "mail": mail, "speak": speak, "hud": True}
+            db.set_watch(item["session_id"], item["kind"], item["thread_id"], item.get("after_id") or "", "ready", payload)
         return {
             "watching": False,
             "ready": True,
@@ -253,3 +274,25 @@ def watch_payload(session_id: str) -> dict[str, Any]:
             "widgets": [{"type": "quote", "text": payload.get("error") or "Gmail did not take it.", "cite": "Jarvis"}],
         },
     }
+
+
+def ack_watch(session_id: str = "default") -> dict[str, Any]:
+    targets: list[str] = [session_id]
+    if session_id != "default":
+        targets.append("default")
+    item = _hud_item(session_id)
+    if item and item.get("session_id") not in targets:
+        targets.append(item["session_id"])
+    acked = False
+    for sid in targets:
+        row = db.get_watch(sid)
+        if not row:
+            continue
+        status = row.get("status") or ""
+        if status not in {"ready", "timeout", "error"}:
+            continue
+        payload = dict(row.get("payload") or {})
+        payload["acked"] = True
+        db.set_watch(sid, row["kind"], row.get("thread_id") or "", row.get("after_id") or "", "seen", payload)
+        acked = True
+    return {"ok": True, "acked": acked}

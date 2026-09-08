@@ -3,33 +3,245 @@ from __future__ import annotations
 import json
 import re
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from . import db
 from .briefing import build_briefing
+from .compose import calendar_event_spec, document_spec, gemini_steps, reply_draft, spreadsheet_spec
 from .config import settings
-from .ollama_client import OllamaError, chat as ollama_chat, health
-from .schemas import Artifact, ChatResponse, PendingAction, Scene, Widget
-from .tools.registry import TOOL_SCHEMAS, execute_tool
+from .brain import OllamaError, chat as ollama_chat, health
+from .schemas import Artifact, ChatResponse, MailAttachment, PendingAction, Scene, Widget
+from .tools.registry import TOOL_SCHEMAS, _guess_file_title, execute_tool
 from .familiarity import remember_person, resolve as resolve_refs, speak_sent, wants_familiarity
-from .understand import clarification_thought, normalize_speech, unmatched_clauses
+from .think import refine_research, refine_mail, refine_briefing, MAIL_TOOLS
+from .intent import classify, is_work, prepare, route_for
+from .understand import clarification_thought, normalize_speech, unmatched_clauses, wants_briefing
 
-_YES = re.compile(
-    r"^(yes|yeah|yep|yup|yea|ok|okay|sure|confirm|send( it)?|do it|go ahead|proceed|please|affirmative|that'?s fine)\b",
-    re.I,
-)
-_NO = re.compile(r"^(no|nope|nah|cancel|stop|don'?t|do not|never|reject|negative|abort|wait)\b", re.I)
+_YES_SHORT = {
+    "y", "yes", "yeah", "yep", "yup", "yea", "confirm", "send", "send it", "do it",
+    "go ahead", "proceed", "affirmative", "yes please", "yes send it", "yeah do it",
+    "yes do it", "go for it", "do that", "ship it", "do so", "that's a yes", "thats a yes",
+}
+_NO_SHORT = {
+    "n", "no", "nope", "nah", "cancel", "stop", "dont", "don't", "do not", "never",
+    "reject", "negative", "abort", "wait", "no thanks", "no thank you", "not now",
+    "hold on", "leave it", "later", "not yet", "hold off",
+}
 
 
 def classify_decision(text: str) -> bool | None:
     cleaned = re.sub(r"[!.?,]", "", (text or "").strip())
+    cleaned = re.sub(r"\s+", " ", cleaned)
     if not cleaned:
         return None
-    lowered = cleaned.lower()
-    if lowered == "n" or _NO.match(cleaned):
+    lowered = cleaned.lower().replace("'", "")
+    no = {item.replace("'", "") for item in _NO_SHORT}
+    yes = {item.replace("'", "") for item in _YES_SHORT}
+    if lowered in no:
         return False
-    if lowered == "y" or _YES.match(cleaned):
+    if lowered in yes:
         return True
     return None
+
+
+def _attachment_models(rows: list[dict[str, Any]] | None) -> list[MailAttachment]:
+    out: list[MailAttachment] = []
+    for row in rows or []:
+        try:
+            out.append(MailAttachment.model_validate(row))
+        except Exception:
+            continue
+    return out
+
+
+def _chat_response(
+    session_id: str,
+    *,
+    speak: str,
+    reply: str = "",
+    scene: Scene | None = None,
+    artifacts: list[Artifact] | None = None,
+    pending: list[PendingAction] | None = None,
+    attachments: list[dict[str, Any]] | None = None,
+    mail_id: str | None = None,
+    offline: bool = False,
+    more: int = 0,
+    watching: bool = False,
+) -> ChatResponse:
+    return ChatResponse(
+        speak=speak,
+        reply=reply or speak,
+        scene=scene or Scene(title="", widgets=[]),
+        artifacts=artifacts if artifacts is not None else _collect_artifacts(),
+        pending=pending if pending is not None else _pending_models(session_id),
+        attachments=_attachment_models(attachments),
+        mail_id=mail_id,
+        offline=offline,
+        more=more,
+        watching=watching,
+    )
+
+
+def _apply_tool(
+    name: str,
+    arguments: dict[str, Any],
+    session_id: str,
+    prefs: dict[str, Any],
+    asked: str,
+) -> dict[str, Any]:
+    result = execute_tool(name, arguments, session_id)
+    if name == "research":
+        return refine_research(prefs, asked, result)
+    if name == "get_briefing":
+        return refine_briefing(prefs, asked, result)
+    if name in MAIL_TOOLS:
+        return refine_mail(prefs, asked, name, result)
+    return result
+
+
+def run_attachment_save(session_id: str, email_id: str, attachment_ids: list[str], filenames: list[str] | None = None) -> ChatResponse:
+    prefs = db.get_preferences()
+    result = _apply_tool(
+        "save_mail_attachments",
+        {"email_id": email_id, "attachment_ids": attachment_ids, "filenames": filenames or []},
+        session_id,
+        prefs,
+        "",
+    )
+    thought = _thought_from_result(result, "save_mail_attachments")
+    if thought:
+        return _response_from_thought(session_id, thought, False)
+    speak = str(result.get("speak") or "Done.")
+    return _chat_response(
+        session_id,
+        speak=speak,
+        scene=_scene_from_dict(result.get("scene")),
+        attachments=result.get("attachments"),
+        mail_id=result.get("mail_id"),
+    )
+
+
+def run_attachment_reply(session_id: str, email_id: str, attachment_ids: list[str], filenames: list[str] | None = None) -> ChatResponse:
+    prefs = db.get_preferences()
+    result = _apply_tool(
+        "reply_with_attachments",
+        {"email_id": email_id, "attachment_ids": attachment_ids, "filenames": filenames or []},
+        session_id,
+        prefs,
+        "",
+    )
+    thought = _thought_from_result(result, "reply_with_attachments")
+    if thought:
+        return _response_from_thought(session_id, thought, False)
+    speak = str(result.get("speak") or "Draft is ready.")
+    return _chat_response(
+        session_id,
+        speak=speak,
+        scene=_scene_from_dict(result.get("scene")),
+        attachments=result.get("attachments"),
+        mail_id=result.get("mail_id"),
+    )
+
+
+def _fill_tool_args(name: str, arguments: dict[str, Any], asked: str, prefs: dict[str, Any] | None = None) -> dict[str, Any]:
+    args = dict(arguments or {})
+    intent = classify(asked)
+    prefs = prefs or {}
+    if name == "read_email":
+        if intent.person and not args.get("email_id"):
+            current = str(args.get("query") or "")
+            if "from:" not in current.lower():
+                args["query"] = intent.query or f"from:{intent.person}"
+        elif not args.get("email_id") and not args.get("query") and intent.query:
+            args["query"] = intent.query
+        if intent.last:
+            args["last"] = True
+    if name == "search_emails":
+        if intent.unread_only:
+            args["unread_only"] = True
+        if intent.query and not args.get("query"):
+            args["query"] = intent.query
+    if name in {"save_mail_attachments", "reply_with_attachments", "forward_email"} and not args.get("query"):
+        args["query"] = asked
+    if name == "research" and not args.get("query"):
+        from .connectors.search import clean_query
+
+        args["query"] = clean_query(intent.query or asked) or asked
+    if name == "list_calendar" and not args.get("days"):
+        args["days"] = 2
+    if name == "create_calendar_event" and not args.get("title"):
+        try:
+            tz = ZoneInfo(prefs.get("timezone") or settings.tz or "Asia/Kolkata")
+        except Exception:
+            tz = ZoneInfo("Asia/Kolkata")
+        event = calendar_event_spec(asked, tz)
+        if event:
+            args.update(event)
+    if name == "drive_find" and not args.get("title"):
+        args["title"] = _guess_file_title(asked) or asked
+    if name == "task_for_gemini" and not args.get("steps"):
+        args["steps"] = gemini_steps(asked)
+    if name == "create_spreadsheet" and not args.get("title"):
+        args.update(spreadsheet_spec(asked))
+    if name == "create_document" and not args.get("title"):
+        args.update(document_spec(asked))
+    return args
+
+
+def _try_model_route(
+    message: str,
+    prefs: dict[str, Any],
+    session_id: str,
+    tools: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[str]]:
+    intent = classify(message)
+    route = route_for(intent.kind)
+    allowed = list(route.tools)
+    if not allowed:
+        return [], []
+    if route.pref and not prefs.get(route.pref, True):
+        return [], []
+    wanted = set(allowed)
+    selected = [item for item in tools if (item.get("function") or {}).get("name") in wanted]
+    if not selected:
+        return [], []
+    name = prefs.get("assistant_name") or "Jarvis"
+    who = prefs.get("display_name") or "Sir"
+    steer = (
+        f"You are {name}, {who}'s aide. {route.job} "
+        "Do not invent senders, prices, or calendar facts. Use only the provided tools."
+    )
+    messages: list[dict[str, Any]] = [
+        {"role": "system", "content": steer},
+        {"role": "user", "content": message},
+    ]
+    try:
+        response = ollama_chat(
+            messages,
+            tools=selected,
+            timeout=180,
+            allowed_function_names=allowed,
+        )
+    except OllamaError:
+        return [], []
+    thoughts: list[dict[str, Any]] = []
+    used: list[str] = []
+    calls = [call for call in _tool_calls_from_message(response) if call.get("name") in wanted]
+    if not calls:
+        args = _fill_tool_args(allowed[0], {}, message, prefs)
+        calls = [{"name": allowed[0], "arguments": args}]
+    if len(allowed) == 1:
+        calls = calls[:1]
+    for call in calls:
+        if call["name"] not in wanted:
+            continue
+        arguments = _fill_tool_args(call["name"], call.get("arguments") or {}, message, prefs)
+        result = _apply_tool(call["name"], arguments, session_id, prefs, message)
+        used.append(call["name"])
+        thought = _thought_from_result(result, call["name"])
+        if thought:
+            thoughts.append(thought)
+    return thoughts, used
 
 
 def _enabled_tools(prefs: dict[str, Any]) -> list[dict[str, Any]]:
@@ -37,6 +249,8 @@ def _enabled_tools(prefs: dict[str, Any]) -> list[dict[str, Any]]:
         "search_emails": prefs.get("email_enabled", True),
         "draft_email": prefs.get("email_enabled", True),
         "send_email": prefs.get("email_enabled", True),
+        "forward_email": prefs.get("email_enabled", True),
+        "read_email": prefs.get("email_enabled", True),
         "list_calendar": prefs.get("calendar_enabled", True),
         "create_calendar_event": prefs.get("calendar_enabled", True),
         "create_spreadsheet": prefs.get("files_enabled", True),
@@ -101,7 +315,8 @@ def _chat_prompt(prefs: dict[str, Any]) -> str:
 Address the user as {prefs.get('display_name', 'Sir')}.
 Persona: {prefs.get('persona')}
 Verbosity: {prefs.get('verbosity', 'concise')}.
-Answer ordinary conversation in 1-3 natural sentences. Do not mention tools, JSON, or that you are a model.
+Answer ordinary conversation in one or two sentences. Be present, not a chatbot.
+Do not mention tools, JSON, or that you are a model.
 Do not invent emails, files, or calendar changes.
 """
 
@@ -145,92 +360,65 @@ def _tool_calls_from_message(message: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def _wants_work(message: str) -> bool:
-    text = message.lower()
-    phrases = (
-        "brief me",
-        "briefing",
-        "what's on",
-        "whats on",
-        "inbox",
-        "email",
-        "e-mail",
-        "mail",
-        "draft",
-        "reply",
-        "calendar",
-        "schedule",
-        "agenda",
-        "spreadsheet",
-        "excel",
-        "xlsx",
-        "document",
-        "docx",
-        "one-pager",
-        "dropped a file",
-        "dropped",
-        "summarize",
-        "review the dropped",
-        "this file",
-        "research",
-        "look up",
-        "search the web",
-        "meeting notes",
-        "open the",
-        "the spreadsheet",
-        "the sheet",
-        "what did",
-        "what's in",
-        "whats in",
-        "reply to him",
-        "reply to her",
-        "gemini",
-        "drive",
-        "google drive",
-        "analyze this",
-        "open in excel",
-    )
-    return any(phrase in text for phrase in phrases) or wants_familiarity(message)
+    return is_work(message) or wants_familiarity(message)
+
+
+def _session_mail(refs: dict[str, Any], session_id: str, pointed: bool = False) -> dict[str, Any] | None:
+    mail = refs.get("mail") or (email_conn_get(refs.get("thread") or {}) if refs.get("thread") else None)
+    if not mail:
+        from .mail_attachments import get_mail_context
+
+        ctx = get_mail_context(session_id)
+        mail = email_conn_get({"id": ctx.get("email_id")}) if ctx.get("email_id") else None
+    if not mail and pointed:
+        mail = email_hint()
+    return mail
 
 
 def _heuristic_tools(message: str, prefs: dict[str, Any], session_id: str = "default") -> list[dict[str, Any]]:
     if not _wants_work(message):
         return []
+    intent = classify(message)
     text = message.lower()
     refs = resolve_refs(session_id, message)
     calls: list[dict[str, Any]] = []
-    gemini_ask = any(
-        phrase in text
-        for phrase in (
-            "ask gemini",
-            "send this to gemini",
-            "send it to gemini",
-            "task for gemini",
-            "analyze this",
-            "have gemini",
-        )
-    )
-    drive_up = any(phrase in text for phrase in ("on drive", "to drive", "upload to drive", "put it on drive", "share it"))
-    drive_find = ("drive" in text) and not drive_up and not gemini_ask
-    briefing_ask = any(phrase in text for phrase in ("brief me", "briefing", "standup")) or (
-        ("what's on" in text or "whats on" in text) and "mail" not in text and "email" not in text
-    )
-    if briefing_ask:
+    pointed = bool(re.search(r"\b(that|this|last|latest|newest|it)\b", text))
+
+    if intent.kind == "briefing":
         calls.append({"name": "get_briefing", "arguments": {}})
-    if prefs.get("email_enabled") and not gemini_ask and (refs["read_mail"] or any(word in text for word in ("email", "e-mail", "inbox", "mail", "reply", "draft"))):
-        if refs["read_mail"]:
-            mail = refs.get("mail") or (email_conn_get(refs.get("thread") or {}))
+
+    if prefs.get("email_enabled") and intent.kind.startswith("mail_"):
+        if intent.kind == "mail_save":
+            mail = _session_mail(refs, session_id, pointed)
+            args = {"query": message}
+            if mail:
+                args["email_id"] = mail["id"]
+            calls.append({"name": "save_mail_attachments", "arguments": args})
+        elif intent.kind == "mail_reply_attach":
+            mail = _session_mail(refs, session_id, pointed)
+            args = {"query": message}
+            if mail:
+                args["email_id"] = mail["id"]
+            calls.append({"name": "reply_with_attachments", "arguments": args})
+        elif intent.kind == "mail_read":
+            args = _fill_tool_args("read_email", {}, message, prefs)
+            mail = None
+            if not intent.person:
+                if intent.last:
+                    mail = email_hint()
+                elif refs.get("mail") or refs.get("thread") or pointed:
+                    mail = _session_mail(refs, session_id, pointed)
             if mail:
                 calls.append({"name": "read_email", "arguments": {"email_id": mail["id"]}})
-            elif refs.get("person"):
-                calls.append({"name": "read_email", "arguments": {"query": refs["person"]["first"]}})
-        elif "unread" in text or "inbox" in text or ("mail" in text and not refs["reply"]):
-            calls.append({"name": "search_emails", "arguments": {"unread_only": "unread" in text}})
-        if refs["reply"] or any(word in text for word in ("reply", "draft")):
+            else:
+                calls.append({"name": "read_email", "arguments": args})
+        elif intent.kind == "mail_search":
+            calls.append({"name": "search_emails", "arguments": _fill_tool_args("search_emails", {}, message, prefs)})
+        elif intent.kind == "mail_draft":
             inbox = refs.get("mail")
             if not inbox and refs.get("thread") and refs["thread"].get("id"):
                 inbox = email_conn_get(refs["thread"])
-            pointed = bool(re.search(r"\b(him|her|them|that)\b", text))
-            if not inbox and not pointed:
+            if not inbox and pointed:
                 inbox = email_hint()
             if inbox:
                 calls.append(
@@ -238,20 +426,68 @@ def _heuristic_tools(message: str, prefs: dict[str, Any], session_id: str = "def
                         "name": "draft_email",
                         "arguments": {
                             "to": inbox["sender"],
-                            "subject": f"Re: {inbox['subject']}",
-                            "body": (
-                                f"Thank you for the note on {inbox['subject']}. "
-                                "I will send the revised pricing sheet before the 4pm review "
-                                "and confirm the 12-week rollout including the on-site week."
-                            ),
+                            "subject": f"Re: {inbox['subject']}" if not str(inbox.get("subject") or "").lower().startswith("re:") else inbox["subject"],
+                            "body": reply_draft(inbox),
                             "in_reply_to": inbox["id"],
                         },
                     }
                 )
-    if prefs.get("calendar_enabled") and any(word in text for word in ("calendar", "schedule", "agenda")):
-        calls.append({"name": "list_calendar", "arguments": {"days": 2}})
-    if prefs.get("research_enabled") and any(word in text for word in ("research", "look up", "search the web")):
-        calls.append({"name": "research", "arguments": {"query": message}})
+            else:
+                compose_match = re.search(r"\b(?:mail|email|write to)\s+([A-Za-z][A-Za-z'-]+)\b", text)
+                person_name = (compose_match.group(1) if compose_match else intent.person) or ""
+                to_addr = ""
+                if refs.get("person") and refs["person"].get("first", "").lower() == person_name.lower():
+                    to_addr = refs["person"].get("email") or refs["person"].get("sender") or ""
+                if not to_addr and person_name:
+                    rows = email_conn_search(person_name, limit=1)
+                    if rows:
+                        to_addr = rows[0].get("sender") or ""
+                if to_addr:
+                    subject_match = re.search(r"\b(?:that|about|re:?)\s+(.+)$", message, re.I)
+                    subject = subject_match.group(1).strip()[:80] if subject_match else f"Note for {person_name}"
+                    calls.append(
+                        {
+                            "name": "draft_email",
+                            "arguments": {
+                                "to": to_addr,
+                                "subject": subject,
+                                "body": f"Hi {person_name},\n\n",
+                            },
+                        }
+                    )
+        elif intent.kind == "mail_forward":
+            mail = _session_mail(refs, session_id, pointed)
+            forward_match = re.search(
+                r"\bforward(?:\s+(?:this|that|it|the(?:\s+mail|\s+email|\s+message)?))?(?:\s+to)?\s+([A-Za-z][A-Za-z'@.\s-]+?)(?:\s+|$|[?.!,])",
+                text,
+            )
+            to_addr = (forward_match.group(1).strip() if forward_match else "").strip(" .")
+            if mail and to_addr:
+                if "@" not in to_addr:
+                    rows = email_conn_search(to_addr, limit=1) if to_addr else []
+                    if rows and "<" in (rows[0].get("sender") or ""):
+                        to_addr = rows[0]["sender"]
+                    elif refs.get("person") and refs["person"].get("first", "").lower() == to_addr.lower():
+                        to_addr = refs["person"].get("email") or refs["person"].get("sender") or to_addr
+                calls.append({"name": "forward_email", "arguments": {"to": to_addr, "email_id": mail["id"]}})
+
+    if prefs.get("calendar_enabled"):
+        try:
+            tz = ZoneInfo(prefs.get("timezone") or settings.tz or "Asia/Kolkata")
+        except Exception:
+            tz = ZoneInfo("Asia/Kolkata")
+        if intent.kind == "calendar_create":
+            event = calendar_event_spec(message, tz)
+            if event:
+                calls.append({"name": "create_calendar_event", "arguments": event})
+        elif intent.kind == "calendar_list":
+            calls.append({"name": "list_calendar", "arguments": {"days": 2}})
+
+    if prefs.get("research_enabled") and intent.kind == "research":
+        from .connectors.search import clean_query
+
+        calls.append({"name": "research", "arguments": {"query": clean_query(message) or message}})
+
     if refs.get("same_morning"):
         have_sheet = bool(refs.get("artifact") and refs["artifact"].get("id"))
         have_mail = bool(refs.get("mail") or (refs.get("thread") and refs["thread"].get("id")))
@@ -263,77 +499,51 @@ def _heuristic_tools(message: str, prefs: dict[str, Any], session_id: str = "def
             mail = refs.get("mail") or email_conn_get(refs.get("thread") or {})
             if mail:
                 calls.append({"name": "read_email", "arguments": {"email_id": mail["id"]}})
-        return calls
-    if prefs.get("files_enabled") and refs["open_sheet"] and refs.get("artifact") and refs["artifact"].get("id"):
+        return _gate_calls(calls, intent.kind)
+
+    if intent.kind == "sheet_open" and prefs.get("files_enabled") and refs.get("artifact") and refs["artifact"].get("id"):
         calls.append({"name": "show_artifact", "arguments": {"artifact_id": refs["artifact"]["id"]}})
-    elif (
-        prefs.get("files_enabled")
-        and any(word in text for word in ("spreadsheet", "excel", "xlsx"))
-        and not refs["open_sheet"]
-        and not drive_up
-        and not gemini_ask
-    ):
-        title = "Pricing" if "pricing" in text else "Follow-up"
-        calls.append(
-            {
-                "name": "create_spreadsheet",
-                "arguments": {
-                    "title": title,
-                    "columns": ["Item", "Owner", "Status"],
-                    "rows": [
-                        ["Revised pricing sheet", "You", "In progress"],
-                        ["MSA redlines", "Legal", "Waiting"],
-                        ["Client review", "You", "16:00 today"],
-                    ],
-                    "chart": False,
-                },
-            }
-        )
-    if prefs.get("files_enabled") and any(
-        word in text for word in ("dropped", "summarize", "this file", "review the dropped")
-    ):
+    elif intent.kind == "sheet_create" and prefs.get("files_enabled"):
+        calls.append({"name": "create_spreadsheet", "arguments": spreadsheet_spec(message)})
+
+    if intent.kind == "file_review" and prefs.get("files_enabled"):
         calls.append({"name": "review_inbox", "arguments": {}})
-    if prefs.get("files_enabled") and drive_up:
+    if intent.kind == "drive_upload" and prefs.get("files_enabled"):
         calls.append({"name": "drive_upload", "arguments": {}})
-    if prefs.get("files_enabled") and drive_find:
-        title = ((refs.get("drive") or {}).get("title") or "")
+    if intent.kind == "drive_find" and prefs.get("files_enabled"):
+        title = ((refs.get("drive") or {}).get("title") or "") or _guess_file_title(message)
         calls.append({"name": "drive_find", "arguments": {"title": title}})
-    if prefs.get("email_enabled") and gemini_ask:
+    if intent.kind == "gemini" and prefs.get("email_enabled"):
         drive = refs.get("drive") or {}
         artifact = refs.get("artifact") or {}
-        steps = re.sub(
-            r"(?i)\b(jarvis|please|ask gemini|send (this|it) to gemini|task for gemini|put it on drive|and)\b",
-            " ",
-            message,
-        )
+        steps = gemini_steps(message)
         calls.append(
             {
                 "name": "task_for_gemini",
                 "arguments": {
-                    "steps": re.sub(r"\s+", " ", steps).strip() or message,
+                    "steps": steps,
                     "file_link": drive.get("link") or "",
                     "file_title": drive.get("title") or artifact.get("title") or artifact.get("name") or "",
                 },
             }
         )
-    if prefs.get("files_enabled") and any(word in text for word in ("word document", "document", "docx", "one-pager", "meeting notes")):
-        calls.append(
-            {
-                "name": "create_document",
-                "arguments": {
-                    "title": "Meeting notes",
-                    "body": "Prepared by Jarvis from the current briefing.",
-                    "bullets": ["Confirm rollout", "Send pricing sheet", "Review MSA"],
-                },
-            }
-        )
+    if intent.kind == "doc_create" and prefs.get("files_enabled"):
+        calls.append({"name": "create_document", "arguments": document_spec(message)})
+
     seen = set()
     unique = []
     for call in calls:
         if call["name"] not in seen:
             unique.append(call)
             seen.add(call["name"])
-    return unique
+    return _gate_calls(unique, intent.kind)
+
+
+def _gate_calls(calls: list[dict[str, Any]], kind: str) -> list[dict[str, Any]]:
+    allowed = set(route_for(kind).tools)
+    if not allowed:
+        return calls
+    return [call for call in calls if call.get("name") in allowed]
 
 
 def email_hint() -> dict[str, Any] | None:
@@ -348,6 +558,12 @@ def email_conn_get(thread: dict[str, Any]) -> dict[str, Any] | None:
 
     mail_id = thread.get("id")
     return get_email(mail_id) if mail_id else None
+
+
+def email_conn_search(query: str, limit: int = 1) -> list[dict[str, Any]]:
+    from .connectors.email import search_emails
+
+    return search_emails(query=query, limit=limit)
 
 
 def _scene_from_dict(data: dict[str, Any] | None) -> Scene | None:
@@ -371,13 +587,41 @@ def _fallback_scene(text: str) -> Scene:
     return Scene(
         title="Jarvis",
         subtitle="Conversation",
-        widgets=[Widget(type="markdown", title="Explanation", text=text or "Standing by.")],
+        widgets=[Widget(type="markdown", title="Explanation", text=text or "Here.")],
     )
 
 
 def _looks_like_error(text: str) -> bool:
     lowered = (text or "").lower()
     return any(token in lowered for token in ("does not support tools", "traceback", '"error"', "could not complete"))
+
+
+def _social_reply(message: str, prefs: dict[str, Any]) -> str:
+    text = prepare(message)
+    cleaned = re.sub(r"[!.?,]", "", (text or "").strip())
+    cleaned = re.sub(r"\s+", " ", cleaned).lower()
+    who = prefs.get("display_name") or "Sir"
+    replies = {
+        "how are you": f"In order, {who}. What do you need?",
+        "how are you doing": f"In order, {who}. What do you need?",
+        "thanks": "Of course.",
+        "thank you": "Of course.",
+        "thanks jarvis": "Of course.",
+        "who are you": "Jarvis. Your aide.",
+        "hello": "Yes?",
+        "hi": "Yes?",
+        "hey": "Yes?",
+        "good morning": "Good morning.",
+        "good evening": "Good evening.",
+        "good afternoon": "Good afternoon.",
+        "don't reply": "Understood. I will not reply.",
+        "dont reply": "Understood. I will not reply.",
+        "do not reply": "Understood. I will not reply.",
+        "do not send this email": "Understood. I will not send it.",
+        "don't send": "Understood. I will not send it.",
+        "dont send": "Understood. I will not send it.",
+    }
+    return replies.get(cleaned, "")
 
 
 def _speak_from_scene(scene: Scene | None, used_tools: bool) -> str:
@@ -388,7 +632,7 @@ def _speak_from_scene(scene: Scene | None, used_tools: bool) -> str:
         return f"{scene.title} is on the board."
     if used_tools:
         return "Done. The board is updated."
-    return "Standing by."
+    return "Here."
 
 
 def _collect_artifacts() -> list[Artifact]:
@@ -418,6 +662,8 @@ def _thought_from_result(result: dict[str, Any], tool_name: str = "") -> dict[st
         "pending_id": pending.get("id") if pending else None,
         "artifact_id": _artifact_from_tool(result),
         "tool": tool_name,
+        "attachments": result.get("attachments"),
+        "mail_id": result.get("mail_id"),
     }
 
 
@@ -432,14 +678,16 @@ def _response_from_thought(session_id: str, thought: dict[str, Any], offline: bo
     scene = _scene_from_dict(thought.get("scene")) or Scene(title="", widgets=[])
     speak = str(thought.get("speak") or _speak_from_scene(scene, True))
     db.set_focus_pending(session_id, thought.get("pending_id") or "")
-    return ChatResponse(
+    return _chat_response(
+        session_id,
         speak=speak,
         reply=speak,
         scene=scene,
         artifacts=_artifacts_for(thought.get("artifact_id")),
-        pending=_pending_models(session_id),
-        more=db.thought_count(session_id),
+        attachments=thought.get("attachments"),
+        mail_id=thought.get("mail_id"),
         offline=offline,
+        more=db.thought_count(session_id),
         watching=bool((db.get_watch(session_id) or {}).get("status") == "waiting"),
     )
 
@@ -463,14 +711,20 @@ def run_agent(message: str, session_id: str = "default") -> ChatResponse:
     heard = message
     message, _repairs = normalize_speech(message)
     db.add_message(session_id, "user", message)
+    if not message.strip():
+        return _chat_response(session_id, speak="Yes?")
     memories = db.list_memories(session_id)
     inbox = db.list_inbox_files(6)
     tools = _enabled_tools(prefs)
     status = health()
 
     model_ready = bool(status.get("model_ready"))
-    offline = not status["ollama"] or not model_ready
+    offline = not model_ready
     work = _wants_work(message)
+    if not work:
+        social = _social_reply(message, prefs)
+        if social:
+            return _chat_response(session_id, speak=social)
     system = _system_prompt(prefs, memories, inbox) if work else _chat_prompt(prefs)
     messages: list[dict[str, Any]] = [{"role": "system", "content": system}]
     for item in db.recent_messages(session_id, 12):
@@ -482,20 +736,36 @@ def run_agent(message: str, session_id: str = "default") -> ChatResponse:
     parsed: dict[str, Any] | None = None
     thoughts: list[dict[str, Any]] = []
     used_names: list[str] = []
+    intent = classify(message)
+    route = route_for(intent.kind)
 
     if work:
-        for call in _heuristic_tools(message, prefs, session_id):
-            result = execute_tool(call["name"], call.get("arguments") or {}, session_id)
-            used_tools = True
-            used_names.append(call["name"])
-            thought = _thought_from_result(result, call["name"])
-            if thought:
-                thoughts.append(thought)
-                last_scene = thought["scene"]
+        if route.tools and not offline:
+            extra, names = _try_model_route(message, prefs, session_id, tools)
+            used_names.extend(names)
+            if names:
+                used_tools = True
+            if extra:
+                thoughts.extend(extra)
+                last_scene = extra[-1].get("scene")
+        done = bool(route.complete and route.complete in used_names)
+        if not done:
+            for call in _heuristic_tools(message, prefs, session_id):
+                if call["name"] in used_names:
+                    continue
+                result = _apply_tool(call["name"], call.get("arguments") or {}, session_id, prefs, message)
+                used_tools = True
+                used_names.append(call["name"])
+                thought = _thought_from_result(result, call["name"])
+                if thought:
+                    thoughts.append(thought)
+                    last_scene = thought["scene"]
+                if route.complete and route.complete in used_names:
+                    break
 
     try:
         if offline:
-            raise OllamaError(f"{settings.ollama_model} is not online yet")
+            raise OllamaError(f"{status.get('model') or 'The model'} is not online yet")
         if work:
             raise OllamaError("skip model tools")
         response = ollama_chat(messages, tools=tools if work else None)
@@ -558,12 +828,16 @@ def run_agent(message: str, session_id: str = "default") -> ChatResponse:
             cleaned = ""
         speak = cleaned[:320] or _speak_from_scene(scene, used_tools)
         reply = cleaned or speak
-    if offline and not used_tools and (not speak or speak == "Standing by."):
+    if offline and not used_tools and (not speak or speak in {"Standing by.", "Here."}):
         speak = "The model is still coming online. Ask me to brief you, draft mail, or make a file."
         reply = speak
     if not scene:
-        if work and any(phrase in message.lower() for phrase in ("brief me", "briefing", "what's on", "whats on")):
-            scene = _scene_from_dict(build_briefing()["scene"])
+        if work and wants_briefing(message):
+            payload = build_briefing()
+            scene = _scene_from_dict(payload["scene"])
+            if not speak:
+                speak = str(payload.get("speak") or "")
+                reply = speak
         else:
             scene = Scene(
                 title="",
@@ -571,15 +845,10 @@ def run_agent(message: str, session_id: str = "default") -> ChatResponse:
             )
 
     refs = resolve_refs(session_id, message)
-    if refs["open_sheet"] and "show_artifact" not in used_names and "create_spreadsheet" not in used_names:
+    if refs["open_sheet"] and "show_artifact" not in used_names and "create_spreadsheet" not in used_names and "task_for_gemini" not in used_names:
         guess = {
             "tool": "create_spreadsheet",
-            "arguments": {
-                "title": "Follow-up",
-                "columns": ["Item", "Owner", "Status"],
-                "rows": [["Revised pricing sheet", "You", "In progress"]],
-                "chart": False,
-            },
+            "arguments": spreadsheet_spec(message or "spreadsheet"),
             "label": "spreadsheet",
         }
         extra = clarification_thought({"heard": "the spreadsheet", "guess": guess})
@@ -613,8 +882,8 @@ def run_agent(message: str, session_id: str = "default") -> ChatResponse:
             "pending_id": None,
             "artifact_id": None,
         })
-    if (refs["reply"] or refs["read_mail"]) and not any(
-        name in used_names for name in ("draft_email", "read_email", "search_emails")
+    if intent.kind in {"mail_draft", "mail_read", "mail_forward"} and (refs["reply"] or refs["read_mail"]) and not any(
+        name in used_names for name in ("draft_email", "read_email", "search_emails", "forward_email")
     ):
         thoughts.append({
             "speak": "Who is that? Give me a name.",
@@ -624,6 +893,8 @@ def run_agent(message: str, session_id: str = "default") -> ChatResponse:
         })
 
     for item in unmatched_clauses(heard, message, used_names):
+        if "task_for_gemini" in used_names:
+            continue
         extra = clarification_thought(item)
         guess = item.get("guess")
         if guess:
@@ -637,6 +908,14 @@ def run_agent(message: str, session_id: str = "default") -> ChatResponse:
             )
             extra["pending_id"] = pending["id"]
         thoughts.append(extra)
+
+    if work and not used_tools and not thoughts:
+        if re.search(r"\bwhat('?s| is| did)\b", message, re.I):
+            speak = "Mail, the calendar, or a file — which one?"
+        else:
+            speak = "I don't handle that yet. Mail, calendar, a file, or Gemini."
+        reply = speak
+        scene = Scene(title="Say that again", widgets=[Widget(type="quote", text=speak, cite="Jarvis")])
 
     if thoughts:
         first, rest = thoughts[0], thoughts[1:]
@@ -694,6 +973,7 @@ def resolve_pending(action_id: str, approved: bool, session_id: str) -> ChatResp
                 payload["body"],
                 payload.get("source_id"),
                 payload.get("thread_id") or "",
+                attachment_paths=payload.get("attachment_paths") or None,
             )
         except Exception:
             db.set_pending_status(action_id, "rejected")
@@ -716,16 +996,50 @@ def resolve_pending(action_id: str, approved: bool, session_id: str) -> ChatResp
                 Widget(type="markdown", title="Message", text=payload["body"]),
             ],
         )
-    elif action["kind"] == "calendar_create":
-        from .connectors.calendar import create_event
+    elif action["kind"] == "email_forward":
+        from .connectors.email import forward_email
 
-        create_event(**payload)
+        try:
+            sent = forward_email(
+                payload["to"],
+                payload.get("source_id") or "",
+                note=payload.get("note") or "",
+            )
+        except Exception:
+            db.set_pending_status(action_id, "rejected")
+            speak = "Gmail did not take it."
+            return ChatResponse(speak=speak, reply=speak, scene=_fallback_scene(speak), watching=False)
+        remember_person(session_id, payload["to"], sent.get("id") or payload.get("source_id"), payload.get("subject"))
+        detail = speak_sent(payload["to"])
+        scene = Scene(
+            title="Forwarded",
+            subtitle=payload.get("subject") or "",
+            widgets=[
+                Widget(type="kpi", label="To", value=payload["to"]),
+                Widget(type="markdown", title="Forward", text=payload.get("note") or sent.get("body") or ""),
+            ],
+        )
+    elif action["kind"] == "calendar_create":
+        from .connectors.calendar import clock, create_event
+
+        try:
+            create_event(**payload)
+        except Exception as exc:
+            db.set_pending_status(action_id, "rejected")
+            speak = str(exc).strip() or "Calendar did not take it."
+            if "traceback" in speak.lower() or len(speak) > 160:
+                speak = "Calendar did not take it."
+            return ChatResponse(speak=speak, reply=speak, scene=_fallback_scene(speak), watching=False)
         detail = f"Added {payload['title']}"
         scene = Scene(
             title="On the calendar",
             subtitle=payload["title"],
             widgets=[
-                Widget(type="timeline", title="New event", items=[{"time": payload["start_at"][11:16], "title": payload["title"], "detail": payload.get("location") or ""}]),
+                Widget(
+                    type="timeline",
+                    title="New event",
+                    items=[{"time": clock(payload.get("start_at") or ""), "title": payload["title"], "detail": payload.get("location") or ""}],
+                ),
             ],
         )
     elif action["kind"] == "clarify":

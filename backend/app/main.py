@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+import binascii
 import uuid
 from pathlib import Path
 
@@ -8,18 +10,23 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, RedirectResponse
 
 from . import db
-from .agent import next_thought, resolve_pending, run_agent
+from .agent import next_thought, resolve_pending, run_agent, run_attachment_reply, run_attachment_save
 from .briefing import build_briefing, build_glance
 from .config import settings
-from .connectors.calendar import seed_calendar
+from .connectors.calendar import live as calendar_live, seed_calendar
 from .familiarity import ensure_demo_people
 from .connectors.email import seed_mailbox
+from .connectors.gmail import live as gmail_live
 from .connectors import google_auth
-from .ollama_client import health
+from .brain import health
+from .mail_attachments import safe_drawing_path, save_marked_drawing
 from .schemas import (
     CANVAS_ITEM_BASE_FIELDS,
     CanvasBoardCreate,
     CanvasBoardUpdate,
+    MailAttachmentAction,
+    MailReplyAttachmentAction,
+    MarkedDrawingSave,
     ChatRequest,
     ConfirmRequest,
     Preferences,
@@ -27,12 +34,13 @@ from .schemas import (
 )
 from .tools.documents import read_export_text
 from .hud_state import load_hud, remember_hud
-from .watch import resume_watches, watch_payload
+from .watch import ack_watch, resume_watches, watch_payload
 
 app = FastAPI(title="Jarvis Command Center", version="0.1.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.origin_list or ["http://localhost:3000"],
+    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1|(\d{1,3}\.){3}\d{1,3})(:\d+)?",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -42,9 +50,11 @@ app.add_middleware(
 @app.on_event("startup")
 def startup() -> None:
     db.init_db()
-    seed_mailbox()
-    seed_calendar()
-    ensure_demo_people()
+    if not gmail_live():
+        seed_mailbox()
+        ensure_demo_people()
+    if not calendar_live():
+        seed_calendar()
     settings.exports_dir.mkdir(parents=True, exist_ok=True)
     resume_watches()
 
@@ -84,9 +94,30 @@ def api_watch(session_id: str = "default") -> dict:
     return watch_payload(session_id)
 
 
+@app.post("/api/watch/ack")
+def api_watch_ack(session_id: str = "default") -> dict:
+    return ack_watch(session_id)
+
+
 @app.get("/api/session")
 def api_session(session_id: str = "default") -> dict:
     return load_hud(session_id)
+
+
+@app.post("/api/mail/attachments/save")
+def api_mail_attachments_save(payload: MailAttachmentAction) -> dict:
+    result = run_attachment_save(payload.session_id, payload.email_id, payload.attachment_ids, payload.filenames)
+    data = result.model_dump()
+    remember_hud(payload.session_id, data)
+    return data
+
+
+@app.post("/api/mail/attachments/reply")
+def api_mail_attachments_reply(payload: MailReplyAttachmentAction) -> dict:
+    result = run_attachment_reply(payload.session_id, payload.email_id, payload.attachment_ids, payload.filenames)
+    data = result.model_dump()
+    remember_hud(payload.session_id, data)
+    return data
 
 
 @app.post("/api/chat")
@@ -131,6 +162,41 @@ def api_artifact_download(artifact_id: str):
     if not path.exists():
         raise HTTPException(404, "File missing")
     return FileResponse(path, filename=item["name"])
+
+
+@app.get("/api/drawings/{filename}")
+def api_drawing_download(filename: str):
+    try:
+        path = safe_drawing_path(filename)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    if not path.exists():
+        raise HTTPException(404, "Drawing not found")
+    suffix = path.suffix.lower()
+    media = "application/pdf" if suffix == ".pdf" else None
+    return FileResponse(path, media_type=media)
+
+
+@app.post("/api/drawings/marked")
+def api_drawing_marked(payload: MarkedDrawingSave) -> dict:
+    raw = payload.image_base64.strip()
+    if raw.startswith("data:"):
+        raw = raw.split(",", 1)[-1]
+    if not raw:
+        raise HTTPException(400, "Missing image data")
+    try:
+        png_bytes = base64.b64decode(raw, validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise HTTPException(400, "Invalid image data") from exc
+    if not png_bytes:
+        raise HTTPException(400, "Empty image")
+    result = save_marked_drawing(payload.session_id, payload.source_name, png_bytes)
+    return {
+        "ok": True,
+        "speak": result["speak"],
+        "artifact": result["artifact"],
+        "drive_link": result.get("drive_link"),
+    }
 
 
 @app.get("/api/audit")

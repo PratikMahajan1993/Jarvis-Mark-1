@@ -1,10 +1,25 @@
-import type { Scene } from "@/lib/types";
+import type { MailAttachment, Scene } from "@/lib/types";
 import { WidgetCard } from "./Widgets";
 
-export function SceneBoard({ scene, dense }: { scene: Scene; dense?: boolean }) {
+export function SceneBoard({
+  scene,
+  dense,
+  onSaveAttachments,
+  onReplyAttachments,
+  onViewAttachment,
+  busy,
+}: {
+  scene: Scene;
+  dense?: boolean;
+  onSaveAttachments?: (emailId: string, attachmentIds: string[], filenames: string[]) => void;
+  onReplyAttachments?: (emailId: string, attachmentIds: string[], filenames: string[]) => void;
+  onViewAttachment?: (item: MailAttachment) => void;
+  busy?: boolean;
+}) {
   if (!scene.title && !scene.widgets.length) return null;
   const kpis = scene.widgets.filter((widget) => widget.type === "kpi");
   const rest = scene.widgets.filter((widget) => widget.type !== "kpi");
+  const widgetProps = { onSaveAttachments, onReplyAttachments, onViewAttachment, busy };
   return (
     <section className="mx-auto w-full max-w-5xl px-6 pb-8">
       {scene.title ? (
@@ -16,13 +31,13 @@ export function SceneBoard({ scene, dense }: { scene: Scene; dense?: boolean }) 
       {kpis.length ? (
         <div className={`mb-8 grid gap-8 ${dense ? "grid-cols-2 xl:grid-cols-4" : "grid-cols-2 md:grid-cols-3"}`}>
           {kpis.map((widget, index) => (
-            <WidgetCard key={`kpi-${index}`} widget={widget} />
+            <WidgetCard key={`kpi-${index}`} widget={widget} {...widgetProps} />
           ))}
         </div>
       ) : null}
       <div className="grid gap-8">
         {rest.map((widget, index) => (
-          <WidgetCard key={`w-${index}`} widget={widget} />
+          <WidgetCard key={`w-${index}`} widget={widget} {...widgetProps} />
         ))}
       </div>
     </section>

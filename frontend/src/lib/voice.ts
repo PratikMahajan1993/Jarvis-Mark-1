@@ -70,6 +70,13 @@ type ListenHandlers = {
   onEnd?: () => void;
 };
 
+type WakeHandlers = {
+  name: string | (() => string);
+  onHot?: () => void;
+  onWake: (rest: string) => void;
+  onError?: (message: string) => void;
+};
+
 const ERRORS: Record<string, string> = {
   "not-allowed": "Chrome blocked the microphone for this page. Click the lock icon in the address bar and allow the mic.",
   "service-not-allowed": "Chrome blocked speech recognition for this page.",
@@ -87,6 +94,9 @@ let listenMode: "off" | "wake" | "command" = "off";
 let deafUntil = 0;
 let wakeConsumed = "";
 let session = 0;
+let wakeRestartTimer = 0;
+let wakeWatchdog = 0;
+let wakeHandlers: WakeHandlers | null = null;
 
 function speechCtor(): (new () => SpeechRecognitionLike) | null {
   const w = window as unknown as {
@@ -116,17 +126,19 @@ function escapeReg(value: string): string {
 
 function wakeNames(name: string): string[] {
   const chosen = (name || "Jarvis").trim() || "Jarvis";
-  return [...new Set([chosen, "Jarvis", "Jarvish", "Jar vis"])];
+  return [...new Set([chosen, "Jarvis", "Jarvish", "Jar vis", "Jarves", "Jervis", "Jarvice"])];
 }
 
 export function takeWake(text: string, name = "Jarvis"): { woke: boolean; rest: string } {
   const raw = text.trim();
   if (!raw) return { woke: false, rest: "" };
   const options = wakeNames(name).map(escapeReg).join("|");
-  const re = new RegExp(`^(?:hey |ok |okay |hi )?(${options})\\b[,.\\s]*`, "i");
-  const match = raw.match(re);
-  if (!match) return { woke: false, rest: raw };
-  return { woke: true, rest: raw.slice(match[0].length).trim() };
+  const re = new RegExp(`(?:^|[\\s,;:]+)(?:hey |ok |okay |hi |hello )?(${options})\\b[?!,.\\s]*`, "i");
+  const padded = ` ${raw}`;
+  const match = padded.match(re);
+  if (!match || match.index === undefined) return { woke: false, rest: raw };
+  const rest = padded.slice(match.index + match[0].length).trim().replace(/^[?!,.\s]+/, "");
+  return { woke: true, rest };
 }
 
 function readLatest(event: SpeechRecognitionEventLike): { finalText: string; partial: string } {
@@ -251,10 +263,22 @@ export async function startListening(handlers: ListenHandlers): Promise<void> {
   }
 }
 
+function clearWakeTimers() {
+  if (wakeRestartTimer) {
+    window.clearTimeout(wakeRestartTimer);
+    wakeRestartTimer = 0;
+  }
+  if (wakeWatchdog) {
+    window.clearInterval(wakeWatchdog);
+    wakeWatchdog = 0;
+  }
+}
+
 function beginSession(mode: "wake" | "command"): number {
   session += 1;
   armed = false;
   listenMode = "off";
+  clearWakeTimers();
   const rec = recognizer;
   recognizer = null;
   try {
@@ -272,6 +296,8 @@ export function stopListening() {
   session += 1;
   armed = false;
   listenMode = "off";
+  wakeHandlers = null;
+  clearWakeTimers();
   const rec = recognizer;
   recognizer = null;
   try {
@@ -287,37 +313,45 @@ export function stopWakeWatch() {
   stopListening();
 }
 
-type WakeHandlers = {
-  name: string | (() => string);
-  onHot?: () => void;
-  onWake: (rest: string) => void;
-  onError?: (message: string) => void;
-};
+export function isWakeWatching(): boolean {
+  return listenMode === "wake" && armed;
+}
 
 function currentName(name: string | (() => string)): string {
   return typeof name === "function" ? name() : name;
 }
 
-export async function startWakeWatch(handlers: WakeHandlers): Promise<void> {
-  const Ctor = speechCtor();
-  if (!Ctor) return;
-
-  const mine = beginSession("wake");
-  wakeConsumed = "";
-
+async function ensureMicPermission(): Promise<boolean> {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    if (mine !== session) {
-      stream.getTracks().forEach((track) => track.stop());
-      return;
-    }
-    micStream = stream;
+    stream.getTracks().forEach((track) => track.stop());
+    return true;
   } catch {
-    if (mine === session) {
-      armed = false;
-      listenMode = "off";
-    }
-    return;
+    return false;
+  }
+}
+
+function heardWake(event: SpeechRecognitionEventLike, name: string): { woke: boolean; rest: string; hot: boolean } {
+  const latest = readLatest(event);
+  const all = readTranscript(event);
+  const hotText = latest.partial || latest.finalText || all.partial;
+  const hot = takeWake(hotText, name);
+  const finalText = latest.finalText || all.finalText;
+  if (!finalText) return { woke: false, rest: "", hot: hot.woke };
+  const heard = takeWake(finalText, name);
+  if (heard.woke) return { woke: true, rest: heard.rest, hot: true };
+  return { woke: false, rest: "", hot: hot.woke };
+}
+
+function attachWakeRecognizer(mine: number, handlers: WakeHandlers) {
+  const Ctor = speechCtor();
+  if (!Ctor) return;
+  if (mine !== session || listenMode !== "wake") return;
+
+  try {
+    recognizer?.abort();
+  } catch {
+    /* replace the dead instance */
   }
 
   const rec = new Ctor();
@@ -329,20 +363,19 @@ export async function startWakeWatch(handlers: WakeHandlers): Promise<void> {
 
   rec.onresult = (event) => {
     if (mine !== session || listenMode !== "wake" || Date.now() < deafUntil) return;
-    const { finalText, partial } = readLatest(event);
     const name = currentName(handlers.name);
-    const hot = takeWake(partial || finalText, name);
-    if (hot.woke && !finalText) {
+    const heard = heardWake(event, name);
+    if (heard.hot && !heard.woke) {
       handlers.onHot?.();
       return;
     }
-    if (!finalText) return;
-    const heard = takeWake(finalText, name);
     if (!heard.woke) return;
-    const key = `${finalText}:${heard.rest}`;
+    const key = `${heard.rest}:${currentName(handlers.name)}`;
     if (key === wakeConsumed) return;
     wakeConsumed = key;
     armed = false;
+    listenMode = "off";
+    clearWakeTimers();
     handlers.onWake(heard.rest);
     try {
       rec.stop();
@@ -354,52 +387,90 @@ export async function startWakeWatch(handlers: WakeHandlers): Promise<void> {
   rec.onerror = (event) => {
     if (mine !== session || listenMode !== "wake") return;
     if (event.error === "no-speech" || event.error === "aborted") return;
-    armed = false;
     const message = friendlyError(event.error);
+    if (event.error === "network") {
+      scheduleWakeRestart(mine, handlers);
+      return;
+    }
+    armed = false;
     if (message) handlers.onError?.(message);
   };
 
   rec.onend = () => {
     if (mine !== session) return;
-    if (armed && listenMode === "wake" && recognizer === rec) {
-      restarting = true;
-      try {
-        rec.start();
-      } catch {
-        armed = false;
-        listenMode = "off";
-      }
-      restarting = false;
+    if (armed && listenMode === "wake") {
+      scheduleWakeRestart(mine, handlers);
       return;
     }
-    if (!restarting && recognizer === rec) {
-      recognizer = null;
-      if (listenMode === "wake") listenMode = "off";
-      releaseMic();
-    }
+    if (recognizer === rec) recognizer = null;
   };
 
   try {
     rec.start();
+    armed = true;
+    listenMode = "wake";
   } catch {
-    if (mine !== session) return;
-    armed = false;
-    listenMode = "off";
-    if (recognizer === rec) {
-      recognizer = null;
-      releaseMic();
-    }
+    scheduleWakeRestart(mine, handlers);
   }
 }
 
-const YES = /^(yes|yeah|yep|yup|yea|ok|okay|sure|confirm|send( it)?|do it|go ahead|proceed|please|affirmative|that'?s fine)\b/;
-const NO = /^(no|nope|nah|cancel|stop|don'?t|do not|never|reject|negative|abort|wait)\b/;
+function scheduleWakeRestart(mine: number, handlers: WakeHandlers) {
+  if (mine !== session) return;
+  listenMode = "wake";
+  if (wakeRestartTimer) window.clearTimeout(wakeRestartTimer);
+  wakeRestartTimer = window.setTimeout(() => {
+    wakeRestartTimer = 0;
+    if (mine !== session) return;
+    listenMode = "wake";
+    armed = true;
+    attachWakeRecognizer(mine, handlers);
+  }, 220);
+}
+
+export async function startWakeWatch(handlers: WakeHandlers): Promise<void> {
+  const Ctor = speechCtor();
+  if (!Ctor) return;
+  if (listenMode === "wake" && armed && recognizer) {
+    wakeHandlers = handlers;
+    return;
+  }
+
+  const mine = beginSession("wake");
+  wakeHandlers = handlers;
+  wakeConsumed = "";
+  deafUntil = Math.min(deafUntil, Date.now() + 350);
+
+  const allowed = await ensureMicPermission();
+  if (mine !== session) return;
+  if (!allowed) {
+    armed = false;
+    listenMode = "off";
+    handlers.onError?.("Chrome did not get the microphone. Click the lock icon and allow the mic, then say Jarvis again.");
+    return;
+  }
+  await new Promise((resolve) => window.setTimeout(resolve, 80));
+  if (mine !== session) return;
+
+  attachWakeRecognizer(mine, handlers);
+  if (wakeWatchdog) window.clearInterval(wakeWatchdog);
+  wakeWatchdog = window.setInterval(() => {
+    if (mine !== session || listenMode !== "wake") return;
+    if (recognizer && armed) return;
+    armed = true;
+    attachWakeRecognizer(mine, handlers);
+  }, 3000);
+}
+
+const YES_SHORT = new Set(["y", "yes", "yeah", "yep", "yup", "yea", "confirm", "send", "send it", "do it", "go ahead", "proceed", "affirmative", "yes please", "yes send it", "yeah do it", "yes do it", "go for it", "do that", "ship it", "do so", "that's a yes", "thats a yes"]);
+const NO_SHORT = new Set(["n", "no", "nope", "nah", "cancel", "stop", "dont", "don't", "do not", "never", "reject", "negative", "abort", "wait", "no thanks", "no thank you", "not now", "hold on", "leave it", "later", "not yet", "hold off"]);
 
 export function classifyDecision(text: string): "yes" | "no" | null {
-  const cleaned = text.toLowerCase().trim().replace(/[!.?,]/g, "");
+  const cleaned = text.toLowerCase().trim().replace(/[!.?,]/g, "").replace(/\s+/g, " ").replace(/'/g, "");
   if (!cleaned) return null;
-  if (cleaned === "n" || NO.test(cleaned)) return "no";
-  if (cleaned === "y" || YES.test(cleaned)) return "yes";
+  const no = new Set([...NO_SHORT].map((item) => item.replace(/'/g, "")));
+  const yes = new Set([...YES_SHORT].map((item) => item.replace(/'/g, "")));
+  if (no.has(cleaned)) return "no";
+  if (yes.has(cleaned)) return "yes";
   return null;
 }
 
@@ -410,12 +481,13 @@ let cachedVoice: SpeechSynthesisVoice | null = null;
 let activeSpeech: SpeechSynthesisUtterance | null = null;
 
 function loadGlanceStore() {
-  if (glanceStoreLoaded || typeof sessionStorage === "undefined") return;
+  if (glanceStoreLoaded || typeof window === "undefined") return;
   glanceStoreLoaded = true;
   try {
-    const raw = sessionStorage.getItem(GLANCE_STORE);
+    const raw = window.localStorage.getItem(GLANCE_STORE);
     if (!raw) return;
-    for (const key of JSON.parse(raw) as string[]) spokenGlanceKeys.add(key);
+    const keys = JSON.parse(raw) as string[];
+    for (const key of keys.slice(-80)) spokenGlanceKeys.add(key);
   } catch {
     /* ignore */
   }
@@ -427,7 +499,7 @@ export function claimGlanceSpeech(key: string): boolean {
   if (spokenGlanceKeys.has(key)) return false;
   spokenGlanceKeys.add(key);
   try {
-    sessionStorage.setItem(GLANCE_STORE, JSON.stringify([...spokenGlanceKeys]));
+    window.localStorage.setItem(GLANCE_STORE, JSON.stringify([...spokenGlanceKeys].slice(-80)));
   } catch {
     /* ignore */
   }
@@ -465,7 +537,8 @@ export function speak(text: string, enabled = true, onEnd?: () => void) {
   }
   lastSpokenText = text;
   lastSpokenAt = Date.now();
-  deafUntil = Date.now() + 30000;
+  const words = text.split(/\s+/).filter(Boolean).length;
+  deafUntil = Date.now() + Math.min(8000, 700 + words * 280);
   window.speechSynthesis.cancel();
   const utterance = new SpeechSynthesisUtterance(text);
   const voice = pickVoice();

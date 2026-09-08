@@ -1,5 +1,5 @@
 export type Widget = {
-  type: "kpi" | "table" | "markdown" | "chart" | "timeline" | "quote";
+  type: "kpi" | "table" | "markdown" | "chart" | "timeline" | "quote" | "attachments";
   label?: string;
   value?: string | number;
   hint?: string;
@@ -9,8 +9,23 @@ export type Widget = {
   text?: string;
   chart_type?: "bar" | "line";
   points?: Array<{ label: string; value: number }>;
-  items?: Array<{ time?: string; title?: string; detail?: string }>;
+  items?: Array<Record<string, unknown>>;
   cite?: string;
+  email_id?: string;
+};
+
+export type MailAttachment = {
+  attachment_id: string;
+  filename: string;
+  mime?: string;
+  size?: number;
+  readable?: boolean;
+  cad?: boolean;
+  status: "gmail" | "local" | "drive" | "both";
+  local_path?: string | null;
+  local_name?: string | null;
+  drive_link?: string | null;
+  artifact_id?: string | null;
 };
 
 export type Scene = {
@@ -41,6 +56,8 @@ export type ChatResponse = {
   scene: Scene;
   artifacts: Artifact[];
   pending: PendingAction[];
+  attachments?: MailAttachment[];
+  mail_id?: string | null;
   offline: boolean;
   more?: number;
   watching?: boolean;
@@ -68,7 +85,8 @@ export type Health = {
   model: string;
   models: string[];
   model_ready?: boolean;
-  google?: { configured: boolean; connected: boolean; account: string; task_to: string };
+  provider?: string;
+  google?: { configured: boolean; connected: boolean; calendar?: boolean; account: string; task_to: string };
 };
 
 export type AuditEntry = {

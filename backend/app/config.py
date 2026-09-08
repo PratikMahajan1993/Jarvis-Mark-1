@@ -18,12 +18,17 @@ class Settings(BaseSettings):
 
     ollama_host: str = "http://localhost:11434"
     ollama_model: str = "llama3.2:1b"
+    llm_provider: str = "auto"
+    gemini_api_key: str = ""
+    gemini_model: str = "gemini-2.5-flash"
     jarvis_host: str = "0.0.0.0"
     jarvis_port: int = 8000
     cors_origins: str = "http://localhost:3000"
     data_dir: Path = ROOT / "data"
     exports_dir: Path = ROOT / "exports"
     canvas_dir: Path = ROOT / "data" / "canvas"
+    google_cse_api_key: str = ""
+    google_cse_cx: str = ""
     tavily_api_key: str = ""
     brave_api_key: str = ""
     email_backend: str = "local"

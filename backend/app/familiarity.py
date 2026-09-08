@@ -6,6 +6,29 @@ from typing import Any
 from . import db
 from .connectors import email as email_conn
 
+_NAME_HINT = re.compile(
+    r"\b(?:from|by)\s+([A-Za-z][A-Za-z'-]+)"
+    r"|\bwhat did\s+([A-Za-z][A-Za-z'-]+)"
+    r"|\breply to\s+([A-Za-z][A-Za-z'-]+)"
+    r"|\b(?:read|show|open)\s+([A-Za-z][A-Za-z'-]+)"
+    r"|\b([A-Za-z][A-Za-z'-]+)'s\s+(?:mail|email|note|message|quote|quotation|enquiry|inquiry)"
+    r"|\b([A-Za-z][A-Za-z'-]+)\s+(?:said|wrote|replied|sent|mailed)"
+    r"|\b(?:quote|quotation|enquiry|inquiry|mail|email)\s+from\s+([A-Za-z][A-Za-z'-]+)",
+    re.I,
+)
+_MAIL_ASK = re.compile(
+    r"\b(mail|email|e-mail|gmail|inbox|reply|draft|said|say|wrote|note|message|quote|quotation|enquiry|inquiry)\b",
+    re.I,
+)
+_NAME_SKIP = {
+    "what", "whats", "did", "mail", "email", "from", "said", "reply", "replied",
+    "the", "a", "an", "to", "in", "is", "show", "read", "please", "jarvis", "draft",
+    "open", "spreadsheet", "sheet", "and", "make", "same", "this", "that",
+    "last", "latest", "newest", "morning", "afternoon", "tonight", "today", "yesterday", "note",
+    "message", "wrote", "say", "about", "your", "our", "them", "they",
+    "him", "her", "his", "hers", "she", "he", "we", "you", "inbox", "unread",
+    "pricing", "calendar", "gemini", "briefing", "document", "file",
+}
 _SKIP_LINE = re.compile(
     r"^(hi|hello|hey|thanks|thank you|best|regards|cheers|dear)\b"
     r"|^(two|a few|several|some)\s+items\b"
@@ -23,7 +46,9 @@ _INSTRUCTION = re.compile(
     r"|extract the totals"
     r"|reply with a table"
     r"|task for gemini"
-    r"|here are the facts and totals extracted",
+    r"|here are the facts and totals extracted"
+    r"|trailing mail|please find (enclosed|attached)|as per your requirement"
+    r"|with reference to|item codes have been selected|for your kind information",
     re.I,
 )
 _POINTER = re.compile(
@@ -36,20 +61,40 @@ _OPEN_SHEET = re.compile(
     re.I,
 )
 _READ_MAIL = re.compile(
-    r"\b(what('?s| is) in|what did|read|show|summarise|summarize)\b.*\b(mail|email|e-mail|said|say|wrote|replied|reply|note|message)\b"
-    r"|\b(mail|email|e-mail|note|message)\s+(from|by)\b",
+    r"\b(what('?s| is) in|what did|read|show|open|summarise|summarize)\b.*\b(mail|email|e-mail|gmail|said|say|wrote|replied|reply|note|message|quote|quotation|enquiry|inquiry)\b"
+    r"|\b(mail|email|e-mail|note|message|quote|quotation)\s+(from|by)\b"
+    r"|\b(last|latest|newest)\s+(email|mail|message)\b",
     re.I,
 )
-_REPLY = re.compile(r"\b(reply|draft)\b", re.I)
+_REPLY = re.compile(r"\b(reply|draft|write back|respond|tell her|tell him)\b", re.I)
 _MAKE_SHEET = re.compile(r"\b(make|create|new|write|build|prepare)\b.*\b(spread\s*sheet|excel|xlsx|workbook)\b", re.I)
 _SAME_MORNING = re.compile(r"\b(same as|like|from)\s+(this\s+)?morning\b|\bthis morning'?s\b", re.I)
 
-FEMALE = {"priya", "sarah", "sara", "anita", "neha", "aisha", "maya", "lisa", "emma"}
-MALE = {"ashutosh", "amit", "rahul", "raj", "arjun", "vikram", "tony", "john", "david"}
+FEMALE = {
+    "priya", "sarah", "sara", "anita", "neha", "aisha", "maya", "lisa", "emma",
+    "muskaan", "pooja", "kavita", "deepa", "ritu", "sneha", "meera", "nisha",
+    "shreya", "anjali", "divya", "kavya", "isha", "riya", "tanvi", "kiran",
+}
+MALE = {
+    "ashutosh", "amit", "rahul", "raj", "arjun", "vikram", "tony", "john", "david",
+    "pratik", "rohit", "sanjay", "vivek", "nikhil", "aditya", "manish", "suresh",
+    "ramesh", "kunal", "rajesh", "siddharth", "harsh", "yash", "arnav",
+}
 
 
 def empty_set() -> dict[str, Any]:
-    return {"person": None, "thread": None, "artifact": None, "client": None, "drive": None, "aliases": {}}
+    return {
+        "person": None,
+        "thread": None,
+        "artifact": None,
+        "client": None,
+        "drive": None,
+        "mail_attachments": None,
+        "aliases": {},
+        "people": [],
+        "artifacts": [],
+        "drives": [],
+    }
 
 
 def get_set(session_id: str) -> dict[str, Any]:
@@ -84,6 +129,13 @@ def person_from_sender(sender: str) -> dict[str, str]:
     return {"name": name, "email": email, "first": first_name(name), "sender": sender}
 
 
+def _push(stack: list[dict[str, Any]] | None, item: dict[str, Any], key: str, limit: int = 3) -> list[dict[str, Any]]:
+    ident = item.get(key)
+    out = [row for row in (stack or []) if row.get(key) != ident]
+    out.insert(0, item)
+    return out[:limit]
+
+
 def remember_person(
     session_id: str,
     sender: str,
@@ -93,13 +145,12 @@ def remember_person(
 ) -> None:
     data = get_set(session_id)
     person = person_from_sender(sender)
-    data["person"] = person
+    data["people"] = _push(data.get("people"), {**person, "mail_id": mail_id, "subject": subject or ""}, "sender")
+    data["person"] = data["people"][0]
     if mail_id:
         data["thread"] = {"id": mail_id, "subject": subject or "", "sender": sender}
     if client:
         data["client"] = client
-    elif "northline" in (sender or "").lower() or "northline" in (subject or "").lower():
-        data["client"] = "Northline"
     first = person["first"].lower()
     if first:
         data.setdefault("aliases", {})[first] = {"kind": "person", "sender": sender, "name": person["name"]}
@@ -114,17 +165,24 @@ def remember_artifact(session_id: str, artifact: dict[str, Any], title: str = ""
         "name": artifact.get("name"),
         "title": title or artifact.get("name") or "Spreadsheet",
     }
-    data["artifact"] = item
+    data["artifacts"] = _push(data.get("artifacts"), item, "id")
+    data["artifact"] = data["artifacts"][0]
     aliases = data.setdefault("aliases", {})
-    aliases["the spreadsheet"] = {"kind": "artifact", "id": item["id"]}
-    aliases["the sheet"] = {"kind": "artifact", "id": item["id"]}
-    label = (title or item["name"] or "").lower()
-    if "pricing" in label:
-        aliases["the pricing sheet"] = {"kind": "artifact", "id": item["id"]}
-        aliases["pricing spreadsheet"] = {"kind": "artifact", "id": item["id"]}
-    client = (data.get("client") or "").lower()
-    if client:
-        aliases[f"the {client} sheet"] = {"kind": "artifact", "id": item["id"]}
+    aliases["the spreadsheet"] = {"kind": "artifact", "id": data["artifact"]["id"]}
+    aliases["the sheet"] = {"kind": "artifact", "id": data["artifact"]["id"]}
+    if len(data["artifacts"]) > 1:
+        other = data["artifacts"][1]
+        aliases["the other spreadsheet"] = {"kind": "artifact", "id": other["id"]}
+        aliases["the other sheet"] = {"kind": "artifact", "id": other["id"]}
+    for art in data["artifacts"]:
+        label = (art.get("title") or art.get("name") or "").lower()
+        stem = re.sub(r"-[0-9a-f]{4,}.*$", "", label).split(".")[0].strip()
+        if stem:
+            aliases[stem] = {"kind": "artifact", "id": art["id"]}
+            aliases[f"the {stem}"] = {"kind": "artifact", "id": art["id"]}
+        if "pricing" in label:
+            aliases["the pricing sheet"] = {"kind": "artifact", "id": art["id"]}
+            aliases["pricing spreadsheet"] = {"kind": "artifact", "id": art["id"]}
     save_set(session_id, data)
 
 
@@ -136,11 +194,16 @@ def remember_drive(session_id: str, file: dict[str, Any]) -> None:
         "title": file.get("title") or file.get("name") or "Drive file",
         "link": file.get("link") or "",
     }
-    data["drive"] = item
+    data["drives"] = _push(data.get("drives"), item, "id")
+    data["drive"] = data["drives"][0]
     aliases = data.setdefault("aliases", {})
-    if item.get("title"):
-        aliases[str(item["title"]).lower()] = {"kind": "drive", "id": item["id"], "link": item["link"]}
-    aliases["the drive file"] = {"kind": "drive", "id": item["id"], "link": item["link"]}
+    for drive in data["drives"]:
+        if drive.get("title"):
+            aliases[str(drive["title"]).lower()] = {"kind": "drive", "id": drive["id"], "link": drive["link"]}
+    aliases["the drive file"] = {"kind": "drive", "id": data["drive"]["id"], "link": data["drive"]["link"]}
+    if len(data["drives"]) > 1:
+        other = data["drives"][1]
+        aliases["the other drive file"] = {"kind": "drive", "id": other["id"], "link": other["link"]}
     save_set(session_id, data)
 
 
@@ -151,27 +214,31 @@ def remember_alias(session_id: str, phrase: str, target: dict[str, Any]) -> None
 
 
 def _find_named_mail(message: str) -> dict[str, Any] | None:
-    tokens = re.findall(r"[A-Za-z][A-Za-z'-]+", message)
-    skip = {
-        "what", "whats", "did", "mail", "email", "from", "said", "reply", "replied",
-        "the", "a", "to", "in", "is", "show", "read", "please", "jarvis", "draft",
-        "open", "spreadsheet", "sheet", "and", "make", "same", "this", "that",
-        "last", "morning", "afternoon", "tonight", "today", "yesterday", "note",
-        "message", "wrote", "say", "about", "your", "our", "them", "they",
-        "him", "her", "his", "hers", "she", "he", "we", "you",
-    }
-    for token in tokens:
+    if not _MAIL_ASK.search(message or "") and not _NAME_HINT.search(message or ""):
+        return None
+    names = [group for match in _NAME_HINT.finditer(message or "") for group in match.groups() if group]
+    for token in names:
         name = re.sub(r"['’]s$", "", token)
-        if name.lower() in skip or len(name) < 3:
+        if name.lower() in _NAME_SKIP or len(name) < 3:
             continue
-        rows = email_conn.search_emails(query=name, limit=1)
+        rows = email_conn.search_emails(query=f"from:{name}", limit=5) or email_conn.search_emails(query=name, limit=5)
+        lowered = name.lower()
+        for row in rows:
+            sender = (row.get("sender") or "").lower()
+            if lowered in sender:
+                return row
         if rows:
             return rows[0]
     return None
 
 
 def gender_of(name: str) -> str | None:
-    key = first_name(name).lower()
+    text = name or ""
+    if re.search(r"\b(sir|mr)\b", text, re.I):
+        return "m"
+    if re.search(r"\b(ma'?am|madam|mrs|ms)\b", text, re.I):
+        return "f"
+    key = first_name(text).lower()
     if key in FEMALE:
         return "f"
     if key in MALE:
@@ -217,12 +284,17 @@ def resolve(session_id: str, message: str) -> dict[str, Any]:
     person = data.get("person")
     thread = data.get("thread")
     aliases = data.get("aliases") or {}
-    for phrase, target in aliases.items():
-        if phrase in text:
+    for phrase, target in sorted((aliases or {}).items(), key=lambda item: len(str(item[0])), reverse=True):
+        if phrase and phrase in text:
             if target.get("kind") == "artifact" and target.get("id"):
-                artifact = db.get_artifact(str(target["id"])) or artifact
-                if artifact and "title" not in artifact:
-                    artifact = {**artifact, "title": artifact.get("name")}
+                found = db.get_artifact(str(target["id"]))
+                if found:
+                    artifact = found
+                    if "title" not in artifact:
+                        artifact = {**artifact, "title": artifact.get("name")}
+                else:
+                    stacked = next((row for row in (data.get("artifacts") or []) if row.get("id") == target["id"]), None)
+                    artifact = stacked or {"id": target["id"], "title": phrase, "name": phrase}
             if target.get("kind") == "person" and target.get("sender"):
                 person = person_from_sender(target["sender"])
                 if not found_mail:
@@ -238,7 +310,26 @@ def resolve(session_id: str, message: str) -> dict[str, Any]:
     if found_mail:
         person = person_from_sender(found_mail["sender"])
         thread = {"id": found_mail["id"], "subject": found_mail["subject"], "sender": found_mail["sender"]}
-    elif pronoun_gender(message) or any(phrase in text for phrase in ("that mail", "the mail", "that note")):
+    elif pronoun_gender(message) or any(
+        phrase in text
+        for phrase in (
+            "that mail",
+            "the mail",
+            "that note",
+            "that email",
+            "the email",
+            "that message",
+            "last email",
+            "last mail",
+            "the last email",
+            "the last mail",
+            "latest email",
+            "latest mail",
+            "forward this",
+            "forward that",
+            "forward it",
+        )
+    ) or re.search(r"\b(this|that|it)\b", text) and "forward" in text:
         found_mail = mail_for_pronoun(session_id, message)
         if found_mail:
             person = person_from_sender(found_mail["sender"])
@@ -316,52 +407,48 @@ def speak_mail(mail: dict[str, Any]) -> str:
     name = first_name(mail.get("sender") or "") or "them"
     facts = facts_from_body(mail.get("body") or "")
     verb = "replied" if str(mail.get("subject") or "").lower().startswith("re:") else "wrote"
-    return f"Here is what {name} {verb}: {join_facts(facts)}."
+    if not facts or facts == ["the note is on the board"]:
+        subject = (mail.get("subject") or "a note").strip()
+        return f"{name}'s note is on the board — {subject}."
+    return f"{name} {verb}: {join_facts(facts)}."
 
 
 def speak_draft(to_addr: str, source: dict[str, Any] | None = None) -> str:
     name = first_name(to_addr) or "them"
-    if source:
-        facts = facts_from_body(source.get("body") or "", limit=2)
-        if facts:
-            return f"{name} asked you to {join_facts(facts)}. Draft is on the board — shall I send it?"
-    return f"Draft for {name} is on the board — shall I send it?"
+    return f"Draft for {name} is ready — shall I send it?"
 
 
 def speak_sent(to_addr: str) -> str:
     name = first_name(to_addr) or "them"
-    first = name.lower()
-    if first in FEMALE:
-        return f"Sent to {name}. She'll have the note."
-    if first in MALE:
-        return f"Sent to {name}. He'll have the note."
+    gender = gender_of(to_addr)
+    if gender == "f":
+        return f"Sent to {name}. She has it."
+    if gender == "m":
+        return f"Sent to {name}. He has it."
     return f"Sent to {name}."
 
 
 def speak_sheet(title: str, reused: bool = False) -> str:
-    label = (title or "spreadsheet").split(".")[0].strip()
-    nice = label.lower()
-    if nice in {"follow-up", "followup"}:
-        nice = "spreadsheet"
-    if "pricing" in nice and "sheet" not in nice:
-        nice = "pricing sheet"
+    label = re.sub(r"-[0-9a-f]{4,}.*$", "", (title or "spreadsheet").split(".")[0], flags=re.I).strip() or "spreadsheet"
+    if label.lower() in {"follow-up", "followup"}:
+        label = "spreadsheet"
     if reused:
-        return f"The {nice} you made is on the board."
-    return f"The {nice} is on the board."
+        return f"{label} is back on the board."
+    return f"{label} is on the board."
 
 
 def speak_calendar(events: list[dict[str, Any]]) -> str:
     if not events:
-        return "The board is clear for the next couple of days."
+        return "Nothing on the calendar for the next couple of days."
     nxt = events[0]
     title = nxt.get("title") or "the next meeting"
     short = title.split("—")[0].split("-")[0].strip()
-    when = ""
-    start = nxt.get("start_at") or ""
-    if len(start) > 16:
-        when = f" at {start[11:16]}"
+    from .connectors.calendar import clock
+
+    stamp = clock(nxt.get("start_at") or "")
+    when = f", {stamp}" if stamp else ""
     extra = f" {len(events)} on the board." if len(events) > 1 else ""
-    return f"Next up is {short}{when}.{extra}"
+    return f"Next is {short}{when}.{extra}"
 
 
 def speak_for_tool(name: str, result: dict[str, Any], session_id: str = "default") -> str:
@@ -375,6 +462,10 @@ def speak_for_tool(name: str, result: dict[str, Any], session_id: str = "default
         payload = (result.get("pending") or {}).get("payload") or {}
         source = email_conn.get_email(payload.get("source_id")) if payload.get("source_id") else None
         return speak_draft(payload.get("to") or "", source)
+    if name == "forward_email":
+        payload = (result.get("pending") or {}).get("payload") or {}
+        name_to = first_name(payload.get("to") or "") or "them"
+        return f"Forward to {name_to} is ready — shall I send it?"
     if name == "show_artifact":
         title = (data or {}).get("title") or (data or {}).get("name") or scene.get("title") or "spreadsheet"
         return speak_sheet(str(title), reused=True)
@@ -385,14 +476,21 @@ def speak_for_tool(name: str, result: dict[str, Any], session_id: str = "default
         return speak_calendar(data)
     if name == "create_calendar_event":
         title = scene.get("subtitle") or scene.get("title") or "that event"
-        return f"{title} is drafted — shall I put it on the calendar?"
+        return f"{title} is ready — shall I put it on the calendar?"
     if name == "drive_upload":
         title = (data or {}).get("title") or (data or {}).get("name") or "file"
-        return f"The {title} is on Drive."
+        return result.get("speak") or f"{title} is on Drive."
+    if name == "save_mail_attachments":
+        return result.get("speak") or "Saved."
+    if name == "reply_with_attachments":
+        return result.get("speak") or "Draft is ready — shall I send it?"
     if name == "drive_find":
-        return scene.get("title") and f"{scene['title']} is on the board." or "I found that on Drive."
+        label = scene.get("title") or "that file"
+        return f"{label} is on the board."
     if name == "task_for_gemini":
-        return result.get("speak") or "Task for Gemini is on the board — shall I send it?"
+        return result.get("speak") or "Task for Gemini is ready — shall I send it?"
+    if name == "research":
+        return result.get("speak") or "Research is on the board."
     if name == "open_artifact":
         title = (data or {}).get("name") or "file"
         return f"Opening {title}."
@@ -413,6 +511,19 @@ def note_tool(session_id: str, name: str, result: dict[str, Any]) -> None:
         remember_person(session_id, first.get("sender") or "", first.get("id"), first.get("subject"))
     if name == "read_email" and isinstance(data, dict) and data.get("sender"):
         remember_person(session_id, data.get("sender") or "", data.get("id"), data.get("subject"))
+        if data.get("attachments"):
+            from .mail_attachments import remember_mail_context
+
+            remember_mail_context(session_id, data, data.get("attachments") or [])
+    if name == "save_mail_attachments" and isinstance(data, dict):
+        saved = data.get("attachments") or []
+        if isinstance(saved, list) and saved:
+            ctx = get_set(session_id).get("mail_attachments") or {}
+            mail = email_conn.get_email(ctx.get("email_id") or "") if ctx.get("email_id") else None
+            if mail:
+                from .mail_attachments import remember_mail_context
+
+                remember_mail_context(session_id, mail, saved)
     if name == "draft_email":
         remember_person(
             session_id,
@@ -420,6 +531,18 @@ def note_tool(session_id: str, name: str, result: dict[str, Any]) -> None:
             payload.get("source_id"),
             payload.get("subject"),
         )
+    if name == "reply_with_attachments":
+        remember_person(
+            session_id,
+            payload.get("to") or "",
+            payload.get("source_id"),
+            payload.get("subject"),
+        )
+    if name == "forward_email" and isinstance(data, dict):
+        source = email_conn.get_email(data.get("source_id") or payload.get("source_id") or "")
+        if source:
+            remember_person(session_id, source.get("sender") or "", source.get("id"), source.get("subject"))
+        remember_person(session_id, payload.get("to") or "", None, payload.get("subject"))
     if name == "create_spreadsheet" and isinstance(data, dict) and data.get("id"):
         scene = result.get("scene") or {}
         remember_artifact(session_id, data, scene.get("title") or data.get("name") or "")
@@ -430,6 +553,10 @@ def note_tool(session_id: str, name: str, result: dict[str, Any]) -> None:
 
 
 def ensure_demo_people() -> None:
+    from .connectors.gmail import live as gmail_live
+
+    if gmail_live():
+        return
     if email_conn.get_email("mail-ashutosh"):
         return
     from datetime import datetime, timedelta, timezone

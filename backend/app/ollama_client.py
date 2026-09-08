@@ -44,6 +44,8 @@ def chat(
     messages: list[dict[str, Any]],
     tools: list[dict[str, Any]] | None = None,
     format_json: bool = False,
+    timeout: float = 120,
+    options: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "model": settings.ollama_model,
@@ -54,8 +56,10 @@ def chat(
         payload["tools"] = tools
     if format_json:
         payload["format"] = "json"
+    if options:
+        payload["options"] = options
     try:
-        with _client() as client:
+        with httpx.Client(base_url=settings.ollama_host, timeout=timeout) as client:
             response = client.post("/api/chat", json=payload)
             data = response.json() if response.headers.get("content-type", "").startswith("application/json") else {}
             if response.status_code >= 400 or data.get("error"):

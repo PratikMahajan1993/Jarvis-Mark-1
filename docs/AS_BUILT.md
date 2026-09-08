@@ -5,8 +5,8 @@ Hybrid: Ollama chats; the app owns voice, tools, HUD, and Shall I. Work asks ski
 ## Surfaces
 
 - HUD: Next.js `http://localhost:3000` → API `http://localhost:8000` (FastAPI + SQLite at `backend/data/jarvis.db`).
-- Brain: Ollama (`OLLAMA_MODEL=llama3.2:1b`). Offline: work tools run; ordinary chat will not improvise.
-- Prefs: `assistant_name`, `display_name`, timezone; **Connect Gmail** when Google client keys are in `.env`.
+- Brain: Gemini (`GEMINI_API_KEY`) when set, else Ollama (`OLLAMA_MODEL=llama3.2:1b`). `LLM_PROVIDER=ollama` forces local. Email “Task for Gemini” is unchanged.
+- Prefs: `assistant_name`, `display_name`, timezone; **Connect Gmail** / **Add Calendar** when Google client keys are in `.env`.
 
 ## A spoken turn
 
@@ -25,8 +25,9 @@ Per-session `working_set`: person, thread, artifact, **drive** (link + title), c
 
 ## Presence
 
-- Glance (`GET /api/glance`, 30s): next event line; whisper on idle (event buckets, unread ≥ 3). **Gemini watch ready** → glance whispers the reply.
-- After Gemini send, HUD polls `GET /api/watch` (~15s). Backend polls Gmail thread every ~20s, up to 3 min.
+- Glance (`GET /api/glance`, 30s): next event line; whisper only after the HUD has restored and been quiet ~20s. Gemini replies are not glance speech.
+- Watch (`GET /api/watch`): waiting vs ready vs **seen**. Opening the HUD restores the board silently, then `POST /api/watch/ack` so the last mail is not narrated again. A reply that arrives while the HUD is already open is spoken once, then acked.
+- Session (`GET /api/session`): last scene and reply text for the board. `speak` is empty on restore — reopen is not a replay.
 - Shall I: on-screen, spoken yes/no, or **Y**/**N** (`classifyDecision`).
 
 ## Safety
@@ -40,30 +41,35 @@ Files only under `backend/exports`. Secrets in `.env`.
 
 ## Gmail (OAuth)
 
-Keys: `GOOGLE_CLIENT_ID`/`SECRET` or `GOOGLE_CLIENT_JSON`. Token: `backend/data/google_token.json`. Scopes: `gmail.send`, `gmail.readonly`, `drive.file`. Send as `GOOGLE_ACCOUNT` (default `pgeneration.mech@gmail.com`).
+Keys: `GOOGLE_CLIENT_ID`/`SECRET` or `GOOGLE_CLIENT_JSON`. Token: `backend/data/google_token.json`. Scopes: `gmail.send`, `gmail.readonly`, `drive.file`, `calendar.events`, `calendar.readonly`. Send as `GOOGLE_ACCOUNT` (default `pgeneration.mech@gmail.com`).
 
-- Connect: prefs → `GET /api/google/auth` → callback `http://127.0.0.1:8000/api/google/callback` → `HUD_URL/?gmail=1`. Register that redirect on the Google OAuth client.
+- Connect: prefs → `GET /api/google/auth` → callback `http://127.0.0.1:8000/api/google/callback` → `HUD_URL/?gmail=1`. Register that redirect on the Google OAuth client. Enable Gmail, Drive, and Calendar APIs on the Cloud project.
 - Live: `email.py` prefers Gmail when connected; upserts to SQLite. No token → demo mailbox; send = local SENT row.
-- Failed live send → “Gmail did not take it.” Status: `GET /api/google/status`.
+- Failed live send → “Gmail did not take it.” Status: `GET /api/google/status` (`connected`, `calendar`).
+- Existing Gmail tokens keep mail/Drive. Calendar needs a second consent (**Add Calendar**) so the grant includes `calendar.events`.
 
 ## Drive
 
 Same OAuth. Upload artifact/inbox/last file; find by title (contains). Link + title on working set. Not connected → “Connect Gmail in preferences first.”
+
+## Calendar
+
+Same OAuth, extra scope `calendar.events`. List/briefing/glance read the primary calendar. Create still Shall I, then Google insert. Gmail connected without Calendar → empty board (no demo mix) plus prefs **Add Calendar**. Failed write → “Calendar did not take it.” Enable the Calendar API on the Cloud project. No token → local seed events.
 
 ## Gemini (email handoff)
 
 No Gemini API. Email to `GEMINI_TASK_TO` (defaults to same account). Subject exactly **Task for Gemini**. Body: **File** / **Do this** / **Reply like this**.
 
 - Triggers: “ask Gemini”, “task for Gemini”, “send to Gemini”, “analyze this”, etc.
-- `task_for_gemini`: envelope + Shall I → send + `start_gemini_watch`. File steps without Drive link → ask once.
+- `task_for_gemini`: find on Drive or upload the local file, then envelope + Shall I → send + `start_gemini_watch`. File steps without a Drive URL → ask once.
 - Unreadable drop (`review_inbox`, under 40 chars): “I cannot read that here. Shall I send it to Gemini?” → `handoff_gemini` (upload + send + watch).
 - Watch ready → speak summary + board. Timeout → “Gemini has not replied yet. I stopped watching.”
 
 ## Demo data
 
-Seeded if empty; used without Gmail. Priya/Ashutosh/Amit/Billing threads + local calendar events. `EMAIL_BACKEND=local`; optional IMAP read (`EMAIL_BACKEND=imap`). Calendar always local.
+Seeded if empty; used without Gmail. Priya/Ashutosh/Amit/Billing threads + local calendar events. `EMAIL_BACKEND=local`; optional IMAP read (`EMAIL_BACKEND=imap`). Calendar uses Google primary when `calendar.events` is granted; otherwise the local seed (or an empty board if Gmail is connected but Calendar is not).
 
-Research: Tavily/Brave or DuckDuckGo. Drops: `POST /api/inbox` → `review_inbox`.
+Research: Google Custom Search when `GOOGLE_CSE_API_KEY` + `GOOGLE_CSE_CX` are set; else Tavily / Brave / DuckDuckGo. The board is a takeaway plus a note on each site (page text, not a raw link dump).
 
 ## Tools
 

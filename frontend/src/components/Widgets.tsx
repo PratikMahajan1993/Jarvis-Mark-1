@@ -1,5 +1,7 @@
-import type { Widget } from "@/lib/types";
+import type { MailAttachment, Widget } from "@/lib/types";
+import { isSavedLocal } from "@/lib/viewerMatch";
 import { splitMarkdownTables } from "@/lib/tables";
+import { useMemo, useState } from "react";
 
 function Kpi({ widget }: { widget: Widget }) {
   return (
@@ -89,16 +91,134 @@ function Timeline({ widget }: { widget: Widget }) {
     <div>
       {widget.title ? <h3 className="mb-4 text-sm text-white/40">{widget.title}</h3> : null}
       <ol className="space-y-3">
-        {(widget.items || []).map((item, index) => (
-          <li key={`${item.title}-${index}`} className="flex gap-5">
-            <span className="w-12 shrink-0 font-display text-lg text-white/50">{item.time}</span>
+        {(widget.items || []).map((item, index) => {
+          const title = String(item.title ?? "");
+          const time = String(item.time ?? "");
+          const detail = item.detail != null ? String(item.detail) : "";
+          return (
+          <li key={`${title}-${index}`} className="flex gap-5">
+            <span className="w-12 shrink-0 font-display text-lg text-white/50">{time}</span>
             <div>
-              <p className="text-white">{item.title}</p>
-              {item.detail ? <p className="text-sm text-white/35">{item.detail}</p> : null}
+              <p className="text-white">{title}</p>
+              {detail ? <p className="text-sm text-white/35">{detail}</p> : null}
             </div>
           </li>
-        ))}
+          );
+        })}
       </ol>
+    </div>
+  );
+}
+
+function statusText(item: MailAttachment): string {
+  if (item.status === "both") return "Saved · Drive";
+  if (item.status === "local") return item.local_name ? `Saved here (${item.local_name})` : "Saved here";
+  if (item.status === "drive") return item.drive_link ? "On Drive" : "Drive";
+  return "Gmail only";
+}
+
+function AttachmentList({
+  widget,
+  onSave,
+  onReply,
+  onView,
+  busy,
+}: {
+  widget: Widget;
+  onSave: (emailId: string, attachmentIds: string[], filenames: string[]) => void;
+  onReply: (emailId: string, attachmentIds: string[], filenames: string[]) => void;
+  onView?: (item: MailAttachment) => void;
+  busy?: boolean;
+}) {
+  const emailId = widget.email_id || "";
+  const items = (widget.items || []) as MailAttachment[];
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  const toggle = (id: string) => {
+    setSelected((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const selectedIds = useMemo(() => Array.from(selected), [selected]);
+  const selectedNames = useMemo(
+    () => items.filter((item) => selected.has(item.attachment_id)).map((item) => item.filename),
+    [items, selected],
+  );
+
+  return (
+    <div>
+      {widget.title ? <h3 className="mb-3 text-sm text-white/40">{widget.title}</h3> : null}
+      <ul className="space-y-2">
+        {items.map((item) => (
+          <li key={item.attachment_id || item.filename} className="flex items-start gap-3 border-t border-white/5 py-2.5">
+            <input
+              type="checkbox"
+              checked={selected.has(item.attachment_id)}
+              onChange={() => toggle(item.attachment_id)}
+              aria-label={item.filename}
+              className="mt-1 h-4 w-4 accent-cyan"
+            />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-white/85">{item.filename}</p>
+              <p className="text-xs text-cyan/70">{statusText(item)}</p>
+              {item.drive_link ? (
+                <a href={item.drive_link} target="_blank" rel="noreferrer" className="text-xs text-white/35 underline">
+                  Drive link
+                </a>
+              ) : null}
+            </div>
+            {onView ? (
+              <button
+                type="button"
+                disabled={busy || !isSavedLocal(item)}
+                title={isSavedLocal(item) ? "View saved drawing" : "Save locally first"}
+                onClick={() => onView(item)}
+                className="shrink-0 rounded border border-cyan/40 px-3 py-1 text-xs tracking-wide text-cyan transition hover:bg-cyan/10 disabled:cursor-not-allowed disabled:opacity-30"
+              >
+                View
+              </button>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+      <div className="mt-4 flex flex-wrap gap-3">
+        <button
+          type="button"
+          disabled={busy || !emailId || selectedIds.length === 0}
+          onClick={() => onSave(emailId, selectedIds, selectedNames)}
+          className="rounded border border-cyan/40 px-4 py-2 text-sm tracking-wide text-cyan transition hover:bg-cyan/10 disabled:opacity-30"
+        >
+          Save selected
+        </button>
+        <button
+          type="button"
+          disabled={busy || !emailId || selectedIds.length === 0}
+          onClick={() => onReply(emailId, selectedIds, selectedNames)}
+          className="rounded border border-white/15 px-4 py-2 text-sm tracking-wide text-white/70 transition hover:bg-white/5 disabled:opacity-30"
+        >
+          Attach selected to reply
+        </button>
+        {onView ? (
+          <button
+            type="button"
+            disabled={
+              busy ||
+              !items.some((item) => selected.has(item.attachment_id) && isSavedLocal(item))
+            }
+            onClick={() => {
+              const saved = items.find((item) => selected.has(item.attachment_id) && isSavedLocal(item));
+              if (saved) onView(saved);
+            }}
+            className="rounded border border-cyan/25 px-4 py-2 text-sm tracking-wide text-cyan/80 transition hover:bg-cyan/10 disabled:opacity-30"
+          >
+            View selected
+          </button>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -107,7 +227,19 @@ function Quote({ widget }: { widget: Widget }) {
   return <p className="font-display text-3xl text-white/80">{widget.text}</p>;
 }
 
-export function WidgetCard({ widget }: { widget: Widget }) {
+export function WidgetCard({
+  widget,
+  onSaveAttachments,
+  onReplyAttachments,
+  onViewAttachment,
+  busy,
+}: {
+  widget: Widget;
+  onSaveAttachments?: (emailId: string, attachmentIds: string[], filenames: string[]) => void;
+  onReplyAttachments?: (emailId: string, attachmentIds: string[], filenames: string[]) => void;
+  onViewAttachment?: (item: MailAttachment) => void;
+  busy?: boolean;
+}) {
   switch (widget.type) {
     case "kpi":
       return <Kpi widget={widget} />;
@@ -119,6 +251,16 @@ export function WidgetCard({ widget }: { widget: Widget }) {
       return <Timeline widget={widget} />;
     case "quote":
       return <Quote widget={widget} />;
+    case "attachments":
+      return (
+        <AttachmentList
+          widget={widget}
+          busy={busy}
+          onSave={onSaveAttachments || (() => undefined)}
+          onReply={onReplyAttachments || (() => undefined)}
+          onView={onViewAttachment}
+        />
+      );
     default:
       return <MarkdownCard widget={widget} />;
   }

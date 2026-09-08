@@ -3,7 +3,22 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 
-WidgetType = Literal["kpi", "table", "markdown", "chart", "timeline", "quote"]
+WidgetType = Literal["kpi", "table", "markdown", "chart", "timeline", "quote", "attachments"]
+AttachmentStatus = Literal["gmail", "local", "drive", "both"]
+
+
+class MailAttachment(BaseModel):
+    attachment_id: str = ""
+    filename: str = ""
+    mime: str = ""
+    size: int = 0
+    readable: bool = False
+    cad: bool = False
+    status: AttachmentStatus = "gmail"
+    local_path: str | None = None
+    local_name: str | None = None
+    drive_link: str | None = None
+    artifact_id: str | None = None
 
 
 class Widget(BaseModel):
@@ -19,6 +34,7 @@ class Widget(BaseModel):
     points: list[dict[str, Any]] | None = None
     items: list[dict[str, Any]] | None = None
     cite: str | None = None
+    email_id: str | None = None
 
 
 class Scene(BaseModel):
@@ -48,11 +64,34 @@ class ChatRequest(BaseModel):
     session_id: str = "default"
 
 
+class MailAttachmentAction(BaseModel):
+    session_id: str = "default"
+    email_id: str = ""
+    attachment_ids: list[str] = Field(default_factory=list)
+    filenames: list[str] = Field(default_factory=list)
+
+
+class MailReplyAttachmentAction(BaseModel):
+    session_id: str = "default"
+    email_id: str = ""
+    attachment_ids: list[str] = Field(default_factory=list)
+    filenames: list[str] = Field(default_factory=list)
+    body: str = ""
+
+
+class MarkedDrawingSave(BaseModel):
+    session_id: str = "default"
+    source_name: str = ""
+    image_base64: str = ""
+
+
 class ChatResponse(BaseModel):
     speak: str
     scene: Scene
     artifacts: list[Artifact] = Field(default_factory=list)
     pending: list[PendingAction] = Field(default_factory=list)
+    attachments: list[MailAttachment] = Field(default_factory=list)
+    mail_id: str | None = None
     reply: str = ""
     offline: bool = False
     more: int = 0
@@ -99,9 +138,11 @@ class PreferencesUpdate(BaseModel):
 
 class HealthResponse(BaseModel):
     ok: bool
-    ollama: bool
+    ollama: bool = False
     model: str
     models: list[str] = Field(default_factory=list)
+    model_ready: bool | None = None
+    provider: str | None = None
 
 
 class AuditEntry(BaseModel):

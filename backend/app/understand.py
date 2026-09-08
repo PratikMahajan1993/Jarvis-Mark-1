@@ -3,6 +3,11 @@ from __future__ import annotations
 import difflib
 import re
 from typing import Any
+from zoneinfo import ZoneInfo
+
+from .compose import calendar_event_spec, document_spec, spreadsheet_spec, wants_calendar_create
+from .config import settings
+from .intent import wants_briefing, wants_mail, wants_research
 
 WORK_WORDS = (
     "spreadsheet",
@@ -24,13 +29,16 @@ WORK_WORDS = (
 
 PHRASE_ALIASES = (
     ("thread sheet", "spreadsheet"),
-    ("pricing sheet", "pricing spreadsheet"),
     ("spread sheet", "spreadsheet"),
     ("speed sheet", "spreadsheet"),
     ("spread seat", "spreadsheet"),
     ("one pager", "one-pager"),
     ("e mail", "email"),
+    ("g mail", "gmail"),
     ("in box", "inbox"),
+    ("meetin notes", "meeting notes"),
+    ("work book", "workbook"),
+    ("calender", "calendar"),
 )
 
 TOKEN_ALIASES = {
@@ -45,6 +53,8 @@ TOKEN_ALIASES = {
     "calandar": "calendar",
     "scheduel": "schedule",
     "docxument": "document",
+    "gemeni": "gemini",
+    "jemeni": "gemini",
 }
 
 _SHEETISH = re.compile(r"(sheet|spread|excel|xlsx|calen|sched|inbox|docu)", re.I)
@@ -60,19 +70,19 @@ _SKIP_CLAUSE = re.compile(
 )
 
 FAMILY_WORDS: dict[str, tuple[str, ...]] = {
+    "gemini": ("gemini", "ask gemini", "task for gemini"),
+    "drive": ("drive", "google drive"),
     "mail": ("draft", "reply", "email", "e-mail", "mail", "inbox"),
     "sheet": ("spreadsheet", "excel", "xlsx"),
     "calendar": ("calendar", "schedule", "agenda"),
     "doc": ("document", "docx", "one-pager", "meeting notes"),
-    "research": ("research", "look up", "search the web"),
-    "brief": ("brief me", "briefing", "what's on", "whats on", "standup"),
-    "file": ("dropped", "summarize", "this file", "review the dropped"),
-    "drive": ("drive", "google drive"),
-    "gemini": ("gemini", "ask gemini", "task for gemini"),
+    "research": ("research", "look up", "search the web", "search for", "search the", "google this"),
+    "brief": ("brief me", "briefing", "what's on", "whats on", "standup", "catch me up"),
+    "file": ("dropped", "this file", "review the dropped"),
 }
 
 FAMILY_TOOLS: dict[str, tuple[str, ...]] = {
-    "mail": ("draft_email", "send_email", "search_emails", "read_email"),
+    "mail": ("draft_email", "send_email", "search_emails", "read_email", "forward_email", "save_mail_attachments", "reply_with_attachments"),
     "sheet": ("create_spreadsheet", "show_artifact"),
     "calendar": ("list_calendar", "create_calendar_event"),
     "doc": ("create_document", "create_pdf"),
@@ -81,17 +91,6 @@ FAMILY_TOOLS: dict[str, tuple[str, ...]] = {
     "file": ("review_inbox",),
     "drive": ("drive_upload", "drive_find"),
     "gemini": ("task_for_gemini",),
-}
-
-PRICING_SHEET = {
-    "title": "Pricing",
-    "columns": ["Item", "Owner", "Status"],
-    "rows": [
-        ["Revised pricing sheet", "You", "In progress"],
-        ["MSA redlines", "Legal", "Waiting"],
-        ["Client review", "You", "16:00 today"],
-    ],
-    "chart": False,
 }
 
 
@@ -106,7 +105,8 @@ def _close_work_word(token: str) -> str | None:
 
 
 def normalize_speech(message: str) -> tuple[str, list[tuple[str, str]]]:
-    text = (message or "").strip()
+    text = (message or "").strip().replace("\u2019", "'").replace("\u2018", "'")
+    text = text.replace("\u201c", '"').replace("\u201d", '"')
     repairs: list[tuple[str, str]] = []
     lowered = f" {text.lower()} "
     for src, dest in PHRASE_ALIASES:
@@ -140,19 +140,29 @@ def _clause_family(clause: str) -> str | None:
 def _guess_from_clause(clause: str) -> dict[str, Any] | None:
     text = clause.lower()
     family = _clause_family(clause)
-    if family == "sheet" or "pricing" in text or _SHEETISH.search(text):
-        title = "Pricing" if "pricing" in text else "Follow-up"
-        args = dict(PRICING_SHEET)
-        args["title"] = title
-        return {"tool": "create_spreadsheet", "arguments": args, "label": f"{title.lower()} spreadsheet"}
+    if family == "calendar":
+        if wants_calendar_create(clause):
+            try:
+                tz = ZoneInfo(settings.tz or "Asia/Kolkata")
+            except Exception:
+                tz = ZoneInfo("Asia/Kolkata")
+            spec = calendar_event_spec(clause, tz)
+            if spec:
+                return {"tool": "create_calendar_event", "arguments": spec, "label": "calendar event"}
+        return {"tool": "list_calendar", "arguments": {"days": 2}, "label": "calendar"}
+    if family == "sheet" or (
+        family not in {"calendar", "doc", "mail", "brief", "gemini", "drive"}
+        and re.search(r"\b(make|create|new|write|build|prepare)\b", text)
+        and ("pricing" in text or re.search(r"(spread\s*sheet|excel|xlsx|\bsheet\b)", text))
+    ):
+        args = spreadsheet_spec(clause)
+        return {"tool": "create_spreadsheet", "arguments": args, "label": f"{args['title'].lower()} spreadsheet"}
     if family == "doc":
         return {
             "tool": "create_document",
-            "arguments": {"title": "Meeting notes", "body": "Prepared by Jarvis.", "bullets": []},
+            "arguments": document_spec(clause),
             "label": "Word document",
         }
-    if family == "calendar":
-        return {"tool": "list_calendar", "arguments": {"days": 2}, "label": "calendar"}
     if family == "brief":
         return {"tool": "get_briefing", "arguments": {}, "label": "briefing"}
     return None
@@ -163,6 +173,7 @@ def unmatched_clauses(original: str, normalized: str, used_tools: list[str]) -> 
     for family, tools in FAMILY_TOOLS.items():
         if any(tool in used_tools for tool in tools):
             covered.add(family)
+    gemini = "gemini" in f"{original} {normalized}".lower()
     unclear: list[dict[str, Any]] = []
     for raw, clean in zip(_clauses(original), _clauses(normalized) or _clauses(original)):
         if _SKIP_CLAUSE.search(raw) and not _INTENT.search(raw):
@@ -170,8 +181,12 @@ def unmatched_clauses(original: str, normalized: str, used_tools: list[str]) -> 
         family = _clause_family(clean)
         if family and family in covered:
             continue
+        if gemini and family in {"sheet", "file"}:
+            continue
         looks_like_work = bool(_INTENT.search(raw) or _VAGUE.search(raw) or family or _SHEETISH.search(raw))
         if not looks_like_work:
+            continue
+        if gemini and not family and _SHEETISH.search(clean):
             continue
         if family and family not in covered:
             guess = _guess_from_clause(clean)
@@ -188,10 +203,10 @@ def clarification_thought(item: dict[str, Any]) -> dict[str, Any]:
     heard = item.get("heard") or "that last part"
     guess = item.get("guess")
     if guess:
-        speak = f'I heard "{heard}". Shall I make a {guess["label"]}?'
-        title = "I may have misheard"
+        speak = f"Did you want a {guess['label']}?"
+        title = "Confirm"
     else:
-        speak = f'I didn\'t catch "{heard}". Spreadsheet, mail, or something else?'
+        speak = f"I didn't catch \"{heard}\". Mail, calendar, a file, or Gemini?"
         title = "Say that again"
     scene = {
         "title": title,
