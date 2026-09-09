@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { canListen, claimGlanceSpeech, classifyDecision, isWakeWatching, silence, speak, startListening, startWakeWatch, stopListening, stopWakeWatch } from "@/lib/voice";
-import type { Artifact, AuditEntry, ChatResponse, Conversation, Health, MailAttachment, PendingAction, Preferences, Scene } from "@/lib/types";
+import type { Artifact, AuditEntry, ChatResponse, Conversation, CriticalAlert, Health, MailAttachment, PendingAction, Preferences, RfqPublic, Scene } from "@/lib/types";
 import { ArtifactTray } from "./ArtifactTray";
 import { Composer } from "./Composer";
 import { ConfirmBar } from "./ConfirmBar";
@@ -86,6 +86,9 @@ export function HudShell() {
   const [spawnAsk, setSpawnAsk] = useState<PendingAction | null>(null);
   const [convBusyId, setConvBusyId] = useState<string | null>(null);
   const [dismissedCriticalId, setDismissedCriticalId] = useState<string | null>(null);
+  const [rfqs, setRfqs] = useState<RfqPublic[]>([]);
+  const [glanceCritical, setGlanceCritical] = useState<CriticalAlert | null>(null);
+  const [chatCritical, setChatCritical] = useState<CriticalAlert | null>(null);
   const fileTimer = useRef<number | null>(null);
   const lastWhisper = useRef("");
   const lastWatchSpeak = useRef("");
@@ -135,6 +138,9 @@ export function HudShell() {
     moreRef.current = result.more || 0;
     setMore(result.more || 0);
     setWatching(Boolean(result.watching));
+    if ("critical" in result) {
+      setChatCritical(result.critical ?? null);
+    }
     setShowFiles((result.artifacts || []).length > 0);
     if (result.speak) {
       setTurns((current) => [...current.slice(-4), { role: "jarvis", text: result.speak }]);
@@ -202,6 +208,11 @@ export function HudShell() {
     } catch {
       /* dock is optional */
     }
+  }, []);
+
+  const refreshRfqs = useCallback(async () => {
+    const listed = await api.listRfqs();
+    setRfqs(listed.items || []);
   }, []);
 
   useEffect(() => {
@@ -275,10 +286,11 @@ export function HudShell() {
     void refreshSide().then(async () => {
       if (cancelled) return;
       await refreshConversations();
+      await refreshRfqs();
       try {
         const last = await api.session();
         if (cancelled) return;
-        if (last?.scene?.title || last?.reply) {
+        if (last?.scene?.title || last?.reply || last?.critical) {
           applyResponseRef.current(
             {
               speak: "",
@@ -289,6 +301,7 @@ export function HudShell() {
               offline: Boolean(last.offline),
               more: 0,
               watching: false,
+              critical: last.critical ?? null,
             },
             false,
           );
@@ -309,15 +322,17 @@ export function HudShell() {
     return () => {
       cancelled = true;
     };
-  }, [refreshSide, refreshConversations]);
+  }, [refreshSide, refreshConversations, refreshRfqs]);
 
   useEffect(() => {
     let cancelled = false;
     const tick = async () => {
+      if (!cancelled) void refreshRfqs();
       try {
         const next = await api.glance();
         if (cancelled) return;
         setGlance(next.line || "");
+        setGlanceCritical(next.critical ?? null);
         if (!restored.current || Date.now() < announceAt.current) return;
         const geminiReady = Boolean(next.key?.startsWith("gemini:") && next.speak);
         const occupied =
@@ -364,7 +379,7 @@ export function HudShell() {
       cancelled = true;
       window.clearInterval(id);
     };
-  }, []);
+  }, [refreshRfqs]);
 
   const toggleAlwaysOnMic = useCallback(() => {
     setAlwaysOnMic((current) => {
@@ -696,19 +711,21 @@ export function HudShell() {
             : await api.chat(message, target?.session_id || "default");
       if (target) {
         await refreshConversations();
+        if ("critical" in result) setChatCritical(result.critical ?? null);
         whisper(result.speak || result.reply || "");
         if (voiceEnabledRef.current && result.speak) speak(result.speak, true);
       } else {
         applyResponse(result);
       }
       await refreshSide();
+      await refreshRfqs();
     } catch (err) {
       setError(err instanceof Error ? err.message : "I could not reach the house systems.");
     } finally {
       setBusy(false);
       setConvBusyId(null);
     }
-  }, [applyResponse, busy, interceptMessage, refreshConversations, refreshSide, whisper]);
+  }, [applyResponse, busy, interceptMessage, refreshConversations, refreshRfqs, refreshSide, whisper]);
 
   const runAttachmentAction = useCallback(
     async (kind: "save" | "reply", emailId: string, attachmentIds: string[], filenames: string[]) => {
@@ -723,13 +740,14 @@ export function HudShell() {
             : await api.replyWithAttachments(emailId, attachmentIds, filenames);
         applyResponse(result);
         await refreshSide();
+        await refreshRfqs();
       } catch (err) {
         setError(err instanceof Error ? err.message : "Attachment action failed.");
       } finally {
         setBusy(false);
       }
     },
-    [applyResponse, busy, refreshSide],
+    [applyResponse, busy, refreshRfqs, refreshSide],
   );
 
   const decide = useCallback(async (id: string, approved: boolean) => {
@@ -747,10 +765,11 @@ export function HudShell() {
       const result = await api.confirm(id, approved);
       applyResponse(result);
       await refreshSide();
+      await refreshRfqs();
     } finally {
       setBusy(false);
     }
-  }, [applyResponse, decideSpawn, refreshSide]);
+  }, [applyResponse, decideSpawn, refreshRfqs, refreshSide]);
 
   const sendToConversation = useCallback(async (id: string, message: string) => {
     const row = conversationsRef.current.find((item) => item.id === id);
@@ -761,6 +780,8 @@ export function HudShell() {
     try {
       const result = await api.chat(message.trim(), row.session_id);
       await refreshConversations();
+      if ("critical" in result) setChatCritical(result.critical ?? null);
+      await refreshRfqs();
       whisper(result.speak || result.reply || "");
       if (voiceEnabledRef.current && result.speak) speak(result.speak, true);
     } catch (err) {
@@ -769,7 +790,7 @@ export function HudShell() {
       setBusy(false);
       setConvBusyId(null);
     }
-  }, [refreshConversations, whisper]);
+  }, [refreshConversations, refreshRfqs, whisper]);
 
   const confirmConversation = useCallback(async (id: string, actionId: string, approved: boolean) => {
     const row = conversationsRef.current.find((item) => item.id === id);
@@ -779,6 +800,8 @@ export function HudShell() {
     try {
       const result = await api.confirm(actionId, approved, row.session_id);
       await refreshConversations();
+      if ("critical" in result) setChatCritical(result.critical ?? null);
+      await refreshRfqs();
       whisper(result.speak || result.reply || "");
     } catch (err) {
       setError(err instanceof Error ? err.message : "I could not confirm that.");
@@ -786,7 +809,7 @@ export function HudShell() {
       setBusy(false);
       setConvBusyId(null);
     }
-  }, [refreshConversations, whisper]);
+  }, [refreshConversations, refreshRfqs, whisper]);
 
   advanceThought.current = () => {
     if (busyRef.current || pendingIdRef.current || composeRef.current || listeningRef.current) return;
@@ -996,7 +1019,7 @@ export function HudShell() {
 
   const mood = listening || hot ? "listen" : busy ? "think" : "idle";
   const density = prefs?.hud_density === "dense";
-  const critical = deriveCritical(conversations, focusedId);
+  const critical = deriveCritical(conversations, focusedId, { glanceCritical, chatCritical, rfqs });
   const showCritical = Boolean(critical && critical.sourceId !== dismissedCriticalId);
 
   return (

@@ -72,6 +72,60 @@ export type Conversation = {
   waiting?: boolean;
 };
 
+export type SimilarJob = {
+  id: string;
+  part_name: string;
+  material: string;
+  machine: string;
+  cycle_min: number | null;
+  geometry_notes: string;
+};
+
+export type RfqPublic = {
+  id: string;
+  status: string;
+  mail_id: string;
+  conversation_id: string;
+  extract: Record<string, unknown>;
+  similar_jobs: SimilarJob[];
+  pending_reply: string;
+  deadline_iso: string;
+  catch: string;
+  updated_at: string;
+};
+
+export type RfqIntakeRequest = {
+  mail_id?: string;
+  conversation_id?: string;
+  message?: string;
+};
+
+export type RfqIntakeResponse = {
+  rfq: RfqPublic;
+  conversation: Conversation;
+  speak: string;
+};
+
+export type CriticalKind = "rfq" | "efficiency" | "shift";
+export type CriticalTone = "cyan" | "amber" | "red";
+
+export type CriticalAlert = {
+  kind: CriticalKind;
+  title: string;
+  detail?: string;
+  tone?: CriticalTone;
+  sourceId?: string;
+};
+
+export type Glance = {
+  line: string;
+  whisper: string;
+  speak: string;
+  key: string;
+  minutes: number | null;
+  critical?: CriticalAlert | null;
+};
+
 export type ChatResponse = {
   speak: string;
   reply: string;
@@ -83,6 +137,7 @@ export type ChatResponse = {
   offline: boolean;
   more?: number;
   watching?: boolean;
+  critical?: CriticalAlert | null;
 };
 
 export type Preferences = {

@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import type { Conversation, PendingAction, Scene } from "@/lib/types";
+import type { Conversation, PendingAction, Scene, Widget } from "@/lib/types";
+import { shallICopy } from "./ConfirmBar";
 import { SceneBoard } from "./SceneBoard";
 import { HudButton, Panel, StatusDot } from "./hud/Hud";
 
@@ -31,6 +32,52 @@ function group(rows: Conversation[]): [string, Conversation[]][] {
     if (!ORDER.includes(key)) ordered.push([key, list]);
   }
   return ordered;
+}
+
+function asJobs(value: unknown): Array<Record<string, unknown>> {
+  if (!Array.isArray(value)) return [];
+  return value.filter((row): row is Record<string, unknown> => Boolean(row) && typeof row === "object");
+}
+
+function drawingRfqScene(row: Conversation): Scene {
+  const scene = row.scene || { title: "", widgets: [] };
+  const widgets: Widget[] = [...(scene.widgets || [])];
+  if (row.category !== "drawing") {
+    return { title: scene.title, subtitle: scene.subtitle, widgets };
+  }
+  const focus = row.focus || {};
+  const extra = row as Conversation & { catch?: unknown; similar_jobs?: unknown };
+  const catchLine = [focus.catch, extra.catch].find((value) => typeof value === "string" && value.trim()) as
+    | string
+    | undefined;
+  const similar = asJobs(focus.similar_jobs ?? extra.similar_jobs);
+  const hasCatch = widgets.some((widget) => {
+    const label = `${widget.title || ""} ${widget.label || ""}`.toLowerCase();
+    return label.includes("catch") || (catchLine && (widget.text === catchLine || String(widget.value ?? "") === catchLine));
+  });
+  if (catchLine && !hasCatch) {
+    widgets.unshift({ type: "markdown", title: "Catch", text: catchLine.trim() });
+  }
+  const hasSimilar = widgets.some((widget) => /similar/i.test(`${widget.title || ""} ${widget.label || ""}`));
+  if (similar.length && !hasSimilar) {
+    widgets.push({
+      type: "table",
+      title: "Similar jobs",
+      columns: ["Part", "Material", "Machine", "Cycle", "Notes"],
+      rows: similar.map((job) => [
+        String(job.part_name ?? ""),
+        String(job.material ?? ""),
+        String(job.machine ?? ""),
+        job.cycle_min == null || job.cycle_min === "" ? "" : String(job.cycle_min),
+        String(job.geometry_notes ?? ""),
+      ]),
+    });
+  }
+  return {
+    title: scene.title || row.title,
+    subtitle: scene.subtitle,
+    widgets,
+  };
 }
 
 export function ConversationDock({
@@ -120,7 +167,8 @@ function ConversationCard({
 }) {
   const [draft, setDraft] = useState("");
   const pending = (row.pending || [])[0] as PendingAction | undefined;
-  const scene = (row.scene || { title: "", widgets: [] }) as Scene;
+  const pendingCopy = pending ? shallICopy(pending) : null;
+  const scene = drawingRfqScene(row);
   const turns = (row.turns || []).slice(-6);
   return (
     <div onClick={onFocus}>
@@ -153,9 +201,10 @@ function ConversationCard({
           ))}
           {scene.title || (scene.widgets || []).length ? <SceneBoard scene={scene} compact /> : null}
         </div>
-        {pending ? (
+        {pending && pendingCopy ? (
           <div className="mt-2 border-l-2 border-amber/30 bg-amber/5 px-3 py-2 text-center">
-            <p className="text-xs text-white/70">Shall I? {pending.title}</p>
+            <p className="text-xs text-white/70">Shall I? {pendingCopy.title}</p>
+            {pendingCopy.summary ? <p className="mt-1 text-[11px] text-white/40">{pendingCopy.summary}</p> : null}
             <div className="mt-2 flex justify-center gap-3 text-xs">
               <HudButton variant="ghost" className="px-3 py-1" onClick={() => onConfirm(pending.id, false)}>
                 No
