@@ -9,6 +9,7 @@ openpyxl>=3.1.5
 python-docx>=1.2.0
 reportlab>=4.4.3
 pypdf>=6.0.0
+pymupdf>=1.26.0
 ddgs>=9.5.0
 tzdata>=2025.2
 google-api-python-client>=2.160.0

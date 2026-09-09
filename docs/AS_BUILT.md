@@ -86,7 +86,7 @@ Second surface at `http://localhost:3000/canvas`. Manual only: no voice, no agen
 - PDFs show a placeholder card — name, page count, page size from `pypdf` — and open in a tab. Page rasterization is not built.
 - Storage: `canvas_boards` / `canvas_items` / `canvas_files` in SQLite, uploads under `backend/data/canvas`. Edits save on a 600ms debounce; the board reopens where you left it, camera included.
 - API: `GET`/`POST /api/canvas/boards`, `GET`/`PUT /api/canvas/boards/{id}`, `POST /api/canvas/files`, `GET /api/canvas/files/{id}`. Item geometry is columns; kind-specific fields are JSON, so a new item kind needs no migration.
-- Seams: `CanvasItem` union in `lib/canvas/types.ts` plus the `ITEM_RENDERERS` registry on the HUD side, `db.add_canvas_item(...)` on the API side — the one call a future `add_to_canvas` tool would make.
+- Seams: `CanvasItem` union in `lib/canvas/types.ts` plus the `ITEM_RENDERERS` registry on the HUD side, `db.add_canvas_item(...)` on the API side.
 
 ## Not built
 

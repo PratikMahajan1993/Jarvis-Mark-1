@@ -1,4 +1,4 @@
-import type { ChatResponse, Health, Preferences, Artifact, AuditEntry, PendingAction } from "./types";
+import type { ChatResponse, Health, Preferences, Artifact, AuditEntry, PendingAction, Conversation } from "./types";
 import type { CanvasBoard, CanvasCamera, CanvasFile, CanvasItem } from "./canvas/types";
 
 function apiBase(): string {
@@ -74,7 +74,7 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify(patch),
     }),
-  pending: () => json<{ items: PendingAction[] }>("/api/pending"),
+  pending: (sessionId = "default") => json<{ items: PendingAction[] }>(`/api/pending?session_id=${sessionId}`),
   session: (sessionId = "default") =>
     json<Partial<ChatResponse>>(`/api/session?session_id=${sessionId}`),
   nextThought: (sessionId = "default") => json<ChatResponse>(`/api/thought?session_id=${sessionId}`),
@@ -86,6 +86,28 @@ export const api = {
     ),
   ackWatch: (sessionId = "default") =>
     json<{ ok: boolean; acked: boolean }>(`/api/watch/ack?session_id=${sessionId}`, { method: "POST" }),
+  conversations: () => json<{ items: Conversation[] }>("/api/conversations"),
+  createConversation: (category: string, title: string, focus: Record<string, unknown> = {}) =>
+    json<Conversation>("/api/conversations", {
+      method: "POST",
+      body: JSON.stringify({ category, title, focus }),
+    }),
+  patchConversation: (id: string, patch: { minimized?: boolean; title?: string }) =>
+    json<Conversation>(`/api/conversations/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(patch),
+    }),
+  spawnDrawingConversation: (focus: {
+    filename?: string;
+    local_name?: string;
+    local_path?: string;
+    mime?: string;
+    drive_link?: string;
+  }) =>
+    json<Conversation>("/api/conversations/drawing", {
+      method: "POST",
+      body: JSON.stringify(focus),
+    }),
   downloadUrl: (id: string) => `${apiBase()}/api/artifacts/${id}`,
   drawingUrl: (name: string) => `${apiBase()}/api/drawings/${encodeURIComponent(name)}`,
   saveMarkedDrawing: (sourceName: string, imageBase64: string, sessionId = "default") =>

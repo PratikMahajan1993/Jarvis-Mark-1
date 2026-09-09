@@ -2,12 +2,19 @@ import type { MailAttachment, Widget } from "@/lib/types";
 import { isSavedLocal } from "@/lib/viewerMatch";
 import { splitMarkdownTables } from "@/lib/tables";
 import { useMemo, useState } from "react";
+import { ACCENT_SOLID_BG, ACCENT_TEXT_SOFT, type Accent, HudButton } from "./hud/Hud";
 
-function Kpi({ widget }: { widget: Widget }) {
+const ACCENT_CYCLE: Accent[] = ["cyan", "violet", "magenta", "amber"];
+
+function cycleAccent(index: number): Accent {
+  return ACCENT_CYCLE[index % ACCENT_CYCLE.length];
+}
+
+function Kpi({ widget, accent = "cyan" }: { widget: Widget; accent?: Accent }) {
   return (
     <div>
-      <p className="text-[11px] tracking-[0.25em] uppercase text-white/35">{widget.label}</p>
-      <p className="mt-1 font-display text-5xl leading-none text-white">{widget.value ?? "—"}</p>
+      <p className={`font-mono text-[10px] uppercase tracking-[0.22em] ${ACCENT_TEXT_SOFT[accent]}`}>{widget.label}</p>
+      <p className="mt-1.5 font-display text-4xl leading-none text-white">{widget.value ?? "—"}</p>
     </div>
   );
 }
@@ -15,12 +22,12 @@ function Kpi({ widget }: { widget: Widget }) {
 function TableCard({ widget }: { widget: Widget }) {
   return (
     <div className="overflow-auto">
-      {widget.title ? <h3 className="mb-3 text-sm text-white/40">{widget.title}</h3> : null}
+      {widget.title ? <h3 className="mb-3 font-mono text-[11px] uppercase tracking-[0.18em] text-cyan/60">{widget.title}</h3> : null}
       <table className="w-full text-left text-sm">
         <thead className="text-[11px] uppercase tracking-widest text-white/30">
           <tr>
             {(widget.columns || []).map((col) => (
-              <th key={col} className="pb-2 pr-6 font-medium">{col}</th>
+              <th key={col} className="border-b border-white/10 pb-2 pr-6 font-medium">{col}</th>
             ))}
           </tr>
         </thead>
@@ -44,14 +51,14 @@ function MarkdownCard({ widget }: { widget: Widget }) {
   if (!hasTable) {
     return (
       <div>
-        {widget.title ? <h3 className="mb-2 text-sm text-white/40">{widget.title}</h3> : null}
+        {widget.title ? <h3 className="mb-2 font-mono text-[11px] uppercase tracking-[0.18em] text-cyan/60">{widget.title}</h3> : null}
         <div className="whitespace-pre-wrap leading-relaxed text-white/70">{widget.text}</div>
       </div>
     );
   }
   return (
     <div className="space-y-6">
-      {widget.title ? <h3 className="text-sm text-white/40">{widget.title}</h3> : null}
+      {widget.title ? <h3 className="font-mono text-[11px] uppercase tracking-[0.18em] text-cyan/60">{widget.title}</h3> : null}
       {blocks.map((block, index) =>
         block.kind === "table" ? (
           <TableCard
@@ -73,11 +80,14 @@ function ChartCard({ widget }: { widget: Widget }) {
   const max = Math.max(1, ...points.map((point) => Number(point.value) || 0));
   return (
     <div>
-      {widget.title ? <h3 className="mb-4 text-sm text-white/40">{widget.title}</h3> : null}
+      {widget.title ? <h3 className="mb-4 font-mono text-[11px] uppercase tracking-[0.18em] text-cyan/60">{widget.title}</h3> : null}
       <div className="flex h-32 items-end gap-3">
-        {points.map((point) => (
+        {points.map((point, index) => (
           <div key={point.label} className="flex flex-1 flex-col items-center gap-2">
-            <div className="w-full rounded-t bg-cyan/70" style={{ height: `${(Number(point.value) / max) * 100}%` }} />
+            <div
+              className={`w-full rounded-t ${ACCENT_SOLID_BG[cycleAccent(index)]} opacity-80`}
+              style={{ height: `${(Number(point.value) / max) * 100}%` }}
+            />
             <span className="text-[11px] text-white/35">{point.label}</span>
           </div>
         ))}
@@ -87,22 +97,23 @@ function ChartCard({ widget }: { widget: Widget }) {
 }
 
 function Timeline({ widget }: { widget: Widget }) {
+  const items = widget.items || [];
   return (
     <div>
-      {widget.title ? <h3 className="mb-4 text-sm text-white/40">{widget.title}</h3> : null}
-      <ol className="space-y-3">
-        {(widget.items || []).map((item, index) => {
+      {widget.title ? <h3 className="mb-4 font-mono text-[11px] uppercase tracking-[0.18em] text-cyan/60">{widget.title}</h3> : null}
+      <ol className="relative space-y-5 border-l border-white/10 pl-5">
+        {items.map((item, index) => {
           const title = String(item.title ?? "");
           const time = String(item.time ?? "");
           const detail = item.detail != null ? String(item.detail) : "";
+          const accent = cycleAccent(index);
           return (
-          <li key={`${title}-${index}`} className="flex gap-5">
-            <span className="w-12 shrink-0 font-display text-lg text-white/50">{time}</span>
-            <div>
-              <p className="text-white">{title}</p>
+            <li key={`${title}-${index}`} className="relative">
+              <span className={`absolute -left-[25px] top-1 h-2 w-2 rounded-full ${ACCENT_SOLID_BG[accent]}`} />
+              <span className="font-mono text-[11px] uppercase tracking-[0.12em] text-white/40">{time}</span>
+              <p className="mt-0.5 text-white">{title}</p>
               {detail ? <p className="text-sm text-white/35">{detail}</p> : null}
-            </div>
-          </li>
+            </li>
           );
         })}
       </ol>
@@ -151,7 +162,7 @@ function AttachmentList({
 
   return (
     <div>
-      {widget.title ? <h3 className="mb-3 text-sm text-white/40">{widget.title}</h3> : null}
+      {widget.title ? <h3 className="mb-3 font-mono text-[11px] uppercase tracking-[0.18em] text-cyan/60">{widget.title}</h3> : null}
       <ul className="space-y-2">
         {items.map((item) => (
           <li key={item.attachment_id || item.filename} className="flex items-start gap-3 border-t border-white/5 py-2.5">
@@ -172,51 +183,37 @@ function AttachmentList({
               ) : null}
             </div>
             {onView ? (
-              <button
-                type="button"
+              <HudButton
+                variant="primary"
                 disabled={busy || !isSavedLocal(item)}
                 title={isSavedLocal(item) ? "View saved drawing" : "Save locally first"}
                 onClick={() => onView(item)}
-                className="shrink-0 rounded border border-cyan/40 px-3 py-1 text-xs tracking-wide text-cyan transition hover:bg-cyan/10 disabled:cursor-not-allowed disabled:opacity-30"
+                className="shrink-0 py-1"
               >
                 View
-              </button>
+              </HudButton>
             ) : null}
           </li>
         ))}
       </ul>
       <div className="mt-4 flex flex-wrap gap-3">
-        <button
-          type="button"
-          disabled={busy || !emailId || selectedIds.length === 0}
-          onClick={() => onSave(emailId, selectedIds, selectedNames)}
-          className="rounded border border-cyan/40 px-4 py-2 text-sm tracking-wide text-cyan transition hover:bg-cyan/10 disabled:opacity-30"
-        >
+        <HudButton variant="primary" disabled={busy || !emailId || selectedIds.length === 0} onClick={() => onSave(emailId, selectedIds, selectedNames)}>
           Save selected
-        </button>
-        <button
-          type="button"
-          disabled={busy || !emailId || selectedIds.length === 0}
-          onClick={() => onReply(emailId, selectedIds, selectedNames)}
-          className="rounded border border-white/15 px-4 py-2 text-sm tracking-wide text-white/70 transition hover:bg-white/5 disabled:opacity-30"
-        >
-          Attach selected to reply
-        </button>
+        </HudButton>
+        <HudButton variant="ghost" disabled={busy || !emailId || selectedIds.length === 0} onClick={() => onReply(emailId, selectedIds, selectedNames)}>
+          Attach to reply
+        </HudButton>
         {onView ? (
-          <button
-            type="button"
-            disabled={
-              busy ||
-              !items.some((item) => selected.has(item.attachment_id) && isSavedLocal(item))
-            }
+          <HudButton
+            variant="secondary"
+            disabled={busy || !items.some((item) => selected.has(item.attachment_id) && isSavedLocal(item))}
             onClick={() => {
               const saved = items.find((item) => selected.has(item.attachment_id) && isSavedLocal(item));
               if (saved) onView(saved);
             }}
-            className="rounded border border-cyan/25 px-4 py-2 text-sm tracking-wide text-cyan/80 transition hover:bg-cyan/10 disabled:opacity-30"
           >
             View selected
-          </button>
+          </HudButton>
         ) : null}
       </div>
     </div>
@@ -229,12 +226,14 @@ function Quote({ widget }: { widget: Widget }) {
 
 export function WidgetCard({
   widget,
+  accent,
   onSaveAttachments,
   onReplyAttachments,
   onViewAttachment,
   busy,
 }: {
   widget: Widget;
+  accent?: Accent;
   onSaveAttachments?: (emailId: string, attachmentIds: string[], filenames: string[]) => void;
   onReplyAttachments?: (emailId: string, attachmentIds: string[], filenames: string[]) => void;
   onViewAttachment?: (item: MailAttachment) => void;
@@ -242,7 +241,7 @@ export function WidgetCard({
 }) {
   switch (widget.type) {
     case "kpi":
-      return <Kpi widget={widget} />;
+      return <Kpi widget={widget} accent={accent} />;
     case "table":
       return <TableCard widget={widget} />;
     case "chart":

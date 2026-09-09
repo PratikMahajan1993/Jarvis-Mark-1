@@ -50,6 +50,28 @@ export type PendingAction = {
   payload: Record<string, unknown>;
 };
 
+export type ConversationTurn = {
+  role: string;
+  content: string;
+};
+
+export type Conversation = {
+  id: string;
+  session_id: string;
+  category: string;
+  title: string;
+  focus: Record<string, unknown>;
+  minimized: boolean;
+  status: string;
+  model?: string;
+  updated_at?: string;
+  speak?: string;
+  scene?: Scene;
+  pending?: PendingAction[];
+  turns?: ConversationTurn[];
+  waiting?: boolean;
+};
+
 export type ChatResponse = {
   speak: string;
   reply: string;

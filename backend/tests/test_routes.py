@@ -30,6 +30,9 @@ CONFLICTS: list[tuple[str, str, tuple[str, ...], tuple[str, ...]]] = [
     ("search for Paladon", "research", ("research",), ("search_emails",)),
     ("what's on", "briefing", ("get_briefing",), ("list_calendar", "search_emails")),
     ("what's on my calendar", "calendar_list", ("list_calendar",), ("get_briefing", "search_emails")),
+    ("when is my next meeting", "calendar_list", ("list_calendar",), ("get_briefing", "create_calendar_event")),
+    ("what's tomorrow", "calendar_list", ("list_calendar",), ("get_briefing", "create_calendar_event")),
+    ("what do I have tomorrow", "calendar_list", ("list_calendar",), ("get_briefing",)),
     ("what's in my inbox", "mail_search", ("search_emails",), ("get_briefing", "read_email")),
     ("forward this to Pratik", "mail_forward", ("forward_email",), ("task_for_gemini", "send_email")),
     ("forward this to Gemini", "gemini", ("task_for_gemini",), ("forward_email", "draft_email")),
@@ -136,6 +139,14 @@ def test_briefing_vs_calendar_vs_inbox():
     assert classify("what's on").kind == "briefing"
     assert classify("what's on my calendar").kind == "calendar_list"
     assert classify("what's on my schedule").kind == "calendar_list"
+    assert classify("when is my next meeting").kind == "calendar_list"
+    assert classify("any meetings today").kind == "calendar_list"
+    assert classify("what's tomorrow").kind == "calendar_list"
+    assert classify("what do I have tomorrow").kind == "calendar_list"
+    assert classify("any meetings today").query == "today"
+    assert classify("what's tomorrow").query == "tomorrow"
+    assert classify("what's on").kind == "briefing"
+    assert classify("write meeting notes").kind == "doc_create"
     assert classify("what's in my inbox").kind == "mail_search"
     assert classify("what's in that email").kind == "mail_read"
 
@@ -183,6 +194,8 @@ def test_heuristic_obeys_route():
         ("aluminium prices in India", ["research"]),
         ("search the web for Paladon", ["research"]),
         ("what's on my calendar", ["list_calendar"]),
+        ("when is my next meeting", ["list_calendar"]),
+        ("book a call with Rahul at 4pm", ["create_calendar_event"]),
         ("how are you", []),
         ("brief me", ["get_briefing"]),
         ("don't reply", []),
@@ -212,6 +225,14 @@ def test_fill_read_args():
     assert args.get("last") is True
     search = _fill_tool_args("search_emails", {}, "check mail from Neha", {})
     assert search.get("query") == "from:Neha"
+    today = _fill_tool_args("list_calendar", {}, "any meetings today", {})
+    assert today.get("span") == "today"
+    assert today.get("days") == 1
+    tomorrow = _fill_tool_args("list_calendar", {}, "what's tomorrow", {})
+    assert tomorrow.get("span") == "tomorrow"
+    week = _fill_tool_args("list_calendar", {}, "what's on my calendar", {})
+    assert week.get("days") == 7
+    assert not week.get("span")
 
 
 def test_social_replies():

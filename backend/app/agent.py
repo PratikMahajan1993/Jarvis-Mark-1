@@ -15,8 +15,15 @@ from .schemas import Artifact, ChatResponse, MailAttachment, PendingAction, Scen
 from .tools.registry import TOOL_SCHEMAS, _guess_file_title, execute_tool
 from .familiarity import get_set, remember_person, resolve as resolve_refs, speak_sent, wants_familiarity
 from .think import refine_research, refine_mail, refine_briefing, MAIL_TOOLS
-from .intent import ROUTES, classify, intent_for_kind, looks_like_work, prepare, route_for
-from .snapshot import ready as snapshot_ready, refresh as refresh_snapshot, uses_snapshot, wants_fresh
+from .intent import ROUTES, calendar_span, classify, intent_for_kind, looks_like_work, prepare, route_for
+from .snapshot import (
+    calendar_ready,
+    ready as snapshot_ready,
+    refresh as refresh_snapshot,
+    skips_model,
+    uses_snapshot,
+    wants_fresh,
+)
 from .understand import clarification_thought, normalize_speech, unmatched_clauses
 
 _YES_SHORT = {
@@ -175,8 +182,23 @@ def _fill_tool_args(
         from .connectors.search import clean_query
 
         args["query"] = clean_query(intent.query or asked) or asked
-    if name == "list_calendar" and not args.get("days"):
-        args["days"] = 2
+    if name == "list_calendar":
+        span = str(args.get("span") or "").strip().lower()
+        if span not in {"today", "tomorrow"}:
+            span = str(intent.query or "").strip().lower()
+        if span not in {"today", "tomorrow"}:
+            span = calendar_span(asked)
+        args["span"] = span
+        if span == "today":
+            args["days"] = 1
+        elif span == "tomorrow":
+            args["days"] = 2
+        else:
+            try:
+                days = int(args.get("days") or 7)
+            except (TypeError, ValueError):
+                days = 7
+            args["days"] = min(max(days, 1), 7)
     if name == "create_calendar_event" and not args.get("title"):
         try:
             tz = ZoneInfo(prefs.get("timezone") or settings.tz or "Asia/Kolkata")
@@ -360,6 +382,26 @@ def _chat_prompt(prefs: dict[str, Any], session_id: str = "default") -> str:
             f"Subject: {mail.get('subject') or ''}\n"
             f"{body}\n"
         )
+    cal_focus = ""
+    try:
+        from .connectors import calendar as calendar_conn
+
+        rows = calendar_conn.upcoming(days=7)[:4]
+    except Exception:
+        rows = []
+    if rows:
+        lines = []
+        for event in rows:
+            stamp = calendar_conn.clock(event.get("start_at") or "")
+            title = event.get("title") or "event"
+            loc = event.get("location") or ""
+            extra = f" ({loc})" if loc else ""
+            lines.append(f"- {stamp} {title}{extra}".strip())
+        cal_focus = (
+            "\nUpcoming on the calendar (use only if they ask; ignore for small talk):\n"
+            + "\n".join(lines)
+            + "\n"
+        )
     return f"""You are {prefs.get('assistant_name', 'Jarvis')}, a present and slightly dry British aide.
 Address the user as {prefs.get('display_name', 'Sir')}.
 Persona: {prefs.get('persona')}
@@ -367,7 +409,7 @@ Verbosity: {prefs.get('verbosity', 'concise')}.
 They may put your name anywhere in the sentence. Answer in one or two spoken sentences.
 Be present. Do not mention tools, JSON, or that you are a model.
 Do not invent emails, files, or calendar changes.
-{focus}"""
+{focus}{cal_focus}"""
 
 
 def _extract_json(text: str) -> dict[str, Any] | None:
@@ -531,7 +573,9 @@ def _heuristic_tools(
             if event:
                 calls.append({"name": "create_calendar_event", "arguments": event})
         elif intent.kind == "calendar_list":
-            calls.append({"name": "list_calendar", "arguments": {"days": 2}})
+            span = intent.query if intent.query in {"today", "tomorrow"} else calendar_span(message)
+            days = 1 if span == "today" else 2 if span == "tomorrow" else 7
+            calls.append({"name": "list_calendar", "arguments": {"days": days, "span": span}})
 
     if prefs.get("research_enabled") and intent.kind == "research":
         from .connectors.search import clean_query
@@ -750,7 +794,20 @@ def next_thought(session_id: str = "default") -> ChatResponse:
     return _response_from_thought(session_id, thought, False)
 
 
+def _skip_brain(kind: str, message: str) -> bool:
+    if kind == "calendar_create" or kind == "calendar_list":
+        return True
+    return uses_snapshot(kind) and snapshot_ready() and not wants_fresh(message)
+
+
 def run_agent(message: str, session_id: str = "default") -> ChatResponse:
+    from .conversations import brain_lock
+
+    with brain_lock():
+        return _run_agent(message, session_id)
+
+
+def _run_agent(message: str, session_id: str = "default") -> ChatResponse:
     waiting = db.list_pending(session_id)
     decision = classify_decision(message)
     if waiting and decision is not None:
@@ -767,7 +824,11 @@ def run_agent(message: str, session_id: str = "default") -> ChatResponse:
     inbox = db.list_inbox_files(6)
     tools = _enabled_tools(prefs)
     intent = classify(message)
-    skip_brain = uses_snapshot(intent.kind) and snapshot_ready() and not wants_fresh(message)
+    from .conversations import chat_drawing, is_drawing_session
+
+    if is_drawing_session(session_id) and intent.kind == "chat":
+        return chat_drawing(session_id, message)
+    skip_brain = _skip_brain(intent.kind, message)
     if skip_brain:
         status = {"model_ready": True, "model": "snapshot"}
         offline = False
@@ -778,7 +839,7 @@ def run_agent(message: str, session_id: str = "default") -> ChatResponse:
             labeled = _model_label(message, prefs)
             if labeled:
                 intent = intent_for_kind(labeled, message)
-                skip_brain = uses_snapshot(intent.kind) and snapshot_ready() and not wants_fresh(message)
+                skip_brain = _skip_brain(intent.kind, message)
                 if skip_brain:
                     offline = False
     work = intent.kind != "chat" or wants_familiarity(message)
@@ -796,13 +857,17 @@ def run_agent(message: str, session_id: str = "default") -> ChatResponse:
     used_names: list[str] = []
 
     if work:
-        need_sync = wants_fresh(message) or (uses_snapshot(intent.kind) and intent.kind != "mail_read" and not snapshot_ready())
+        need_sync = wants_fresh(message)
+        if uses_snapshot(intent.kind) and intent.kind != "mail_read" and not snapshot_ready():
+            need_sync = True
+        if intent.kind in {"calendar_list", "briefing"} and not calendar_ready():
+            need_sync = True
         if need_sync:
             try:
                 refresh_snapshot(force=wants_fresh(message))
             except Exception:
                 pass
-        if route.tools and not offline and not uses_snapshot(intent.kind):
+        if route.tools and not offline and not skips_model(intent.kind):
             extra, names = _try_model_route(message, prefs, session_id, tools, intent)
             used_names.extend(names)
             if names:
@@ -865,6 +930,9 @@ def run_agent(message: str, session_id: str = "default") -> ChatResponse:
     if not work and (not speak or speak in {"Here.", "Standing by."}):
         social = _social_reply(message, prefs)
         speak = social or ("Yes?" if speak in {"Here.", "Standing by.", ""} else speak)
+        reply = speak
+    if work and intent.kind == "calendar_create" and not used_tools and (not speak or speak in {"Here.", "Standing by."}):
+        speak = "I need a time for that. When should I put it on the calendar?"
         reply = speak
     if offline and not used_tools and (not speak or speak in {"Standing by.", "Here.", "Yes?"}):
         speak = "The model is still coming online. Ask me to brief you, draft mail, or make a file."

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { MailAttachment } from "@/lib/types";
 import { api } from "@/lib/api";
 import type { ViewerCommand } from "@/lib/viewerMatch";
+import { HudButton } from "./hud/Hud";
 
 type Mode = "pan" | "crop" | "mark";
 type PenColor = "cyan" | "red";
@@ -343,52 +344,35 @@ export function DrawingViewer({
 
   return (
     <div className="absolute inset-0 z-30 flex flex-col bg-black/70 backdrop-blur-sm">
-      <header className="flex shrink-0 items-center justify-between border-b border-cyan/15 px-6 py-3">
+      <header className="hud-panel hud-accent-cyan flex shrink-0 items-center justify-between rounded-none border-x-0 border-t-0 px-6 py-3">
         <div>
-          <p className="text-[11px] uppercase tracking-[0.25em] text-cyan/50">Drawing viewer</p>
+          <p className="font-mono text-[11px] uppercase tracking-[0.25em] text-cyan/50">Drawing viewer</p>
           <p className="font-display text-xl text-white">{title}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {numPages > 1 ? (
             <div className="flex items-center gap-2 text-sm text-white/60">
-              <button
-                type="button"
-                disabled={pageNum <= 1}
-                onClick={() => setPageNum((p) => Math.max(1, p - 1))}
-                className="rounded border border-white/15 px-3 py-1 hover:bg-white/5 disabled:opacity-30"
-              >
+              <HudButton variant="ghost" disabled={pageNum <= 1} onClick={() => setPageNum((p) => Math.max(1, p - 1))}>
                 Prev
-              </button>
-              <span>
+              </HudButton>
+              <span className="font-mono text-xs">
                 {pageNum} / {numPages}
               </span>
-              <button
-                type="button"
-                disabled={pageNum >= numPages}
-                onClick={() => setPageNum((p) => Math.min(numPages, p + 1))}
-                className="rounded border border-white/15 px-3 py-1 hover:bg-white/5 disabled:opacity-30"
-              >
+              <HudButton variant="ghost" disabled={pageNum >= numPages} onClick={() => setPageNum((p) => Math.min(numPages, p + 1))}>
                 Next
-              </button>
+              </HudButton>
             </div>
           ) : null}
-          <button type="button" onClick={() => setZoom((z) => Math.min(4, z * 1.25))} className="rounded border border-white/15 px-3 py-1 text-sm text-white/70 hover:bg-white/5">
+          <HudButton variant="ghost" onClick={() => setZoom((z) => Math.min(4, z * 1.25))}>
             Zoom +
-          </button>
-          <button type="button" onClick={() => setZoom((z) => Math.max(0.25, z / 1.25))} className="rounded border border-white/15 px-3 py-1 text-sm text-white/70 hover:bg-white/5">
+          </HudButton>
+          <HudButton variant="ghost" onClick={() => setZoom((z) => Math.max(0.25, z / 1.25))}>
             Zoom −
-          </button>
+          </HudButton>
           {(["pan", "crop", "mark"] as Mode[]).map((m) => (
-            <button
-              key={m}
-              type="button"
-              onClick={() => setMode(m)}
-              className={`rounded border px-3 py-1 text-sm capitalize tracking-wide ${
-                mode === m ? "border-cyan/60 bg-cyan/10 text-cyan" : "border-white/15 text-white/60 hover:bg-white/5"
-              }`}
-            >
+            <HudButton key={m} variant={mode === m ? "primary" : "ghost"} className="capitalize" onClick={() => setMode(m)}>
               {m}
-            </button>
+            </HudButton>
           ))}
           {mode === "mark" ? (
             <>
@@ -408,17 +392,12 @@ export function DrawingViewer({
               />
             </>
           ) : null}
-          <button
-            type="button"
-            disabled={saving || loading}
-            onClick={() => void saveMarked()}
-            className="rounded border border-cyan/40 px-4 py-1 text-sm text-cyan hover:bg-cyan/10 disabled:opacity-30"
-          >
+          <HudButton variant="primary" disabled={saving || loading} onClick={() => void saveMarked()}>
             {saving ? "Saving…" : "Save marked"}
-          </button>
-          <button type="button" onClick={onClose} className="rounded border border-white/15 px-3 py-1 text-sm text-white/60 hover:bg-white/5">
+          </HudButton>
+          <HudButton variant="ghost" onClick={onClose}>
             Close
-          </button>
+          </HudButton>
         </div>
       </header>
 

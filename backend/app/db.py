@@ -121,6 +121,20 @@ def init_db() -> None:
                 data TEXT NOT NULL,
                 created_at TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS conversations (
+                id TEXT PRIMARY KEY,
+                session_id TEXT NOT NULL UNIQUE,
+                category TEXT NOT NULL,
+                title TEXT NOT NULL,
+                focus TEXT NOT NULL,
+                minimized INTEGER NOT NULL DEFAULT 1,
+                expanded_at TEXT,
+                status TEXT NOT NULL DEFAULT 'ready',
+                model TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS conversations_updated ON conversations (updated_at);
             CREATE TABLE IF NOT EXISTS canvas_boards (
                 id TEXT PRIMARY KEY,
                 name TEXT NOT NULL,
@@ -903,6 +917,153 @@ def get_canvas_file(file_id: str) -> dict[str, Any] | None:
     with connect() as conn:
         row = conn.execute("SELECT * FROM canvas_files WHERE id = ?", (file_id,)).fetchone()
     return dict(row) if row else None
+
+
+MAX_CONVERSATIONS = 12
+MAX_EXPANDED = 2
+
+
+def _conversation_row(row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
+    data = dict(row)
+    try:
+        focus = json.loads(data.get("focus") or "{}")
+    except json.JSONDecodeError:
+        focus = {}
+    data["focus"] = focus if isinstance(focus, dict) else {}
+    data["minimized"] = bool(int(0 if data.get("minimized") is None else data.get("minimized")))
+    return data
+
+
+def list_conversations(include_archived: bool = False) -> list[dict[str, Any]]:
+    with connect() as conn:
+        if include_archived:
+            rows = conn.execute(
+                "SELECT * FROM conversations ORDER BY updated_at DESC"
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM conversations WHERE status != 'archived' ORDER BY updated_at DESC"
+            ).fetchall()
+    return [_conversation_row(row) for row in rows]
+
+
+def get_conversation(conversation_id: str) -> dict[str, Any] | None:
+    with connect() as conn:
+        row = conn.execute("SELECT * FROM conversations WHERE id = ?", (conversation_id,)).fetchone()
+    return _conversation_row(row) if row else None
+
+
+def get_conversation_by_session(session_id: str) -> dict[str, Any] | None:
+    with connect() as conn:
+        row = conn.execute("SELECT * FROM conversations WHERE session_id = ?", (session_id,)).fetchone()
+    return _conversation_row(row) if row else None
+
+
+def create_conversation(
+    conversation_id: str,
+    session_id: str,
+    category: str,
+    title: str,
+    focus: dict[str, Any] | None = None,
+    status: str = "warming",
+) -> dict[str, Any]:
+    now = utc_now()
+    payload = json.dumps(focus or {})
+    with connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO conversations
+            (id, session_id, category, title, focus, minimized, expanded_at, status, model, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, 0, ?, ?, '', ?, ?)
+            """,
+            (conversation_id, session_id, category, title, payload, now, status, now, now),
+        )
+    _enforce_expanded(conversation_id)
+    _archive_overflow()
+    found = get_conversation(conversation_id)
+    return found or {}
+
+
+def update_conversation(conversation_id: str, **fields: Any) -> dict[str, Any] | None:
+    current = get_conversation(conversation_id)
+    if not current:
+        return None
+    focus = fields["focus"] if "focus" in fields else current["focus"]
+    if isinstance(focus, dict):
+        focus_text = json.dumps(focus)
+    else:
+        focus_text = str(focus or "{}")
+    minimized = current["minimized"]
+    if "minimized" in fields:
+        minimized = bool(fields["minimized"])
+    expanded_at = current.get("expanded_at")
+    if "minimized" in fields:
+        expanded_at = None if minimized else utc_now()
+    status = fields.get("status", current.get("status") or "ready")
+    title = fields.get("title", current.get("title") or "")
+    model = fields.get("model", current.get("model") or "")
+    now = utc_now()
+    with connect() as conn:
+        conn.execute(
+            """
+            UPDATE conversations
+            SET title = ?, focus = ?, minimized = ?, expanded_at = ?, status = ?, model = ?, updated_at = ?
+            WHERE id = ?
+            """,
+            (title, focus_text, 1 if minimized else 0, expanded_at, status, model, now, conversation_id),
+        )
+    if "minimized" in fields and not minimized:
+        _enforce_expanded(conversation_id)
+    return get_conversation(conversation_id)
+
+
+def touch_conversation(conversation_id: str) -> None:
+    with connect() as conn:
+        conn.execute(
+            "UPDATE conversations SET updated_at = ? WHERE id = ?",
+            (utc_now(), conversation_id),
+        )
+
+
+def _enforce_expanded(keep_id: str) -> None:
+    with connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT id FROM conversations
+            WHERE status != 'archived' AND minimized = 0
+            ORDER BY expanded_at DESC
+            """
+        ).fetchall()
+    ids = [row["id"] for row in rows]
+    if keep_id in ids:
+        ids = [keep_id] + [ident for ident in ids if ident != keep_id]
+    extra = ids[MAX_EXPANDED:]
+    if not extra:
+        return
+    with connect() as conn:
+        conn.executemany(
+            "UPDATE conversations SET minimized = 1, expanded_at = NULL WHERE id = ?",
+            [(ident,) for ident in extra],
+        )
+
+
+def _archive_overflow() -> None:
+    with connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT id FROM conversations
+            WHERE status != 'archived'
+            ORDER BY updated_at DESC
+            """
+        ).fetchall()
+    extra = [row["id"] for row in rows[MAX_CONVERSATIONS:]]
+    if not extra:
+        return
+    with connect() as conn:
+        conn.executemany(
+            "UPDATE conversations SET status = 'archived', minimized = 1 WHERE id = ?",
+            [(ident,) for ident in extra],
+        )
 
 
 def safe_export_path(name: str) -> Path:

@@ -9,6 +9,7 @@ from . import db
 
 STALE_SECONDS = 180
 SNAPSHOT_KINDS = frozenset({"briefing", "mail_search", "mail_read", "calendar_list"})
+SKIP_MODEL = SNAPSHOT_KINDS | {"calendar_create"}
 
 _FRESH = re.compile(
     r"\b("
@@ -28,6 +29,18 @@ def wants_fresh(message: str) -> bool:
 
 def uses_snapshot(kind: str) -> bool:
     return kind in SNAPSHOT_KINDS
+
+
+def skips_model(kind: str) -> bool:
+    return kind in SKIP_MODEL
+
+
+def calendar_ready() -> bool:
+    from .connectors import calendar as calendar_conn
+
+    if not calendar_conn.live():
+        return True
+    return bool(str(status().get("calendar_synced_at") or "").strip())
 
 
 def status() -> dict[str, Any]:
@@ -52,7 +65,7 @@ def ready() -> bool:
 def refresh(force: bool = False) -> dict[str, Any]:
     with _lock:
         current = status()
-        if current["ready"] and not current["stale"] and not force:
+        if current["ready"] and not current["stale"] and calendar_ready() and not force:
             return current
         db.set_work_snapshot(status="syncing")
         mail_count = 0
@@ -143,5 +156,5 @@ def _pull_calendar() -> None:
 
     if not calendar_conn.live():
         return
-    rows = calendar_conn.pull_google(days=2)
+    rows = calendar_conn.pull_google(days=7)
     db.replace_calendar_events(rows)

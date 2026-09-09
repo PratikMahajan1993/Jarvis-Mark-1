@@ -310,29 +310,59 @@ def _send_email(
     return _ok({"queued": True}, pending=pending)
 
 
-def _list_calendar(session_id: str, days: int = 2, **_: Any) -> dict[str, Any]:
-    events = calendar_conn.list_events(days=days)
-    next_up = calendar_conn.upcoming(days=days)
-    scene = {
-        "title": "Schedule",
-        "subtitle": f"Next {days} day(s)",
-        "widgets": [
-            {"type": "kpi", "label": "Events", "value": len(events)},
+def _list_calendar(session_id: str, days: int = 7, span: str = "", **_: Any) -> dict[str, Any]:
+    events = calendar_conn.list_events(days=days, span=span)
+    next_up = calendar_conn.upcoming(days=days, span=span)
+    note = calendar_conn.calendar_note(empty=not events)
+    widgets: list[dict[str, Any]] = []
+    buckets: dict[str, list[dict[str, Any]]] = {}
+    order: list[str] = []
+    for event in events:
+        bucket = calendar_conn.day_bucket(event.get("start_at") or "") or "Upcoming"
+        if bucket not in buckets:
+            buckets[bucket] = []
+            order.append(bucket)
+        buckets[bucket].append(
+            {
+                "time": calendar_conn.when_label(event.get("start_at") or ""),
+                "title": event.get("title") or "(No title)",
+                "detail": event.get("location") or event.get("notes") or "",
+            }
+        )
+    titles = {"today": "Today", "tomorrow": "Tomorrow"}
+    for bucket in order:
+        heading = titles.get(bucket)
+        if not heading:
+            first = next((event for event in events if calendar_conn.day_bucket(event.get("start_at") or "") == bucket), None)
+            heading = calendar_conn.day_heading((first or {}).get("start_at") or "") if first else bucket
+        widgets.append(
             {
                 "type": "timeline",
-                "title": "Upcoming",
-                "items": [
-                    {
-                        "time": calendar_conn.clock(event.get("start_at") or ""),
-                        "title": event["title"],
-                        "detail": event.get("location") or event.get("notes") or "",
-                    }
-                    for event in events
-                ],
-            },
-        ],
+                "title": heading,
+                "items": buckets[bucket],
+            }
+        )
+    if note:
+        widgets.append({"type": "markdown", "text": note})
+    if span == "today":
+        subtitle = "Today"
+    elif span == "tomorrow":
+        subtitle = "Tomorrow"
+    else:
+        subtitle = "This week"
+    scene = {
+        "title": "Schedule",
+        "subtitle": subtitle,
+        "widgets": widgets,
     }
-    return _ok(events, scene=scene, speak=speak_calendar(next_up))
+    speak_note = ""
+    if not events and note:
+        if "Reconnect Google" in note or "not connected" in note.lower():
+            speak_note = "Calendar is not connected. Reconnect Google in preferences."
+        elif "primary calendar" in note.lower():
+            speak_note = "Primary calendar is empty. Allow all calendars in preferences if the day lives elsewhere."
+    speak = speak_calendar(events, upcoming=next_up, span=span, note=speak_note)
+    return _ok(events, scene=scene, speak=speak)
 
 
 def _create_calendar_event(
@@ -841,7 +871,10 @@ TOOL_SCHEMAS = [
             "description": "List upcoming calendar events.",
             "parameters": {
                 "type": "object",
-                "properties": {"days": {"type": "integer", "description": "How many days ahead"}},
+                "properties": {
+                    "days": {"type": "integer", "description": "How many days ahead"},
+                    "span": {"type": "string", "description": "today, tomorrow, or empty for the next couple of days"},
+                },
             },
         },
     },

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from typing import Any
+from datetime import datetime, timedelta
 
 from . import db
 from .connectors import email as email_conn
@@ -90,6 +91,7 @@ def empty_set() -> dict[str, Any]:
         "client": None,
         "drive": None,
         "mail_attachments": None,
+        "calendar": [],
         "aliases": {},
         "people": [],
         "artifacts": [],
@@ -437,18 +439,60 @@ def speak_sheet(title: str, reused: bool = False) -> str:
     return f"{label} is on the board."
 
 
-def speak_calendar(events: list[dict[str, Any]]) -> str:
-    if not events:
-        return "Nothing on the calendar for the next couple of days."
-    nxt = events[0]
-    title = nxt.get("title") or "the next meeting"
-    short = title.split("—")[0].split("-")[0].strip()
+def speak_calendar(
+    events: list[dict[str, Any]],
+    upcoming: list[dict[str, Any]] | None = None,
+    span: str = "",
+    note: str = "",
+) -> str:
     from .connectors.calendar import clock
 
-    stamp = clock(nxt.get("start_at") or "")
-    when = f", {stamp}" if stamp else ""
-    extra = f" {len(events)} on the board." if len(events) > 1 else ""
-    return f"Next is {short}{when}.{extra}"
+    upcoming = list(upcoming) if upcoming is not None else list(events or [])
+    events = list(events or [])
+    label = (span or "").strip().lower()
+
+    def _line(event: dict[str, Any]) -> str:
+        title = (event.get("title") or "the next meeting").split("—")[0].split("-")[0].strip()
+        raw = event.get("start_at") or ""
+        try:
+            from .connectors.calendar import parse_when
+
+            when = parse_when(raw)
+        except Exception:
+            when = None
+        if when and when.hour == 0 and when.minute == 0:
+            today = datetime.now(when.tzinfo).date()
+            if when.date() == today:
+                return f"{title} today"
+            if when.date() == today + timedelta(days=1):
+                return f"{title} tomorrow"
+            return f"{title} on {when.strftime('%A')}"
+        stamp = clock(raw)
+        return f"{title} at {stamp}" if stamp else title
+
+    if not events:
+        if note:
+            return note.split(".")[0] + "."
+        if label == "today":
+            return "Clear today."
+        if label == "tomorrow":
+            return "Nothing tomorrow."
+        return "Nothing on the calendar this week."
+    if not upcoming:
+        if label == "today":
+            return f"{len(events)} already done today. Rest of the day is clear."
+        nxt = events[0]
+        return f"Next was {_line(nxt)}."
+    shown = upcoming[:3]
+    bits = [_line(event) for event in shown]
+    extra = f" {len(upcoming) - 3} more." if len(upcoming) > 3 else ""
+    if label == "tomorrow":
+        return "Tomorrow: " + ", ".join(bits) + "." + extra
+    if label == "today":
+        return "Today: " + ", ".join(bits) + "." + extra
+    nxt = upcoming[0]
+    rest = f" {len(upcoming)} on the board." if len(upcoming) > 1 else ""
+    return f"Next is {_line(nxt)}.{rest}"
 
 
 def speak_for_tool(name: str, result: dict[str, Any], session_id: str = "default") -> str:
@@ -543,6 +587,10 @@ def note_tool(session_id: str, name: str, result: dict[str, Any]) -> None:
         if source:
             remember_person(session_id, source.get("sender") or "", source.get("id"), source.get("subject"))
         remember_person(session_id, payload.get("to") or "", None, payload.get("subject"))
+    if name == "list_calendar" and isinstance(data, list):
+        working = get_set(session_id)
+        working["calendar"] = data[:8]
+        save_set(session_id, working)
     if name == "create_spreadsheet" and isinstance(data, dict) and data.get("id"):
         scene = result.get("scene") or {}
         remember_artifact(session_id, data, scene.get("title") or data.get("name") or "")

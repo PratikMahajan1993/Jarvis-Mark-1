@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     llm_provider: str = "auto"
     gemini_api_key: str = ""
     gemini_model: str = "gemini-3.6-flash"
+    gemini_drawing_model: str = "gemini-3.1-pro"
     jarvis_host: str = "0.0.0.0"
     jarvis_port: int = 8000
     cors_origins: str = "http://localhost:3000"

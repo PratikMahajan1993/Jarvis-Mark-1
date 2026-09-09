@@ -43,6 +43,27 @@ export function isSavedLocal(att: MailAttachment): boolean {
   return (att.status === "local" || att.status === "both") && Boolean(att.local_name || att.local_path);
 }
 
+export function conversationToAttachment(focus: Record<string, unknown> | undefined): MailAttachment | null {
+  if (!focus) return null;
+  const filename = String(focus.filename || focus.local_name || "");
+  const localName = String(focus.local_name || filename);
+  const localPath = String(focus.local_path || "");
+  if (!filename && !localName && !localPath) return null;
+  return {
+    attachment_id: String(focus.artifact_id || ""),
+    filename: filename || localName,
+    mime: String(focus.mime || ""),
+    size: 0,
+    readable: true,
+    cad: true,
+    status: "local",
+    local_path: localPath || null,
+    local_name: localName || null,
+    drive_link: String(focus.drive_link || "") || null,
+    artifact_id: String(focus.artifact_id || "") || null,
+  };
+}
+
 export function isViewCommand(message: string): boolean {
   const text = message.toLowerCase();
   if (!/\b(view|open|show)\b/.test(text)) return false;
@@ -53,10 +74,10 @@ export function isViewCommand(message: string): boolean {
 function collectTokens(message: string): string[] {
   const tokens: string[] = [];
   for (const pattern of [
-    /\b(?:view|open|show)\s+(?:the\s+)?([A-Za-z0-9._-]+)/i,
-    /\b([A-Za-z0-9._-]+\.pdf)\b/i,
-    /\b(DPIS\d+)\b/i,
-    /\b(RFNW[-_]?\d+)\b/i,
+    /\b(?:view|open|show)\s+(?:the\s+)?([A-Za-z0-9._-]+)/gi,
+    /\b([A-Za-z0-9._-]+\.pdf)\b/gi,
+    /\b(DPIS\d+)\b/gi,
+    /\b(RFNW[-_]?\d+)\b/gi,
   ]) {
     for (const match of message.matchAll(pattern)) {
       for (const group of match.slice(1)) {

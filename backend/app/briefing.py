@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from . import db
@@ -168,7 +168,7 @@ def gather_briefing_facts() -> dict:
     unread_total = email_conn.unread_count()
     unread = email_conn.search_emails(unread_only=True, limit=24)
     priority_mail = filter_priority_mail(unread)
-    upcoming = calendar_conn.upcoming(days=1)
+    upcoming = calendar_conn.upcoming(days=2)
     next_event = upcoming[0] if upcoming else None
     slot = greeting_slot()
     return {
@@ -251,6 +251,21 @@ def briefing_scene(facts: dict, speak: str) -> dict:
                 ],
             }
         )
+    next_event = facts.get("next_event") if isinstance(facts.get("next_event"), dict) else None
+    if next_event and next_event.get("title"):
+        widgets.append(
+            {
+                "type": "timeline",
+                "title": "Next",
+                "items": [
+                    {
+                        "time": calendar_conn.clock(str(next_event.get("start_at") or "")),
+                        "title": str(next_event["title"]),
+                        "detail": str(next_event.get("location") or next_event.get("notes") or ""),
+                    }
+                ],
+            }
+        )
     if speak:
         widgets.append({"type": "quote", "text": speak, "cite": "Jarvis"})
     return {
@@ -317,7 +332,7 @@ def build_glance() -> dict:
         }
     now = datetime.now(_tz())
     upcoming = []
-    for event in calendar_conn.upcoming(days=2):
+    for event in calendar_conn.upcoming(days=7):
         try:
             start = calendar_conn.parse_when(event["start_at"])
             end = calendar_conn.parse_when(event["end_at"]) if event.get("end_at") else start
@@ -337,8 +352,14 @@ def build_glance() -> dict:
     start, end, event = upcoming[0]
     title = event["title"]
     short = title.split("—")[0].split("-")[0].strip()
-    clock = start.strftime("%H:%M")
-    line = f"{clock}  {short}"
+    today = now.date()
+    if start.hour == 0 and start.minute == 0:
+        stamp = start.strftime("%a")
+    elif start.date() == today or start.date() == today + timedelta(days=1):
+        stamp = start.strftime("%H:%M")
+    else:
+        stamp = start.strftime("%a %H:%M")
+    line = f"{stamp}  {short}"
     if start <= now <= end:
         whisper = f"{short} is on now."
         return {

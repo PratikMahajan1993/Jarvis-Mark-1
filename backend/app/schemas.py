@@ -98,6 +98,25 @@ class ChatResponse(BaseModel):
     watching: bool = False
 
 
+class ConversationCreate(BaseModel):
+    category: str = "drawing"
+    title: str = "Conversation"
+    focus: dict[str, Any] = Field(default_factory=dict)
+
+
+class ConversationPatch(BaseModel):
+    minimized: bool | None = None
+    title: str | None = None
+
+
+class DrawingSpawn(BaseModel):
+    filename: str = ""
+    local_name: str = ""
+    local_path: str = ""
+    mime: str = ""
+    drive_link: str = ""
+
+
 class ConfirmRequest(BaseModel):
     action_id: str
     approved: bool

@@ -20,8 +20,17 @@ body {
 .hud-bg {
   background:
     radial-gradient(900px 520px at 50% 115%, rgba(62, 224, 212, 0.1), transparent 55%),
-    radial-gradient(700px 400px at 80% 0%, rgba(62, 224, 212, 0.05), transparent 50%),
+    radial-gradient(700px 400px at 80% 0%, rgba(164, 140, 242, 0.05), transparent 50%),
     linear-gradient(180deg, #050b11 0%, #020508 100%);
+}
+
+.hud-grid {
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(62, 224, 212, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(62, 224, 212, 0.05) 1px, transparent 1px);
+  background-size: 42px 42px;
+  mask-image: radial-gradient(1100px 640px at 50% 30%, rgba(0, 0, 0, 0.55), transparent 75%);
 }
 
 .glass {
@@ -42,6 +51,48 @@ body {
   );
 }
 
+/* ---- HUD bracket panel -----------------------------------------------
+   Corner accents only on two diagonal corners, matching the reference
+   cyberpunk kit's minimal "targeting frame" look. Accent color is set
+   per-instance via the --hud-accent custom property. */
+.hud-panel {
+  --hud-accent: #3ee0d4;
+  position: relative;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(9, 16, 26, 0.55);
+}
+
+.hud-panel::before,
+.hud-panel::after {
+  content: "";
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  pointer-events: none;
+}
+
+.hud-panel::before {
+  top: -1px;
+  left: -1px;
+  border-top: 2px solid var(--hud-accent);
+  border-left: 2px solid var(--hud-accent);
+}
+
+.hud-panel::after {
+  bottom: -1px;
+  right: -1px;
+  border-bottom: 2px solid var(--hud-accent);
+  border-right: 2px solid var(--hud-accent);
+}
+
+.hud-accent-cyan { --hud-accent: #3ee0d4; }
+.hud-accent-violet { --hud-accent: #a48cf2; }
+.hud-accent-magenta { --hud-accent: #f45fb0; }
+.hud-accent-amber { --hud-accent: #f5c16c; }
+.hud-accent-red { --hud-accent: #f2555c; }
+.hud-accent-green { --hud-accent: #43e0a0; }
+.hud-accent-white { --hud-accent: rgba(255, 255, 255, 0.4); }
+
 @keyframes breathe {
   0%, 100% { transform: scale(1); opacity: 0.55; }
   50% { transform: scale(1.08); opacity: 0.95; }
@@ -53,12 +104,28 @@ body {
   100% { opacity: 0; }
 }
 
+@keyframes hud-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes hud-spin-reverse {
+  to { transform: rotate(-360deg); }
+}
+
 .orb-core {
   animation: breathe 4.8s ease-in-out infinite;
 }
 
 .orb-think {
   animation: think 1.4s ease-out infinite;
+}
+
+.hud-ring-spin {
+  animation: hud-spin 6s linear infinite;
+}
+
+.hud-ring-spin-slow {
+  animation: hud-spin-reverse 14s linear infinite;
 }
 
 .whisper {

@@ -7,11 +7,6 @@ Redo each surface like research: tools for truth, Gemini for voice and board.
 | Research | Done |
 | Mail | Shipped (Deepak enquiry as live fixture) |
 | Morning briefing | Built |
-| Calendar | Later |
-| Files / Drive | Later |
-| Task for Gemini (email handoff) | Later |
-| Ordinary chat | Later |
-| Canvas | Later |
 | Drawing viewer | Built (HUD overlay) |
 | Voice / HUD | Mic always-on toggle shipped; not a full redo |
 

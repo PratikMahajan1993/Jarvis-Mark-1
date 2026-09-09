@@ -24,6 +24,9 @@ from .schemas import (
     CANVAS_ITEM_BASE_FIELDS,
     CanvasBoardCreate,
     CanvasBoardUpdate,
+    ConversationCreate,
+    ConversationPatch,
+    DrawingSpawn,
     MailAttachmentAction,
     MailReplyAttachmentAction,
     MarkedDrawingSave,
@@ -233,6 +236,45 @@ def api_pending(session_id: str = "default") -> dict:
 @app.get("/api/thought")
 def api_thought(session_id: str = "default") -> dict:
     return next_thought(session_id).model_dump()
+
+
+@app.get("/api/conversations")
+def api_conversations() -> dict:
+    from . import conversations as convs
+
+    return {"items": convs.list_public()}
+
+
+@app.post("/api/conversations")
+def api_conversation_create(payload: ConversationCreate) -> dict:
+    from . import conversations as convs
+
+    return convs.create(payload.category, payload.title, payload.focus)
+
+
+@app.patch("/api/conversations/{conversation_id}")
+def api_conversation_patch(conversation_id: str, payload: ConversationPatch) -> dict:
+    from . import conversations as convs
+
+    fields = payload.model_dump(exclude_none=True)
+    row = convs.patch(conversation_id, **fields)
+    if not row:
+        raise HTTPException(404, "Conversation not found")
+    return row
+
+
+@app.post("/api/conversations/drawing")
+def api_conversation_drawing(payload: DrawingSpawn) -> dict:
+    from . import conversations as convs
+
+    focus = {
+        "filename": payload.filename or payload.local_name,
+        "local_name": payload.local_name or payload.filename,
+        "local_path": payload.local_path,
+        "mime": payload.mime,
+        "drive_link": payload.drive_link,
+    }
+    return convs.spawn_drawing(focus)
 
 
 @app.get("/api/memory")

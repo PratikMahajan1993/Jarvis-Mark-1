@@ -3,20 +3,25 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { canListen, claimGlanceSpeech, classifyDecision, isWakeWatching, silence, speak, startListening, startWakeWatch, stopListening, stopWakeWatch } from "@/lib/voice";
-import type { Artifact, AuditEntry, ChatResponse, Health, MailAttachment, PendingAction, Preferences, Scene } from "@/lib/types";
+import type { Artifact, AuditEntry, ChatResponse, Conversation, Health, MailAttachment, PendingAction, Preferences, Scene } from "@/lib/types";
 import { ArtifactTray } from "./ArtifactTray";
 import { Composer } from "./Composer";
 import { ConfirmBar } from "./ConfirmBar";
+import { ConversationDock } from "./ConversationDock";
 import { DrawingViewer } from "./DrawingViewer";
 import { SceneBoard } from "./SceneBoard";
 import { VoiceOrb } from "./VoiceOrb";
 import {
+  conversationToAttachment,
+  isSavedLocal,
   isViewCommand,
   matchViewAttachment,
   parseViewerCommand,
   sceneAttachments,
   type ViewerCommand,
 } from "@/lib/viewerMatch";
+import { matchConversation, namesConversation, parseWindowCommand } from "@/lib/conversationVoice";
+import { Alert, HudButton, Panel, StatCard, StatusDot } from "./hud/Hud";
 
 const EMPTY_SCENE: Scene = { title: "", subtitle: null, widgets: [] };
 const ALWAYS_ON_MIC_KEY = "jarvis.alwaysOnMic";
@@ -73,6 +78,11 @@ export function HudShell() {
   const [viewerAttachment, setViewerAttachment] = useState<MailAttachment | null>(null);
   const [viewerVoiceCmd, setViewerVoiceCmd] = useState<ViewerCommand | null>(null);
   const [viewerVoiceSeq, setViewerVoiceSeq] = useState(0);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [focusedId, setFocusedId] = useState<string | null>(null);
+  const [dockHidden, setDockHidden] = useState(false);
+  const [spawnAsk, setSpawnAsk] = useState<PendingAction | null>(null);
+  const [convBusyId, setConvBusyId] = useState<string | null>(null);
   const fileTimer = useRef<number | null>(null);
   const lastWhisper = useRef("");
   const lastWatchSpeak = useRef("");
@@ -97,9 +107,18 @@ export function HudShell() {
   const handleWake = useRef<(rest: string) => void>(() => {});
   const sceneRef = useRef(scene);
   const viewerRef = useRef<MailAttachment | null>(null);
+  const conversationsRef = useRef<Conversation[]>([]);
+  const focusedRef = useRef<string | null>(null);
+  const spawnAskRef = useRef<PendingAction | null>(null);
+  const dockHiddenRef = useRef(false);
+  const commandPendingRef = useRef(false);
 
   sceneRef.current = scene;
   viewerRef.current = viewerAttachment;
+  conversationsRef.current = conversations;
+  focusedRef.current = focusedId;
+  spawnAskRef.current = spawnAsk;
+  dockHiddenRef.current = dockHidden;
 
   const applyResponse = useCallback((result: ChatResponse, spoken = true) => {
     setScene(result.scene || EMPTY_SCENE);
@@ -171,16 +190,28 @@ export function HudShell() {
     }
   }, []);
 
+  const refreshConversations = useCallback(async () => {
+    try {
+      const listed = await api.conversations();
+      setConversations(listed.items || []);
+    } catch {
+      /* dock is optional */
+    }
+  }, []);
+
   useEffect(() => {
     busyRef.current = busy;
     listeningRef.current = listening;
     composeRef.current = compose;
     hotRef.current = hot;
-    pendingRef.current = pending.length > 0;
+    pendingRef.current = pending.length > 0 || Boolean(spawnAsk);
+    commandPendingRef.current = pending.length > 0;
+    pendingIdRef.current = pending[0]?.id || spawnAsk?.id || pendingIdRef.current;
+    if (!pending.length && !spawnAsk) pendingIdRef.current = "";
     replyRef.current = reply;
     voiceEnabledRef.current = prefs?.voice_enabled !== false;
-    if (busy || listening || compose || pending.length) idleSince.current = Date.now();
-  }, [busy, listening, compose, hot, pending, reply, prefs?.voice_enabled]);
+    if (busy || listening || compose || pending.length || spawnAsk) idleSince.current = Date.now();
+  }, [busy, listening, compose, hot, pending, spawnAsk, reply, prefs?.voice_enabled]);
 
   useEffect(() => {
     nameRef.current = prefs?.assistant_name || "Jarvis";
@@ -207,6 +238,7 @@ export function HudShell() {
     api.health().then(setHealth).catch(() => setHealth({ ok: false, ollama: false, model: "unknown", models: [] }));
     void refreshSide().then(async () => {
       if (cancelled) return;
+      await refreshConversations();
       try {
         const last = await api.session();
         if (cancelled) return;
@@ -241,7 +273,7 @@ export function HudShell() {
     return () => {
       cancelled = true;
     };
-  }, [refreshSide]);
+  }, [refreshSide, refreshConversations]);
 
   useEffect(() => {
     let cancelled = false;
@@ -320,7 +352,7 @@ export function HudShell() {
       setHot(false);
       return;
     }
-    if (!pageOpen || busy || listening || talking || pending.length || more || watching || panel !== "none") {
+    if (!pageOpen || busy || listening || talking || pending.length || spawnAsk || more || watching || panel !== "none") {
       stopWakeWatch();
       return;
     }
@@ -365,7 +397,7 @@ export function HudShell() {
       window.removeEventListener("keydown", onGesture);
       stopWakeWatch();
     };
-  }, [alwaysOnMic, pageOpen, busy, listening, talking, pending.length, more, watching, panel]);
+  }, [alwaysOnMic, pageOpen, busy, listening, talking, pending.length, spawnAsk, more, watching, panel]);
 
   useEffect(() => {
     let cancelled = false;
@@ -435,8 +467,70 @@ export function HudShell() {
   const openViewer = useCallback((item: MailAttachment) => {
     setViewerAttachment(item);
     setViewerVoiceCmd(null);
+    const existing = conversationsRef.current.find((row) => {
+      if (row.category !== "drawing") return false;
+      const focus = row.focus || {};
+      return (
+        (item.local_name && focus.local_name === item.local_name) ||
+        (item.filename && focus.filename === item.filename)
+      );
+    });
+    if (existing) {
+      setDockHidden(false);
+      setFocusedId(existing.id);
+      void api.patchConversation(existing.id, { minimized: false }).then(() => refreshConversations());
+      whisper(`Viewing ${item.local_name || item.filename}.`);
+      return;
+    }
+    if (isSavedLocal(item)) {
+      const pending: PendingAction = {
+        id: "spawn-drawing",
+        kind: "start_conversation",
+        title: "Keep a conversation on this drawing?",
+        summary: item.local_name || item.filename,
+        payload: { ...item },
+      };
+      setSpawnAsk(pending);
+      const line = "Shall I keep a conversation on this drawing?";
+      whisper(line);
+      if (voiceEnabledRef.current) speak(line, true);
+      return;
+    }
     whisper(`Viewing ${item.local_name || item.filename}.`);
-  }, [whisper]);
+  }, [refreshConversations, whisper]);
+
+  const decideSpawn = useCallback(async (approved: boolean) => {
+    const ask = spawnAskRef.current;
+    setSpawnAsk(null);
+    if (!approved) {
+      whisper("Alright.");
+      return;
+    }
+    const payload = (ask?.payload || {}) as MailAttachment;
+    speakToken.current += 1;
+    setBusy(true);
+    setConvBusyId("spawn");
+    try {
+      const created = await api.spawnDrawingConversation({
+        filename: payload.filename,
+        local_name: payload.local_name || payload.filename,
+        local_path: payload.local_path || "",
+        mime: payload.mime,
+        drive_link: payload.drive_link || "",
+      });
+      setDockHidden(false);
+      setFocusedId(created.id);
+      await refreshConversations();
+      const line = created.speak || "The drawing is in focus.";
+      whisper(line);
+      if (voiceEnabledRef.current) speak(line, true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "I could not start that conversation.");
+    } finally {
+      setBusy(false);
+      setConvBusyId(null);
+    }
+  }, [refreshConversations, whisper]);
 
   const runViewerVoice = useCallback(
     (text: string): boolean => {
@@ -459,7 +553,13 @@ export function HudShell() {
   const tryViewCommand = useCallback(
     (text: string): boolean => {
       if (!isViewCommand(text)) return false;
-      const items = sceneAttachments(sceneRef.current);
+      const fromScene = sceneAttachments(sceneRef.current);
+      const fromConv = conversationsRef.current
+        .filter((row) => row.category === "drawing")
+        .map((row) => conversationToAttachment(row.focus))
+        .filter((item): item is MailAttachment => Boolean(item));
+      const seen = new Set(fromScene.map((item) => item.local_name || item.filename));
+      const items = [...fromScene, ...fromConv.filter((item) => !seen.has(item.local_name || item.filename))];
       if (!items.length) return false;
       const { attachment, whisper: line } = matchViewAttachment(text, items);
       if (line) {
@@ -476,12 +576,52 @@ export function HudShell() {
     [openViewer, whisper],
   );
 
+  const runWindowCommand = useCallback((text: string): boolean => {
+    const cmd = parseWindowCommand(text);
+    if (!cmd) return false;
+    if (cmd.action === "hide_dock") {
+      setDockHidden(true);
+      whisper("Conversations hidden.");
+      return true;
+    }
+    if (cmd.action === "show_dock") {
+      setDockHidden(false);
+      whisper("Conversations are on the right.");
+      return true;
+    }
+    const row = matchConversation(cmd.query, conversationsRef.current);
+    if (!row) {
+      whisper("I do not have that window.");
+      return true;
+    }
+    if (cmd.action === "minimize") {
+      void api.patchConversation(row.id, { minimized: true }).then(() => refreshConversations());
+      if (focusedRef.current === row.id) setFocusedId(null);
+      whisper(`Minimized ${row.title}.`);
+      return true;
+    }
+    setDockHidden(false);
+    void api.patchConversation(row.id, { minimized: false }).then(() => refreshConversations());
+    setFocusedId(row.id);
+    whisper(`${row.title} is open.`);
+    return true;
+  }, [refreshConversations, whisper]);
+
   const interceptMessage = useCallback(
     (text: string): boolean => {
-      if (viewerRef.current) return runViewerVoice(text);
+      if (viewerRef.current) {
+        const viewerCmd = parseViewerCommand(text);
+        const windowCmd = parseWindowCommand(text);
+        if (viewerCmd && !windowCmd) return runViewerVoice(text);
+      }
+      if (runWindowCommand(text)) return true;
+      if (spawnAskRef.current && !commandPendingRef.current && classifyDecision(text)) {
+        void decideSpawn(classifyDecision(text) === "yes");
+        return true;
+      }
       return tryViewCommand(text);
     },
-    [runViewerVoice, tryViewCommand],
+    [decideSpawn, runViewerVoice, runWindowCommand, tryViewCommand],
   );
 
   const send = useCallback(async (text: string) => {
@@ -490,6 +630,11 @@ export function HudShell() {
     if (interceptMessage(message)) return;
     const waiting = pendingIdRef.current;
     const decision = waiting ? classifyDecision(message) : null;
+    const named = namesConversation(message, conversationsRef.current);
+    const commandRoom = /\b(mail|inbox|calendar|schedule|brief|briefing|catch me up)\b/i.test(message);
+    const target = !decision && !commandRoom ? named || conversationsRef.current.find((row) => row.id === focusedRef.current) : null;
+    const threadPending = target?.pending?.[0];
+    const threadDecision = threadPending ? classifyDecision(message) : null;
     speakToken.current += 1;
     confirmGen.current += 1;
     setBusy(true);
@@ -500,19 +645,34 @@ export function HudShell() {
     setListening(false);
     setHot(false);
     setReply("…");
-    setTurns((current) => [...current.slice(-4), { role: "you", text: message }]);
+    if (!target) {
+      setTurns((current) => [...current.slice(-4), { role: "you", text: message }]);
+    } else {
+      setFocusedId(target.id);
+      setConvBusyId(target.id);
+    }
     try {
-      const result = decision !== null && waiting
-        ? await api.confirm(waiting, decision === "yes")
-        : await api.chat(message);
-      applyResponse(result);
+      const result =
+        decision !== null && waiting
+          ? await api.confirm(waiting, decision === "yes")
+          : threadDecision && threadPending && target
+            ? await api.confirm(threadPending.id, threadDecision === "yes", target.session_id)
+            : await api.chat(message, target?.session_id || "default");
+      if (target) {
+        await refreshConversations();
+        whisper(result.speak || result.reply || "");
+        if (voiceEnabledRef.current && result.speak) speak(result.speak, true);
+      } else {
+        applyResponse(result);
+      }
       await refreshSide();
     } catch (err) {
       setError(err instanceof Error ? err.message : "I could not reach the house systems.");
     } finally {
       setBusy(false);
+      setConvBusyId(null);
     }
-  }, [applyResponse, busy, interceptMessage, refreshSide]);
+  }, [applyResponse, busy, interceptMessage, refreshConversations, refreshSide, whisper]);
 
   const runAttachmentAction = useCallback(
     async (kind: "save" | "reply", emailId: string, attachmentIds: string[], filenames: string[]) => {
@@ -537,6 +697,10 @@ export function HudShell() {
   );
 
   const decide = useCallback(async (id: string, approved: boolean) => {
+    if (id === "spawn-drawing") {
+      await decideSpawn(approved);
+      return;
+    }
     speakToken.current += 1;
     confirmGen.current += 1;
     silence();
@@ -550,7 +714,43 @@ export function HudShell() {
     } finally {
       setBusy(false);
     }
-  }, [applyResponse, refreshSide]);
+  }, [applyResponse, decideSpawn, refreshSide]);
+
+  const sendToConversation = useCallback(async (id: string, message: string) => {
+    const row = conversationsRef.current.find((item) => item.id === id);
+    if (!row || !message.trim()) return;
+    setFocusedId(id);
+    setConvBusyId(id);
+    setBusy(true);
+    try {
+      const result = await api.chat(message.trim(), row.session_id);
+      await refreshConversations();
+      whisper(result.speak || result.reply || "");
+      if (voiceEnabledRef.current && result.speak) speak(result.speak, true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "That conversation did not answer.");
+    } finally {
+      setBusy(false);
+      setConvBusyId(null);
+    }
+  }, [refreshConversations, whisper]);
+
+  const confirmConversation = useCallback(async (id: string, actionId: string, approved: boolean) => {
+    const row = conversationsRef.current.find((item) => item.id === id);
+    if (!row) return;
+    setConvBusyId(id);
+    setBusy(true);
+    try {
+      const result = await api.confirm(actionId, approved, row.session_id);
+      await refreshConversations();
+      whisper(result.speak || result.reply || "");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "I could not confirm that.");
+    } finally {
+      setBusy(false);
+      setConvBusyId(null);
+    }
+  }, [refreshConversations, whisper]);
 
   advanceThought.current = () => {
     if (busyRef.current || pendingIdRef.current || composeRef.current || listeningRef.current) return;
@@ -775,62 +975,101 @@ export function HudShell() {
         if (file) onDrop(file);
       }}
     >
+      <div className="hud-grid absolute inset-0" />
       <div className="scanline absolute inset-0" />
 
-      <header className="relative z-10 flex shrink-0 items-start justify-between px-8 py-5">
-        <button type="button" onClick={() => setPanel("settings")} className="text-white/20 hover:text-white/50">
-          {prefs?.assistant_name || "Jarvis"}
+      <header className="relative z-10 flex shrink-0 items-start justify-between gap-4 px-8 py-4">
+        <button
+          type="button"
+          onClick={() => {
+            setPanel("settings");
+            setFocusedId(null);
+          }}
+          className="hud-panel hud-accent-cyan px-4 py-1.5 font-display text-sm uppercase tracking-[0.3em] text-white/50 transition-colors hover:text-cyan"
+        >
+          {(prefs?.assistant_name || "Jarvis").toUpperCase()}
         </button>
-        <div className="flex items-center gap-4">
-          {glance ? <p className="hidden text-sm text-white/25 md:block">{glance}</p> : null}
-          <button
-            type="button"
-            onClick={toggleAlwaysOnMic}
-            className={`flex items-center gap-1.5 text-[11px] uppercase tracking-[0.14em] transition-colors ${
-              alwaysOnMic ? "text-cyan/55 hover:text-cyan/80" : "text-white/25 hover:text-white/45"
-            }`}
-            aria-pressed={alwaysOnMic}
-            aria-label={alwaysOnMic ? "Always-on mic on" : "Always-on mic off"}
-            title={
-              alwaysOnMic
-                ? "Always listening for wake word — click to turn off"
-                : "Wake word off — press Space or tap the orb to listen"
+        <div className="flex items-center gap-3">
+          {glance ? <p className="hidden max-w-xs truncate text-xs text-white/25 md:block">{glance}</p> : null}
+          <StatCard
+            label="Mic"
+            accent={alwaysOnMic ? "cyan" : "white"}
+            value={
+              <button
+                type="button"
+                onClick={toggleAlwaysOnMic}
+                className="flex items-center gap-1.5 transition-colors"
+                aria-pressed={alwaysOnMic}
+                aria-label={alwaysOnMic ? "Always-on mic on" : "Always-on mic off"}
+                title={
+                  alwaysOnMic
+                    ? "Always listening for wake word — click to turn off"
+                    : "Wake word off — press Space or tap the orb to listen"
+                }
+              >
+                <StatusDot accent={alwaysOnMic ? "cyan" : "white"} pulse={alwaysOnMic} />
+                {alwaysOnMic ? "Always on" : "Off"}
+              </button>
             }
-          >
-            <span
-              className={`inline-block h-1.5 w-1.5 rounded-full ${
-                alwaysOnMic ? "bg-cyan/70" : "bg-white/20"
-              }`}
-            />
-            {alwaysOnMic ? "Mic always on" : "Mic off"}
-          </button>
-          <Clock timezone={prefs?.timezone || "Asia/Kolkata"} />
-          <button
-            type="button"
-            onClick={() => setPanel("audit")}
-            className={`h-1.5 w-1.5 rounded-full ${health?.model_ready ? "bg-cyan/70" : "bg-amber/70"}`}
-            aria-label="Systems"
           />
+          <StatCard label="Local time" accent="violet" value={<Clock timezone={prefs?.timezone || "Asia/Kolkata"} />} />
+          <button type="button" onClick={() => setPanel("audit")} aria-label="Systems">
+            <StatCard
+              label="Systems"
+              accent={health?.model_ready ? "green" : "amber"}
+              value={
+                <span className="flex items-center gap-1.5">
+                  <StatusDot accent={health?.model_ready ? "green" : "amber"} pulse />
+                  {health?.model_ready ? "Nominal" : "Degraded"}
+                </span>
+              }
+            />
+          </button>
         </div>
       </header>
 
-      <main className="relative z-0 min-h-0 flex-1 overflow-auto">
-        <SceneBoard
-          scene={scene}
-          dense={density}
-          busy={busy}
-          onSaveAttachments={(emailId, attachmentIds, filenames) => void runAttachmentAction("save", emailId, attachmentIds, filenames)}
-          onReplyAttachments={(emailId, attachmentIds, filenames) => void runAttachmentAction("reply", emailId, attachmentIds, filenames)}
-          onViewAttachment={openViewer}
+      <div className="relative z-0 flex min-h-0 flex-1">
+        <main className="min-h-0 min-w-0 flex-1 overflow-auto" onClick={() => setFocusedId(null)}>
+          <SceneBoard
+            scene={scene}
+            dense={density}
+            busy={busy}
+            onSaveAttachments={(emailId, attachmentIds, filenames) => void runAttachmentAction("save", emailId, attachmentIds, filenames)}
+            onReplyAttachments={(emailId, attachmentIds, filenames) => void runAttachmentAction("reply", emailId, attachmentIds, filenames)}
+            onViewAttachment={openViewer}
+          />
+        </main>
+        <ConversationDock
+          conversations={conversations}
+          focusedId={focusedId}
+          busyId={convBusyId}
+          hidden={dockHidden}
+          onFocus={setFocusedId}
+          onMinimize={(id) => {
+            void api.patchConversation(id, { minimized: true }).then(() => refreshConversations());
+            if (focusedId === id) setFocusedId(null);
+          }}
+          onExpand={(id) => {
+            setDockHidden(false);
+            setFocusedId(id);
+            void api.patchConversation(id, { minimized: false }).then(() => refreshConversations());
+          }}
+          onSend={(id, message) => void sendToConversation(id, message)}
+          onConfirm={(id, actionId, approved) => void confirmConversation(id, actionId, approved)}
         />
-      </main>
+      </div>
 
-      <footer className="relative z-10 flex shrink-0 flex-col items-center gap-3 border-t border-white/5 bg-[#020508] px-6 pb-8 pt-3">
-        <p className="whisper max-h-16 max-w-2xl overflow-auto text-center text-xl text-white/70">
-          {error || reply}
-        </p>
+      <footer className="relative z-10 flex shrink-0 flex-col items-center gap-3 border-t border-white/5 bg-[#020508] px-6 pb-8 pt-4">
+        {error || reply ? (
+          <Alert
+            tone={error ? "error" : listening ? "warn" : "info"}
+            className="whisper max-h-16 max-w-2xl overflow-auto text-center"
+          >
+            <span className="text-lg">{error || reply}</span>
+          </Alert>
+        ) : null}
         {turns.length ? (
-          <p className="max-w-2xl text-center text-[11px] leading-5 text-white/25">
+          <p className="max-w-2xl text-center font-mono text-[11px] leading-5 text-white/25">
             {turns.slice(-3).map((turn, index) => (
               <span key={`${turn.role}-${index}`}>
                 {index ? " · " : ""}
@@ -838,6 +1077,11 @@ export function HudShell() {
                 {turn.text.length > 72 ? "…" : ""}
               </span>
             ))}
+          </p>
+        ) : null}
+        {focusedId ? (
+          <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-cyan/40">
+            {conversations.find((row) => row.id === focusedId)?.title || "Conversation"} in focus
           </p>
         ) : null}
         <Composer
@@ -861,7 +1105,11 @@ export function HudShell() {
         </div>
       ) : null}
 
-      <ConfirmBar actions={pending} onDecide={decide} listening={listening} />
+      <ConfirmBar
+        actions={pending.length ? pending : spawnAsk ? [spawnAsk] : []}
+        onDecide={decide}
+        listening={listening}
+      />
 
       {viewerAttachment ? (
         <DrawingViewer
@@ -878,29 +1126,38 @@ export function HudShell() {
 
       {panel !== "none" ? (
         <div className="absolute inset-0 z-20 bg-black/55" onClick={() => setPanel("none")}>
-          <div className="glass ml-auto h-full max-w-md overflow-auto p-8" onClick={(event) => event.stopPropagation()}>
-            <div className="mb-8 flex justify-between text-white/40">
-              <p>{panel === "settings" ? "Preferences" : "What I have done"}</p>
-              <button type="button" onClick={() => setPanel("none")}>Close</button>
-            </div>
-            {panel === "settings" && prefs ? (
-              <SettingsForm
-                prefs={prefs}
-                onSave={async (next) => {
-                  const saved = await api.updatePreferences(next);
-                  setPrefs(saved);
-                }}
-              />
-            ) : (
-              <ul className="space-y-4 text-sm">
-                {audit.map((entry) => (
-                  <li key={entry.id}>
-                    <p className="text-white/80">{entry.tool}</p>
-                    <p className="text-white/40">{entry.detail}</p>
-                  </li>
-                ))}
-              </ul>
-            )}
+          <div className="ml-auto h-full max-w-md" onClick={(event) => event.stopPropagation()}>
+            <Panel
+              accent={panel === "settings" ? "cyan" : "violet"}
+              className="h-full overflow-auto rounded-none border-y-0 border-r-0"
+              bodyClassName="p-8"
+              eyebrow={panel === "settings" ? "Configuration" : "Activity log"}
+              title={panel === "settings" ? "Preferences" : "What I have done"}
+              right={
+                <HudButton variant="ghost" className="py-1" onClick={() => setPanel("none")}>
+                  Close
+                </HudButton>
+              }
+            >
+              {panel === "settings" && prefs ? (
+                <SettingsForm
+                  prefs={prefs}
+                  onSave={async (next) => {
+                    const saved = await api.updatePreferences(next);
+                    setPrefs(saved);
+                  }}
+                />
+              ) : (
+                <ul className="space-y-4 text-sm">
+                  {audit.map((entry) => (
+                    <li key={entry.id} className="border-l-2 border-violet/25 pl-3">
+                      <p className="text-white/80">{entry.tool}</p>
+                      <p className="text-white/40">{entry.detail}</p>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Panel>
           </div>
         </div>
       ) : null}
@@ -924,7 +1181,7 @@ function GoogleConnect() {
   const allCalendars = Boolean(status.calendar_list);
   return (
     <div className="border-t border-white/10 pt-4 text-sm text-white/50">
-      <p>Google</p>
+      <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-cyan/60">Google</p>
       <p className="mt-1 text-white/70">
         {status.connected
           ? `Connected as ${status.account}${calendarOn ? " · Calendar on" : " · Calendar needs reconnect"}${calendarOn && !allCalendars ? " · primary only" : ""}`
@@ -932,15 +1189,23 @@ function GoogleConnect() {
             ? "Not connected"
             : "Add Google client keys to .env"}
       </p>
-      {status.configured && !status.connected ? (
-        <a href={api.googleAuthUrl()} className="mt-2 inline-block text-cyan">Connect Gmail</a>
-      ) : null}
-      {status.connected && !calendarOn ? (
-        <a href={api.googleAuthUrl()} className="mt-2 inline-block text-cyan">Add Calendar</a>
-      ) : null}
-      {status.connected && calendarOn && !allCalendars ? (
-        <a href={api.googleAuthUrl()} className="mt-2 block text-cyan">Allow all calendars</a>
-      ) : null}
+      <div className="mt-2 flex flex-wrap gap-2">
+        {status.configured && !status.connected ? (
+          <HudButton variant="primary" onClick={() => { window.location.href = api.googleAuthUrl(); }}>
+            Connect Gmail
+          </HudButton>
+        ) : null}
+        {status.connected && !calendarOn ? (
+          <HudButton variant="primary" onClick={() => { window.location.href = api.googleAuthUrl(); }}>
+            Add Calendar
+          </HudButton>
+        ) : null}
+        {status.connected && calendarOn && !allCalendars ? (
+          <HudButton variant="ghost" onClick={() => { window.location.href = api.googleAuthUrl(); }}>
+            Allow all calendars
+          </HudButton>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -973,11 +1238,11 @@ function SettingsForm({
         ] as const
       ).map(([key, label]) => (
         <label key={key} className="block text-sm">
-          <span className="text-white/40">{label}</span>
+          <span className="font-mono text-[11px] uppercase tracking-[0.16em] text-white/40">{label}</span>
           <input
             value={String(draft[key])}
             onChange={(event) => setDraft({ ...draft, [key]: event.target.value })}
-            className="mt-1 w-full border-b border-white/10 bg-transparent py-2 outline-none"
+            className="mt-1.5 w-full border border-white/10 bg-white/[0.02] px-3 py-2 outline-none transition-colors focus:border-cyan/50"
           />
         </label>
       ))}
@@ -1000,7 +1265,9 @@ function SettingsForm({
         </label>
       ))}
       <GoogleConnect />
-      <button type="submit" className="pt-4 text-cyan">Remember this</button>
+      <HudButton type="submit" variant="primary" className="mt-2">
+        Remember this
+      </HudButton>
     </form>
   );
 }

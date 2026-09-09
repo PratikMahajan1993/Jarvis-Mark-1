@@ -206,19 +206,70 @@ def seed_calendar() -> None:
         )
 
 
-def _local_list(days: int) -> list[dict[str, Any]]:
+def _window(days: int, span: str = "") -> tuple[datetime, datetime]:
     start = datetime.now(_tz()).replace(hour=0, minute=0, second=0, microsecond=0)
-    end = start + timedelta(days=days)
+    label = (span or "").strip().lower()
+    if label == "today":
+        return start, start + timedelta(days=1)
+    if label == "tomorrow":
+        return start + timedelta(days=1), start + timedelta(days=2)
+    return start, start + timedelta(days=max(int(days or 2), 1))
+
+
+def day_bucket(start_at: str) -> str:
+    try:
+        when = parse_when(start_at)
+    except Exception:
+        return ""
+    today = datetime.now(_tz()).date()
+    stamp = when.date()
+    if stamp == today:
+        return "today"
+    if stamp == today + timedelta(days=1):
+        return "tomorrow"
+    return when.strftime("%Y-%m-%d")
+
+
+def day_heading(start_at: str) -> str:
+    bucket = day_bucket(start_at)
+    if bucket == "today":
+        return "Today"
+    if bucket == "tomorrow":
+        return "Tomorrow"
+    try:
+        when = parse_when(start_at)
+    except Exception:
+        return "Upcoming"
+    return f"{when.strftime('%A')} {when.day} {when.strftime('%b')}"
+
+
+def when_label(start_at: str) -> str:
+    try:
+        when = parse_when(start_at)
+    except Exception:
+        return clock(start_at)
+    if when.hour == 0 and when.minute == 0:
+        return "All day"
+    bucket = day_bucket(start_at)
+    if bucket in {"today", "tomorrow"}:
+        return clock(start_at)
+    return when.strftime("%H:%M")
+
+
+def _local_list(days: int, span: str = "") -> list[dict[str, Any]]:
+    start, end = _window(days, span)
     with connect() as conn:
-        rows = conn.execute(
-            """
-            SELECT * FROM calendar_events
-            WHERE start_at >= ? AND start_at < ?
-            ORDER BY start_at
-            """,
-            (start.isoformat(), end.isoformat()),
-        ).fetchall()
-    return [dict(row) for row in rows]
+        rows = [dict(row) for row in conn.execute("SELECT * FROM calendar_events ORDER BY start_at").fetchall()]
+    out: list[dict[str, Any]] = []
+    for row in rows:
+        try:
+            when = parse_when(row.get("start_at") or "")
+        except Exception:
+            continue
+        if start <= when < end:
+            out.append(row)
+    out.sort(key=lambda item: item.get("start_at") or "")
+    return out
 
 
 def calendar_note(empty: bool = False) -> str:
@@ -237,16 +288,16 @@ def pull_google(days: int = 2) -> list[dict[str, Any]]:
     return list(rows)
 
 
-def list_events(days: int = 2) -> list[dict[str, Any]]:
+def list_events(days: int = 2, span: str = "") -> list[dict[str, Any]]:
     if google_auth.connected() and not live():
         return []
-    return _local_list(days)
+    return _local_list(days, span=span)
 
 
-def upcoming(days: int = 2) -> list[dict[str, Any]]:
+def upcoming(days: int = 2, span: str = "") -> list[dict[str, Any]]:
     now = datetime.now(_tz())
     rows = []
-    for event in list_events(days):
+    for event in list_events(days, span=span):
         raw_end = event.get("end_at") or event.get("start_at") or ""
         try:
             end = parse_when(raw_end)

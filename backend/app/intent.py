@@ -103,6 +103,16 @@ _CAL_CREATE = re.compile(
     r"|\b(meeting|call)\s+with\b",
     re.I,
 )
+_CAL_LIST = re.compile(
+    r"\b(calendar|schedule|agenda)\b"
+    r"|\b(next|upcoming)\s+(meeting|call|event|appointment)\b"
+    r"|\b(any|my)\s+meetings?\b"
+    r"|\bmeetings?\s+(today|tomorrow)\b"
+    r"|\bwhat(?:'s|s| is)\s+tomorrow\b"
+    r"|\bwhat do i have\s+tomorrow\b"
+    r"|\bwhen is (?:my )?next (meeting|call|event|appointment)\b",
+    re.I,
+)
 _RESEARCH = (
     "research",
     "look up",
@@ -289,11 +299,14 @@ def _rule_gemini(_text: str, low: str, _person: str) -> Intent | None:
 
 
 def _rule_briefing(_text: str, low: str, _person: str) -> Intent | None:
-    if any(phrase in low for phrase in _BRIEF) or (
+    if any(phrase in low for phrase in _BRIEF):
+        return Intent("briefing")
+    if (
         ("what's on" in low or "whats on" in low or "what do i have" in low)
         and "mail" not in low
         and "email" not in low
         and not any(word in low for word in ("calendar", "schedule", "agenda"))
+        and not re.search(r"\btomorrow\b|\bmeetings?\b|\bcalls?\b", low)
     ):
         return Intent("briefing")
     return None
@@ -368,11 +381,20 @@ def _rule_research(text: str, low: str, _person: str) -> Intent | None:
     return None
 
 
+def calendar_span(message: str) -> str:
+    low = (message or "").lower()
+    if re.search(r"\btomorrow\b", low):
+        return "tomorrow"
+    if re.search(r"\btoday\b|\bthis afternoon\b|\bthis evening\b|\btonight\b|\bthis morning\b", low):
+        return "today"
+    return ""
+
+
 def _rule_calendar(text: str, low: str, _person: str) -> Intent | None:
     if _CAL_CREATE.search(text):
         return Intent("calendar_create")
-    if any(word in low for word in ("calendar", "schedule", "agenda")):
-        return Intent("calendar_list")
+    if _CAL_LIST.search(low):
+        return Intent("calendar_list", query=calendar_span(low))
     return None
 
 
@@ -492,6 +514,8 @@ def intent_for_kind(kind: str, message: str) -> Intent:
         return Intent("mail_search", query=query, person=person, unread_only=unread)
     if kind == "research":
         return Intent("research", query=text)
+    if kind == "calendar_list":
+        return Intent("calendar_list", query=calendar_span(low))
     if kind.startswith("mail_"):
         return Intent(kind, query=text, person=person, last=last, unread_only=unread)
     return Intent(kind, query=text, person=person)
@@ -581,6 +605,11 @@ CASES: list[tuple[str, str]] = [
     ("what's on my schedule", "calendar_list"),
     ("show my schedule", "calendar_list"),
     ("show my agenda", "calendar_list"),
+    ("when is my next meeting", "calendar_list"),
+    ("any meetings today", "calendar_list"),
+    ("what's tomorrow", "calendar_list"),
+    ("what do I have tomorrow", "calendar_list"),
+    ("anything new on the calendar", "calendar_list"),
     ("book a call with Rahul at 4pm", "calendar_create"),
     ("meeting with Rahul tomorrow", "calendar_create"),
     ("add lunch to my calendar", "calendar_create"),
