@@ -174,6 +174,32 @@ def init_db() -> None:
                 mail_count INTEGER NOT NULL DEFAULT 0,
                 status TEXT NOT NULL DEFAULT ''
             );
+            CREATE TABLE IF NOT EXISTS jobs (
+                id TEXT PRIMARY KEY,
+                customer TEXT NOT NULL,
+                part_name TEXT NOT NULL,
+                material TEXT NOT NULL,
+                machine TEXT NOT NULL,
+                cycle_min REAL,
+                margin REAL,
+                drawing_file TEXT,
+                geometry_notes TEXT,
+                created_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS jobs_material ON jobs (material);
+            CREATE TABLE IF NOT EXISTS rfqs (
+                id TEXT PRIMARY KEY,
+                mail_id TEXT,
+                conversation_id TEXT,
+                status TEXT NOT NULL,
+                extract TEXT NOT NULL,
+                similar_job_ids TEXT NOT NULL,
+                pending_reply TEXT,
+                deadline_iso TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS rfqs_status ON rfqs (status);
             """
         )
         email_cols = {row[1] for row in conn.execute("PRAGMA table_info(emails)").fetchall()}
@@ -184,12 +210,21 @@ def init_db() -> None:
         inbox_cols = {row[1] for row in conn.execute("PRAGMA table_info(inbox_files)").fetchall()}
         if "path" not in inbox_cols:
             conn.execute("ALTER TABLE inbox_files ADD COLUMN path TEXT")
+        job_cols = {row[1] for row in conn.execute("PRAGMA table_info(jobs)").fetchall()}
+        if "geometry_notes" not in job_cols:
+            conn.execute("ALTER TABLE jobs ADD COLUMN geometry_notes TEXT")
+        rfq_cols = {row[1] for row in conn.execute("PRAGMA table_info(rfqs)").fetchall()}
+        if "updated_at" not in rfq_cols:
+            conn.execute("ALTER TABLE rfqs ADD COLUMN updated_at TEXT")
         existing = conn.execute("SELECT data FROM preferences WHERE id = 1").fetchone()
         if not existing:
             conn.execute(
                 "INSERT INTO preferences (id, data) VALUES (1, ?)",
                 (json.dumps(DEFAULT_PREFS),),
             )
+    from .jobs import seed_demo_job
+
+    seed_demo_job()
 
 
 def add_message(session_id: str, role: str, content: str) -> None:
