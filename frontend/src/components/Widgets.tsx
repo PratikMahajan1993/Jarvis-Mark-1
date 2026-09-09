@@ -1,4 +1,4 @@
-import type { Conversation, MailAttachment, Widget } from "@/lib/types";
+import type { Conversation, CriticalAlert, CriticalKind, CriticalTone, MailAttachment, RfqPublic, Widget } from "@/lib/types";
 import { isSavedLocal } from "@/lib/viewerMatch";
 import { splitMarkdownTables } from "@/lib/tables";
 import { useMemo, useState } from "react";
@@ -265,8 +265,7 @@ export function WidgetCard({
   }
 }
 
-export type CriticalKind = "rfq" | "efficiency" | "shift";
-export type CriticalTone = "cyan" | "amber" | "red";
+export type { CriticalKind, CriticalTone };
 
 export type CriticalItem = {
   kind: CriticalKind;
@@ -274,6 +273,15 @@ export type CriticalItem = {
   detail?: string;
   tone?: CriticalTone;
   href?: string;
+  sourceId?: string;
+};
+
+export type DerivedCritical = CriticalItem & { sourceId: string };
+
+export type DeriveCriticalOptions = {
+  glanceCritical?: CriticalAlert | null;
+  chatCritical?: CriticalAlert | null;
+  rfqs?: ReadonlyArray<RfqPublic> | null;
 };
 
 const CRITICAL_KINDS: readonly CriticalKind[] = ["rfq", "efficiency", "shift"];
@@ -283,6 +291,7 @@ const CRITICAL_KIND_LABEL: Record<CriticalKind, string> = {
   efficiency: "Efficiency",
   shift: "Shift",
 };
+const ACTIVE_RFQ = new Set(["reasoned", "pending"]);
 
 type ConversationLike = Partial<Pick<Conversation, "id" | "category" | "title" | "minimized">> | null | undefined;
 
@@ -316,11 +325,65 @@ function expandedDrawing(
   return fallback;
 }
 
-/** Local Wave-1 critical: an expanded drawing conversation is an RFQ chip. Mail scenes do not qualify. */
-export function deriveCritical(
+function fromApiCritical(item: CriticalAlert | null | undefined): DerivedCritical | null {
+  if (!item || typeof item !== "object") return null;
+  if (typeof item.kind !== "string" || !isCriticalKind(item.kind)) return null;
+  const title = typeof item.title === "string" ? item.title.trim() : "";
+  if (!title) return null;
+  const detail = typeof item.detail === "string" ? item.detail.trim() : "";
+  const tone = typeof item.tone === "string" && isCriticalTone(item.tone) ? item.tone : undefined;
+  const sourceId = typeof item.sourceId === "string" && item.sourceId.trim() ? item.sourceId.trim() : `${item.kind}:${title}`;
+  return { kind: item.kind, title, detail: detail || undefined, tone, sourceId };
+}
+
+function rfqLabel(rfq: RfqPublic): string {
+  const catchLine = typeof rfq.catch === "string" ? rfq.catch.trim() : "";
+  if (catchLine) return catchLine;
+  const extract = rfq.extract && typeof rfq.extract === "object" ? rfq.extract : {};
+  for (const key of ["part_name", "title", "customer"] as const) {
+    const value = extract[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return "RFQ";
+}
+
+function rfqDetail(rfq: RfqPublic): string {
+  const reply = typeof rfq.pending_reply === "string" ? rfq.pending_reply.trim() : "";
+  if (reply) return reply;
+  const deadline = typeof rfq.deadline_iso === "string" ? rfq.deadline_iso.trim() : "";
+  if (deadline) return `Deadline ${deadline}`;
+  return "Reasoned RFQ — waiting.";
+}
+
+function fromActiveRfq(
+  rfqs: ReadonlyArray<RfqPublic> | null | undefined,
+  focusedId?: string | null,
+): DerivedCritical | null {
+  if (!Array.isArray(rfqs)) return null;
+  const active = rfqs.filter((row) => {
+    if (!row || typeof row !== "object") return false;
+    const id = typeof row.id === "string" ? row.id.trim() : "";
+    if (!id) return false;
+    const status = typeof row.status === "string" ? row.status.trim().toLowerCase() : "";
+    return ACTIVE_RFQ.has(status);
+  });
+  if (!active.length) return null;
+  const want = typeof focusedId === "string" ? focusedId.trim() : "";
+  const focused = want ? active.find((row) => row.conversation_id === want) : undefined;
+  const pick = focused || active[0];
+  return {
+    kind: "rfq",
+    title: rfqLabel(pick),
+    detail: rfqDetail(pick),
+    tone: "amber",
+    sourceId: pick.id,
+  };
+}
+
+function fromExpandedDrawing(
   conversations: ReadonlyArray<ConversationLike> | null | undefined,
   focusedId?: string | null,
-): (CriticalItem & { sourceId: string }) | null {
+): DerivedCritical | null {
   const drawing = expandedDrawing(conversations, focusedId);
   if (!drawing) return null;
   return {
@@ -330,6 +393,20 @@ export function deriveCritical(
     tone: "amber",
     sourceId: drawing.id,
   };
+}
+
+/** Wave 2: glance/chat critical, then reasoned/pending RFQ, then expanded drawing. */
+export function deriveCritical(
+  conversations: ReadonlyArray<ConversationLike> | null | undefined,
+  focusedId?: string | null,
+  options?: DeriveCriticalOptions,
+): DerivedCritical | null {
+  return (
+    fromApiCritical(options?.chatCritical) ||
+    fromApiCritical(options?.glanceCritical) ||
+    fromActiveRfq(options?.rfqs, focusedId) ||
+    fromExpandedDrawing(conversations, focusedId)
+  );
 }
 
 export function CriticalStrip({

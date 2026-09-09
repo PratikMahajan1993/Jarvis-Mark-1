@@ -1,4 +1,16 @@
-import type { ChatResponse, Health, Preferences, Artifact, AuditEntry, PendingAction, Conversation } from "./types";
+import type {
+  Artifact,
+  AuditEntry,
+  ChatResponse,
+  Conversation,
+  Glance,
+  Health,
+  PendingAction,
+  Preferences,
+  RfqIntakeRequest,
+  RfqIntakeResponse,
+  RfqPublic,
+} from "./types";
 import type { CanvasBoard, CanvasCamera, CanvasFile, CanvasItem } from "./canvas/types";
 
 function apiBase(): string {
@@ -64,8 +76,21 @@ export const api = {
       body: JSON.stringify({ action_id: actionId, approved, session_id: sessionId }),
     }),
   briefing: () => json<ChatResponse & { speak: string }>("/api/briefing"),
-  glance: () =>
-    json<{ line: string; whisper: string; speak: string; key: string; minutes: number | null }>("/api/glance"),
+  glance: () => json<Glance>("/api/glance"),
+  listRfqs: async () => {
+    try {
+      const data = await json<{ items?: RfqPublic[] }>("/api/rfqs");
+      return { items: Array.isArray(data?.items) ? data.items : [] };
+    } catch {
+      return { items: [] as RfqPublic[] };
+    }
+  },
+  getRfq: (id: string) => json<RfqPublic>(`/api/rfqs/${encodeURIComponent(id)}`),
+  intakeRfq: (body: RfqIntakeRequest = {}) =>
+    json<RfqIntakeResponse>("/api/rfqs/intake", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
   artifacts: () => json<{ items: Artifact[] }>("/api/artifacts"),
   audit: () => json<{ items: AuditEntry[] }>("/api/audit"),
   preferences: () => json<Preferences>("/api/preferences"),
