@@ -131,3 +131,12 @@ body {
 .whisper {
   text-wrap: balance;
 }
+
+/* One-line density for Panel used as the critical strip. */
+.critical-strip {
+  max-width: min(100%, 36rem);
+}
+
+.critical-strip > div:first-child {
+  padding: 0.4rem 0.75rem;
+}
