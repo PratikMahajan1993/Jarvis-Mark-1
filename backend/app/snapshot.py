@@ -9,7 +9,7 @@ from . import db
 
 STALE_SECONDS = 180
 SNAPSHOT_KINDS = frozenset({"briefing", "mail_search", "mail_read", "calendar_list"})
-SKIP_MODEL = SNAPSHOT_KINDS | {"calendar_create"}
+SKIP_MODEL = SNAPSHOT_KINDS | {"calendar_create", "rfq_reason", "cnc_suggest"}
 
 _FRESH = re.compile(
     r"\b("
@@ -148,6 +148,12 @@ def _pull_mail() -> int:
                 continue
             seen.add(ident)
             rows.append(_merge_gmail_fields(row))
+    try:
+        from .rfq import detect_inbound_drawings
+
+        detect_inbound_drawings()
+    except Exception:
+        pass
     return len(rows) or db.unread_count_local()
 
 

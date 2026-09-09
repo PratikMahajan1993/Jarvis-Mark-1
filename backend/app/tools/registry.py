@@ -133,12 +133,15 @@ def _ok(
     speak: str | None = None,
     attachments: list[dict[str, Any]] | None = None,
     mail_id: str | None = None,
+    critical: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     out: dict[str, Any] = {"ok": True, "data": data, "scene": scene, "pending": pending, "speak": speak}
     if attachments is not None:
         out["attachments"] = attachments
     if mail_id:
         out["mail_id"] = mail_id
+    if critical is not None:
+        out["critical"] = critical
     return out
 
 
@@ -761,6 +764,58 @@ def _update_preferences(session_id: str, **fields: Any) -> dict[str, Any]:
     return _ok(prefs)
 
 
+def _reason_rfq(
+    session_id: str,
+    conversation_id: str = "",
+    mail_id: str = "",
+    message: str = "",
+    **_: Any,
+) -> dict[str, Any]:
+    from ..rfq import glance_critical, intake
+
+    result = intake(
+        mail_id=mail_id,
+        conversation_id=conversation_id,
+        message=message,
+        session_id=session_id,
+    )
+    speak = str(result.get("speak") or "The drawing RFQ is on the board.")
+    rfq = result.get("rfq") or {}
+    pending_items = db.list_pending(session_id)
+    hold = next((item for item in pending_items if item.get("kind") == "email_send"), None)
+    scene = {
+        "title": "Drawing RFQ",
+        "subtitle": (rfq.get("catch") or "Reasoned")[:80],
+        "widgets": [
+            {"type": "quote", "text": speak, "cite": "Jarvis"},
+            {"type": "markdown", "title": "Holding reply", "text": rfq.get("pending_reply") or ""},
+        ],
+    }
+    return _ok(
+        result,
+        scene=scene,
+        pending=hold,
+        speak=speak,
+        critical=glance_critical(),
+    )
+
+
+def _cnc_suggest(
+    session_id: str,
+    conversation_id: str = "",
+    **_: Any,
+) -> dict[str, Any]:
+    from ..rfq import request_program
+
+    result = request_program(session_id=session_id, conversation_id=conversation_id)
+    return _ok(
+        result.get("result") or result,
+        scene=result.get("scene"),
+        pending=result.get("pending"),
+        speak=result.get("speak"),
+    )
+
+
 HANDLERS.update(
     {
         "get_briefing": _get_briefing,
@@ -785,6 +840,8 @@ HANDLERS.update(
         "open_artifact": _open_artifact,
         "remember": _remember,
         "update_preferences": _update_preferences,
+        "reason_rfq": _reason_rfq,
+        "cnc_suggest": _cnc_suggest,
     }
 )
 
@@ -1114,6 +1171,34 @@ TOOL_SCHEMAS = [
                     "files_enabled": {"type": "boolean"},
                     "research_enabled": {"type": "boolean"},
                     "hud_density": {"type": "string"},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "reason_rfq",
+            "description": "Reason an inbound drawing RFQ: visible sizes only, similar jobs, holding reply. Never drafts CNC.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "conversation_id": {"type": "string"},
+                    "mail_id": {"type": "string"},
+                    "message": {"type": "string"},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "cnc_suggest",
+            "description": "Draft a from-scratch CNC turning program from the open drawing extract. Never send to a machine.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "conversation_id": {"type": "string"},
                 },
             },
         },

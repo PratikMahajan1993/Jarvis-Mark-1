@@ -96,6 +96,7 @@ class ChatResponse(BaseModel):
     offline: bool = False
     more: int = 0
     watching: bool = False
+    critical: dict[str, Any] | None = None
 
 
 class ConversationCreate(BaseModel):

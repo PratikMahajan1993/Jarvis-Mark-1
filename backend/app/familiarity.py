@@ -96,6 +96,8 @@ def empty_set() -> dict[str, Any]:
         "people": [],
         "artifacts": [],
         "drives": [],
+        "rfq": None,
+        "cnc": None,
     }
 
 
@@ -206,6 +208,18 @@ def remember_drive(session_id: str, file: dict[str, Any]) -> None:
     if len(data["drives"]) > 1:
         other = data["drives"][1]
         aliases["the other drive file"] = {"kind": "drive", "id": other["id"], "link": other["link"]}
+    save_set(session_id, data)
+
+
+def remember_rfq(session_id: str, rfq_id: str, conversation_id: str = "") -> None:
+    data = get_set(session_id)
+    data["rfq"] = {"id": rfq_id, "conversation_id": conversation_id}
+    save_set(session_id, data)
+
+
+def remember_cnc(session_id: str, path: str, rfq_id: str = "") -> None:
+    data = get_set(session_id)
+    data["cnc"] = {"path": path, "rfq_id": rfq_id, "draft": True}
     save_set(session_id, data)
 
 
@@ -533,6 +547,10 @@ def speak_for_tool(name: str, result: dict[str, Any], session_id: str = "default
         return f"{label} is on the board."
     if name == "task_for_gemini":
         return result.get("speak") or "Task for Gemini is ready — shall I send it?"
+    if name == "reason_rfq":
+        return result.get("speak") or "The drawing RFQ is on the board."
+    if name == "cnc_suggest":
+        return result.get("speak") or "CNC draft is ready — shall I keep it?"
     if name == "research":
         return result.get("speak") or "Research is on the board."
     if name == "open_artifact":
@@ -598,6 +616,18 @@ def note_tool(session_id: str, name: str, result: dict[str, Any]) -> None:
         remember_artifact(session_id, data, data.get("title") or data.get("name") or "")
     if name in {"drive_upload", "drive_find"} and isinstance(data, dict) and data.get("link"):
         remember_drive(session_id, data)
+    if name == "reason_rfq":
+        payload = data if isinstance(data, dict) else {}
+        rfq = payload.get("rfq") if isinstance(payload.get("rfq"), dict) else payload
+        rfq_id = str((rfq or {}).get("id") or "")
+        conv_id = str((rfq or {}).get("conversation_id") or "")
+        if rfq_id:
+            remember_rfq(session_id, rfq_id, conv_id)
+    if name == "cnc_suggest":
+        path = ""
+        if isinstance(data, dict):
+            path = str(data.get("path") or (data.get("result") or {}).get("path") or "")
+        remember_cnc(session_id, path, "")
 
 
 def ensure_demo_people() -> None:
