@@ -76,6 +76,7 @@ def _chat_response(
     offline: bool = False,
     more: int = 0,
     watching: bool = False,
+    critical: dict[str, Any] | None = None,
 ) -> ChatResponse:
     return ChatResponse(
         speak=speak,
@@ -88,6 +89,7 @@ def _chat_response(
         offline=offline,
         more=more,
         watching=watching,
+        critical=critical,
     )
 
 
@@ -623,6 +625,10 @@ def _heuristic_tools(
         )
     if intent.kind == "doc_create" and prefs.get("files_enabled"):
         calls.append({"name": "create_document", "arguments": document_spec(message)})
+    if intent.kind == "rfq_reason":
+        calls.append({"name": "reason_rfq", "arguments": {"message": message}})
+    if intent.kind == "cnc_suggest":
+        calls.append({"name": "cnc_suggest", "arguments": {}})
 
     seen = set()
     unique = []
@@ -758,6 +764,7 @@ def _thought_from_result(result: dict[str, Any], tool_name: str = "") -> dict[st
         "tool": tool_name,
         "attachments": result.get("attachments"),
         "mail_id": result.get("mail_id"),
+        "critical": result.get("critical"),
     }
 
 
@@ -783,6 +790,7 @@ def _response_from_thought(session_id: str, thought: dict[str, Any], offline: bo
         offline=offline,
         more=db.thought_count(session_id),
         watching=bool((db.get_watch(session_id) or {}).get("status") == "waiting"),
+        critical=thought.get("critical"),
     )
 
 
@@ -795,7 +803,7 @@ def next_thought(session_id: str = "default") -> ChatResponse:
 
 
 def _skip_brain(kind: str, message: str) -> bool:
-    if kind == "calendar_create" or kind == "calendar_list":
+    if kind in {"calendar_create", "calendar_list", "rfq_reason", "cnc_suggest"}:
         return True
     return uses_snapshot(kind) and snapshot_ready() and not wants_fresh(message)
 
@@ -998,7 +1006,7 @@ def _run_agent(message: str, session_id: str = "default") -> ChatResponse:
             "artifact_id": None,
         })
 
-    if work:
+    if work and intent.kind not in {"rfq_reason", "cnc_suggest"}:
         for item in unmatched_clauses(heard, message, used_names):
             if "task_for_gemini" in used_names:
                 continue
@@ -1058,7 +1066,12 @@ def resolve_pending(action_id: str, approved: bool, session_id: str) -> ChatResp
         db.add_audit(session_id, action["kind"], f"Rejected {action['title']}", "rejected")
         remaining = db.thought_count(session_id)
         db.set_focus_pending(session_id, "" if remaining else None)
-        speak = "Alright." if action["kind"] == "clarify" else "Cancelled."
+        if action["kind"] == "cnc_promote":
+            speak = "Left the draft."
+        elif action["kind"] == "clarify":
+            speak = "Alright."
+        else:
+            speak = "Cancelled."
         return ChatResponse(
             speak=speak,
             reply=speak,
@@ -1161,6 +1174,20 @@ def resolve_pending(action_id: str, approved: bool, session_id: str) -> ChatResp
             return response
         detail = "Done."
         scene = _fallback_scene(detail)
+    elif action["kind"] == "cnc_promote":
+        from .rfq import promote_cnc_draft
+
+        promoted = promote_cnc_draft(payload, session_id, True)
+        detail = str(promoted.get("detail") or promoted.get("speak") or "Draft accepted.")
+        label = str(promoted.get("path") or payload.get("path") or "draft").rsplit("/", 1)[-1]
+        scene = Scene(
+            title="CNC draft kept",
+            subtitle=label,
+            widgets=[
+                Widget(type="quote", text=detail, cite="Jarvis"),
+                Widget(type="markdown", text="Not proven on the machine. Not emailed."),
+            ],
+        )
     elif action["kind"] == "handoff_gemini":
         from .connectors import drive as drive_conn
         from .connectors.email import send_email

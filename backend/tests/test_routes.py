@@ -47,6 +47,12 @@ CONFLICTS: list[tuple[str, str, tuple[str, ...], tuple[str, ...]]] = [
     ("aluminium prices in India", "research", ("research",), ("search_emails", "get_briefing")),
     ("book a call with Rahul at 4pm", "calendar_create", ("create_calendar_event",), ("list_calendar", "draft_email")),
     ("write meeting notes", "doc_create", ("create_document",), ("draft_email", "create_spreadsheet")),
+    ("what's in this RFQ", "rfq_reason", ("reason_rfq",), ("cnc_suggest", "send_email", "draft_email", "create_calendar_event")),
+    ("treat this as an RFQ from Deepak", "rfq_reason", ("reason_rfq",), ("cnc_suggest", "send_email")),
+    ("quote on this drawing", "rfq_reason", ("reason_rfq",), ("cnc_suggest",)),
+    ("write a program from scratch", "cnc_suggest", ("cnc_suggest",), ("reason_rfq", "send_email", "draft_email")),
+    ("suggest G-code for this", "cnc_suggest", ("cnc_suggest",), ("reason_rfq", "send_email")),
+    ("CNC program for this", "cnc_suggest", ("cnc_suggest",), ("reason_rfq",)),
 ]
 
 _MAIL_OPEN = re.compile(r"\b(mail|email|e-mail|inbox|gmail|message|letter)\b", re.I)
@@ -201,6 +207,10 @@ def test_heuristic_obeys_route():
         ("don't reply", []),
         ("open DPIS000377", []),
         ("write meeting notes", ["create_document"]),
+        ("what's in this RFQ", ["reason_rfq"]),
+        ("treat this as an RFQ from Deepak", ["reason_rfq"]),
+        ("write a program from scratch", ["cnc_suggest"]),
+        ("suggest G-code for this", ["cnc_suggest"]),
     )
     fails = []
     for phrase, want in checks:

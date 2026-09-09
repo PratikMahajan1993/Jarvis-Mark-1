@@ -64,6 +64,13 @@ def list_public() -> list[dict[str, Any]]:
     return [public_row(row) for row in db.list_conversations()]
 
 
+def latest_drawing() -> dict[str, Any] | None:
+    for row in db.list_conversations():
+        if row.get("category") == "drawing" and row.get("status") != "archived":
+            return public_row(row)
+    return None
+
+
 def create(
     category: str,
     title: str,

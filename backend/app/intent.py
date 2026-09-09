@@ -245,6 +245,18 @@ ROUTES: dict[str, Route] = {
         pref="email_enabled",
         complete="task_for_gemini",
     ),
+    "rfq_reason": Route(
+        "rfq_reason",
+        tools=("reason_rfq",),
+        job="Call reason_rfq only. Do not suggest CNC or send mail.",
+        complete="reason_rfq",
+    ),
+    "cnc_suggest": Route(
+        "cnc_suggest",
+        tools=("cnc_suggest",),
+        job="Call cnc_suggest only. Draft a program; never send it to a machine.",
+        complete="cnc_suggest",
+    ),
 }
 
 
@@ -333,6 +345,35 @@ def _rule_forward(text: str, low: str, person: str) -> Intent | None:
 def _rule_cancel(text: str, _low: str, _person: str) -> Intent | None:
     if _NEGATE.search(text) and (_DRAFT.search(text) or _FORWARD.search(text)):
         return Intent("chat")
+    return None
+
+
+_CNC = re.compile(
+    r"\b(?:write|suggest|draft|make|generate)\b.{0,40}\b(?:cnc\s+)?(?:program|g-?code)\b"
+    r"|\b(?:cnc|g-?code)\s+program\b"
+    r"|\bfrom scratch\b.{0,40}\b(?:program|g-?code|cnc)\b"
+    r"|\b(?:program|g-?code|cnc)\b.{0,40}\bfrom scratch\b"
+    r"|\bsuggest g-?code\b",
+    re.I,
+)
+_RFQ = re.compile(
+    r"\brfq\b|request for quot"
+    r"|treat this as (?:an?\s+)?rfq"
+    r"|(?:\bquote\b|\bquotation\b).{0,48}\bdrawing\b"
+    r"|\bdrawing\b.{0,48}(?:\bquote\b|\bquotation\b|\brfq\b)",
+    re.I,
+)
+
+
+def _rule_cnc(text: str, _low: str, _person: str) -> Intent | None:
+    if _CNC.search(text):
+        return Intent("cnc_suggest")
+    return None
+
+
+def _rule_rfq(text: str, _low: str, person: str) -> Intent | None:
+    if _RFQ.search(text):
+        return Intent("rfq_reason", person=person)
     return None
 
 
@@ -448,6 +489,8 @@ def _rule_doc(_text: str, low: str, _person: str) -> Intent | None:
 RULES = (
     _rule_gemini,
     _rule_briefing,
+    _rule_cnc,
+    _rule_rfq,
     _rule_refresh,
     _rule_reply_attach,
     _rule_save,
@@ -485,6 +528,7 @@ _WORK_HINTS = (
     "spreadsheet", "excel", "xlsx", "gemini", "pdf", "drawing", "attachment",
     "enquiry", "inquiry", "quotation", "quote", "price", "prices", "meeting",
     "draft", "reply", "forward", "document", "docx", "workbook", "sheet",
+    "rfq", "cnc", "g-code", "gcode", "program from scratch",
 )
 
 
@@ -630,6 +674,17 @@ CASES: list[tuple[str, str]] = [
     ("write meeting notes", "doc_create"),
     ("create a word document", "doc_create"),
     ("review the dropped file", "file_review"),
+    ("what's in this RFQ", "rfq_reason"),
+    ("whats in this RFQ", "rfq_reason"),
+    ("treat this as an RFQ from Deepak", "rfq_reason"),
+    ("treat this as RFQ from Deepak", "rfq_reason"),
+    ("quote on this drawing", "rfq_reason"),
+    ("this drawing quotation", "rfq_reason"),
+    ("write a program from scratch", "cnc_suggest"),
+    ("write a program", "cnc_suggest"),
+    ("suggest G-code for this", "cnc_suggest"),
+    ("CNC program for this", "cnc_suggest"),
+    ("suggest G-code", "cnc_suggest"),
     ("how are you", "chat"),
     ("thanks Jarvis", "chat"),
     ("who are you", "chat"),

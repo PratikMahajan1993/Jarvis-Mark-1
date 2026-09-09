@@ -8,6 +8,7 @@ from pathlib import Path
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, RedirectResponse
+from pydantic import BaseModel
 
 from . import db
 from .agent import next_thought, resolve_pending, run_agent, run_attachment_reply, run_attachment_save
@@ -148,8 +149,14 @@ def api_briefing() -> dict:
 
 @app.get("/api/glance")
 def api_glance() -> dict:
+    from .rfq import glance_critical
+
     kick_snapshot()
-    return build_glance()
+    payload = build_glance()
+    critical = glance_critical()
+    if critical:
+        payload["critical"] = critical
+    return payload
 
 
 @app.get("/api/snapshot")
@@ -231,6 +238,42 @@ def api_update_preferences(payload: PreferencesUpdate) -> dict:
 @app.get("/api/pending")
 def api_pending(session_id: str = "default") -> dict:
     return {"items": db.list_focused_pending(session_id)}
+
+
+class RfqIntake(BaseModel):
+    mail_id: str = ""
+    conversation_id: str = ""
+    message: str = ""
+    session_id: str = "default"
+
+
+@app.get("/api/rfqs")
+def api_rfqs() -> dict:
+    from .rfq import list_public
+
+    return {"items": list_public()}
+
+
+@app.get("/api/rfqs/{rfq_id}")
+def api_rfq(rfq_id: str) -> dict:
+    from .rfq import get_public
+
+    row = get_public(rfq_id)
+    if not row:
+        raise HTTPException(404, "RFQ not found")
+    return row
+
+
+@app.post("/api/rfqs/intake")
+def api_rfq_intake(payload: RfqIntake) -> dict:
+    from .rfq import intake
+
+    return intake(
+        mail_id=payload.mail_id or "",
+        conversation_id=payload.conversation_id or "",
+        message=payload.message or "",
+        session_id=payload.session_id or "default",
+    )
 
 
 @app.get("/api/thought")
