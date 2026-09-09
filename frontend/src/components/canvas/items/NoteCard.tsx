@@ -13,7 +13,7 @@ const PALETTE: Record<NoteColor, { background: string; border: string; text: str
 
 export function NoteCard({ item }: { item: NoteItem }) {
   const { dispatch } = useCanvasActions();
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState(!item.text);
   const textarea = useRef<HTMLTextAreaElement>(null);
   const colors = PALETTE[item.color] ?? PALETTE.amber;
 

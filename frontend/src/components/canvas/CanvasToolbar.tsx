@@ -8,17 +8,24 @@ function ToolButton({
   label,
   onClick,
   title,
+  active,
+  disabled,
 }: {
   label: string;
   onClick: () => void;
   title?: string;
+  active?: boolean;
+  disabled?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
       title={title}
-      className="px-3 py-1.5 text-sm text-white/45 transition-colors hover:text-cyan"
+      disabled={disabled}
+      className={`px-3 py-1.5 text-sm transition-colors disabled:opacity-30 ${
+        active ? "text-cyan" : "text-white/45 hover:text-cyan"
+      }`}
     >
       {label}
     </button>
@@ -27,16 +34,21 @@ function ToolButton({
 
 export function CanvasToolbar({
   viewport,
+  snap,
   onAddNote,
+  onToggleSnap,
+  onExport,
 }: {
   viewport: { width: number; height: number };
+  snap: boolean;
   onAddNote: () => void;
+  onToggleSnap: () => void;
+  onExport: () => void;
 }) {
-  const { board, status, dirty, error } = useCanvasState();
+  const { board, status, dirty, error, past, future, selectedIds } = useCanvasState();
   const { dispatch } = useCanvasActions();
   const camera = board.camera;
   const center = { x: viewport.width / 2, y: viewport.height / 2 };
-
   const setCamera = (next: typeof camera) => dispatch({ type: "setCamera", camera: next });
 
   return (
@@ -45,7 +57,19 @@ export function CanvasToolbar({
         Jarvis
       </Link>
       <span className="h-4 w-px bg-white/10" />
-      <ToolButton label="Note" title="Add a note (or double-click the board)" onClick={onAddNote} />
+      <ToolButton label="Note" title="Add a note (N)" onClick={onAddNote} />
+      <ToolButton
+        label="Undo"
+        title="Undo (⌘Z)"
+        disabled={!past.length}
+        onClick={() => dispatch({ type: "undo" })}
+      />
+      <ToolButton
+        label="Redo"
+        title="Redo (⌘⇧Z)"
+        disabled={!future.length}
+        onClick={() => dispatch({ type: "redo" })}
+      />
       <span className="h-4 w-px bg-white/10" />
       <ToolButton label="−" title="Zoom out" onClick={() => setCamera(zoomAt(camera, center, camera.z / 1.25))} />
       <button
@@ -60,12 +84,31 @@ export function CanvasToolbar({
       <span className="h-4 w-px bg-white/10" />
       <ToolButton
         label="Fit"
-        title="Frame everything"
+        title="Frame everything (1)"
         onClick={() => setCamera(fitToItems(board.items, viewport.width, viewport.height))}
+      />
+      <ToolButton
+        label="Snap"
+        title="Snap to grid (G)"
+        active={snap}
+        onClick={onToggleSnap}
+      />
+      <ToolButton
+        label="Export"
+        title="Export selection or board (⌘E)"
+        disabled={!board.items.length}
+        onClick={onExport}
       />
       <span className="h-4 w-px bg-white/10" />
       <span className="px-3 text-[11px] tracking-wide text-white/25">
-        {error || (status === "loading" ? "Opening…" : dirty ? "Saving…" : "Saved")}
+        {error ||
+          (status === "loading"
+            ? "Opening…"
+            : dirty
+              ? "Saving…"
+              : selectedIds.length > 1
+                ? `${selectedIds.length} selected`
+                : "Saved")}
       </span>
     </div>
   );

@@ -4,7 +4,15 @@ export type CanvasCamera = {
   z: number;
 };
 
+export type Point = { x: number; y: number };
+
 export type NoteColor = "amber" | "cyan" | "rose" | "slate";
+
+export type StrokeColor = "cyan" | "amber" | "rose" | "slate" | "white";
+
+export type ShapeKind = "rect" | "ellipse" | "diamond";
+
+export type StrokeMode = "ink" | "line" | "arrow";
 
 export type CanvasItemBase = {
   id: string;
@@ -14,6 +22,8 @@ export type CanvasItemBase = {
   h: number;
   rotation: number;
   z: number;
+  locked?: boolean;
+  groupId?: string;
 };
 
 export type NoteItem = CanvasItemBase & {
@@ -40,12 +50,35 @@ export type PdfItem = CanvasItemBase & {
   naturalH: number;
 };
 
+export type ShapeItem = CanvasItemBase & {
+  kind: "shape";
+  shape: ShapeKind;
+  fill: StrokeColor | "none";
+  stroke: StrokeColor;
+  weight: number;
+};
+
+export type StrokeItem = CanvasItemBase & {
+  kind: "stroke";
+  mode: StrokeMode;
+  points: Point[];
+  color: StrokeColor;
+  weight: number;
+};
+
+export type TextItem = CanvasItemBase & {
+  kind: "text";
+  text: string;
+  color: StrokeColor;
+  size: number;
+};
+
 /**
  * Adding an item type means adding a member here and a renderer in
  * components/canvas/items/index.ts. Nothing else in the pipeline changes:
  * geometry lives in CanvasItemBase and the backend keeps the rest as JSON.
  */
-export type CanvasItem = NoteItem | ImageItem | PdfItem;
+export type CanvasItem = NoteItem | ImageItem | PdfItem | ShapeItem | StrokeItem | TextItem;
 
 export type CanvasItemKind = CanvasItem["kind"];
 
@@ -82,8 +115,35 @@ export const NOTE_SIZE = { w: 220, h: 220 };
 
 export const NOTE_COLORS: NoteColor[] = ["amber", "cyan", "rose", "slate"];
 
+export const STROKE_COLORS: Record<StrokeColor, string> = {
+  cyan: "#3ee0d4",
+  amber: "#f5c16c",
+  rose: "#f082a0",
+  slate: "#94b2c4",
+  white: "#d7eef2",
+};
+
+export const COLOR_KEYS = Object.keys(STROKE_COLORS) as StrokeColor[];
+
+export const GRID_SIZE = 8;
+
 /** Longest edge a dropped file gets on the board, in world units. */
 export const DROPPED_MAX_EDGE = 520;
+
+export type CanvasTool =
+  | "select"
+  | "pan"
+  | "region"
+  | "note"
+  | "text"
+  | "ink"
+  | "rect"
+  | "ellipse"
+  | "diamond"
+  | "line"
+  | "arrow";
+
+export type ItemLocalRect = { x: number; y: number; w: number; h: number };
 
 export function emptyBoard(id: string = DEFAULT_BOARD_ID): CanvasBoard {
   return {
@@ -107,4 +167,18 @@ export function fitDroppedSize(naturalW: number, naturalH: number): { w: number;
   const height = naturalH > 0 ? naturalH : DROPPED_MAX_EDGE;
   const scale = Math.min(1, DROPPED_MAX_EDGE / Math.max(width, height));
   return { w: Math.round(width * scale), h: Math.round(height * scale) };
+}
+
+/** Keep the current longest edge and adopt a new aspect ratio (width / height). */
+export function sizeForAspect(w: number, h: number, aspect: number): { w: number; h: number } {
+  const ratio = aspect > 0 ? aspect : 1;
+  const long = Math.max(w, h, 40);
+  if (ratio >= 1) {
+    return { w: Math.round(long), h: Math.max(40, Math.round(long / ratio)) };
+  }
+  return { w: Math.max(40, Math.round(long * ratio)), h: Math.round(long) };
+}
+
+export function cloneItem(item: CanvasItem, dx = 24, dy = 24): CanvasItem {
+  return { ...item, id: createId(), x: item.x + dx, y: item.y + dy, groupId: undefined };
 }
