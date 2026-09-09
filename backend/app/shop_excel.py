@@ -260,7 +260,6 @@ def efficiency_snapshot(
     """
     payload = read_sheet(path, sheet_name)
     headers = payload["headers"]
-    rows: list[dict[str, Any]] = payload["rows"]
     column = find_column(headers, list(oee_aliases))
     if column is None:
         return {
