@@ -10,6 +10,7 @@ import { ConfirmBar } from "./ConfirmBar";
 import { ConversationDock } from "./ConversationDock";
 import { DrawingViewer } from "./DrawingViewer";
 import { SceneBoard } from "./SceneBoard";
+import { CriticalStrip, deriveCritical } from "./Widgets";
 import { VoiceOrb } from "./VoiceOrb";
 import {
   conversationToAttachment,
@@ -25,6 +26,7 @@ import { Alert, HudButton, Panel, StatCard, StatusDot } from "./hud/Hud";
 
 const EMPTY_SCENE: Scene = { title: "", subtitle: null, widgets: [] };
 const ALWAYS_ON_MIC_KEY = "jarvis.alwaysOnMic";
+const IDLE_SCENE_MS = 8000;
 
 function readAlwaysOnMic(): boolean {
   if (typeof window === "undefined") return true;
@@ -83,6 +85,7 @@ export function HudShell() {
   const [dockHidden, setDockHidden] = useState(false);
   const [spawnAsk, setSpawnAsk] = useState<PendingAction | null>(null);
   const [convBusyId, setConvBusyId] = useState<string | null>(null);
+  const [dismissedCriticalId, setDismissedCriticalId] = useState<string | null>(null);
   const fileTimer = useRef<number | null>(null);
   const lastWhisper = useRef("");
   const lastWatchSpeak = useRef("");
@@ -212,6 +215,31 @@ export function HudShell() {
     voiceEnabledRef.current = prefs?.voice_enabled !== false;
     if (busy || listening || compose || pending.length || spawnAsk) idleSince.current = Date.now();
   }, [busy, listening, compose, hot, pending, spawnAsk, reply, prefs?.voice_enabled]);
+
+  useEffect(() => {
+    const occupied = busy || listening || talking || compose || hot || pending.length > 0 || Boolean(spawnAsk);
+    if (occupied) return;
+    const timer = window.setTimeout(() => {
+      if (
+        busyRef.current ||
+        listeningRef.current ||
+        composeRef.current ||
+        hotRef.current ||
+        pendingRef.current ||
+        spawnAskRef.current
+      ) {
+        return;
+      }
+      setScene((current) => {
+        if (!current?.title && !(current?.widgets || []).length) return current;
+        return EMPTY_SCENE;
+      });
+      if (!error) {
+        setReply((current) => (current ? "" : current));
+      }
+    }, IDLE_SCENE_MS);
+    return () => window.clearTimeout(timer);
+  }, [busy, listening, talking, compose, hot, pending, spawnAsk, scene, reply, error]);
 
   useEffect(() => {
     nameRef.current = prefs?.assistant_name || "Jarvis";
@@ -960,6 +988,8 @@ export function HudShell() {
 
   const mood = listening || hot ? "listen" : busy ? "think" : "idle";
   const density = prefs?.hud_density === "dense";
+  const critical = deriveCritical(conversations);
+  const showCritical = Boolean(critical && critical.sourceId !== dismissedCriticalId);
 
   return (
     <div
@@ -1030,6 +1060,14 @@ export function HudShell() {
 
       <div className="relative z-0 flex min-h-0 flex-1">
         <main className="min-h-0 min-w-0 flex-1 overflow-auto" onClick={() => setFocusedId(null)}>
+          {showCritical && critical ? (
+            <div className="px-6 pb-2 pt-1" onClick={(event) => event.stopPropagation()}>
+              <CriticalStrip
+                item={critical}
+                onDismiss={() => setDismissedCriticalId(critical.sourceId)}
+              />
+            </div>
+          ) : null}
           <SceneBoard
             scene={scene}
             dense={density}

@@ -1,8 +1,8 @@
-import type { MailAttachment, Widget } from "@/lib/types";
+import type { Conversation, MailAttachment, Widget } from "@/lib/types";
 import { isSavedLocal } from "@/lib/viewerMatch";
 import { splitMarkdownTables } from "@/lib/tables";
 import { useMemo, useState } from "react";
-import { ACCENT_SOLID_BG, ACCENT_TEXT_SOFT, type Accent, HudButton } from "./hud/Hud";
+import { ACCENT_SOLID_BG, ACCENT_TEXT, ACCENT_TEXT_SOFT, type Accent, Alert, HudButton, Panel, StatusDot } from "./hud/Hud";
 
 const ACCENT_CYCLE: Accent[] = ["cyan", "violet", "magenta", "amber"];
 
@@ -263,4 +263,113 @@ export function WidgetCard({
     default:
       return <MarkdownCard widget={widget} />;
   }
+}
+
+export type CriticalKind = "rfq" | "efficiency" | "shift";
+export type CriticalTone = "cyan" | "amber" | "red";
+
+export type CriticalItem = {
+  kind: CriticalKind;
+  title: string;
+  detail?: string;
+  tone?: CriticalTone;
+  href?: string;
+};
+
+const CRITICAL_KINDS: readonly CriticalKind[] = ["rfq", "efficiency", "shift"];
+const CRITICAL_TONES: readonly CriticalTone[] = ["cyan", "amber", "red"];
+const CRITICAL_KIND_LABEL: Record<CriticalKind, string> = {
+  rfq: "RFQ",
+  efficiency: "Efficiency",
+  shift: "Shift",
+};
+
+type ConversationLike = Partial<Pick<Conversation, "id" | "category" | "title" | "minimized">> | null | undefined;
+
+function isCriticalKind(value: string): value is CriticalKind {
+  return (CRITICAL_KINDS as readonly string[]).includes(value);
+}
+
+function isCriticalTone(value: string): value is CriticalTone {
+  return (CRITICAL_TONES as readonly string[]).includes(value);
+}
+
+function expandedDrawing(conversations: ReadonlyArray<ConversationLike> | null | undefined): { id: string; title: string } | null {
+  if (!Array.isArray(conversations)) return null;
+  for (const row of conversations) {
+    if (!row || typeof row !== "object") continue;
+    const id = typeof row.id === "string" ? row.id.trim() : "";
+    if (!id) continue;
+    const category = typeof row.category === "string" ? row.category.trim().toLowerCase() : "";
+    if (category !== "drawing") continue;
+    if (row.minimized) continue;
+    const title = typeof row.title === "string" ? row.title.trim() : "";
+    return { id, title: title || "Drawing" };
+  }
+  return null;
+}
+
+/** Local Wave-1 critical: an expanded drawing conversation is an RFQ chip. Mail scenes do not qualify. */
+export function deriveCritical(
+  conversations: ReadonlyArray<ConversationLike> | null | undefined,
+): (CriticalItem & { sourceId: string }) | null {
+  const drawing = expandedDrawing(conversations);
+  if (!drawing) return null;
+  return {
+    kind: "rfq",
+    title: drawing.title,
+    detail: "Drawing on the dock — waiting.",
+    tone: "amber",
+    sourceId: drawing.id,
+  };
+}
+
+export function CriticalStrip({
+  item,
+  onDismiss,
+}: {
+  item: CriticalItem | null | undefined;
+  onDismiss?: () => void;
+}) {
+  if (!item || typeof item !== "object") return null;
+  const kind = typeof item.kind === "string" && isCriticalKind(item.kind) ? item.kind : null;
+  if (!kind) return null;
+  const tone = typeof item.tone === "string" && isCriticalTone(item.tone) ? item.tone : "cyan";
+  const title = typeof item.title === "string" && item.title.trim() ? item.title.trim() : CRITICAL_KIND_LABEL[kind];
+  const detail = typeof item.detail === "string" && item.detail.trim() ? item.detail.trim() : "";
+  const href = typeof item.href === "string" && /^(https?:\/\/|\/|#)/.test(item.href) ? item.href : "";
+  const titleNode = href ? (
+    <a href={href} className={`${ACCENT_TEXT[tone]} underline-offset-2 hover:underline`}>
+      {title}
+    </a>
+  ) : (
+    title
+  );
+  return (
+    <Panel
+      accent={tone}
+      className="critical-strip"
+      eyebrow={
+        <span className="inline-flex items-center gap-1.5">
+          <StatusDot accent={tone} />
+          {CRITICAL_KIND_LABEL[kind]}
+        </span>
+      }
+      title={titleNode}
+      right={
+        onDismiss ? (
+          <HudButton variant="ghost" className="py-1" onClick={onDismiss} aria-label="Dismiss critical alert">
+            Dismiss
+          </HudButton>
+        ) : undefined
+      }
+      bodyClassName={detail ? "px-4 py-1.5" : "hidden"}
+    >
+      {detail ? (
+        <Alert tone={tone === "red" ? "error" : tone === "amber" ? "warn" : "info"} className="whisper py-1">
+          {detail}
+        </Alert>
+      ) : null}
+    </Panel>
+  );
 }
