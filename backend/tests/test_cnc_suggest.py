@@ -83,11 +83,10 @@ def test_length_only_facing_is_ok_without_inventing_od():
     assert result["ok"] is True, result
     nc = result["nc"]
     assert "120" in nc
-    assert "G01" in nc
-    assert "Z0.000" in nc
+    assert "no axis motion" in nc.lower() or "diameter missing" in nc.lower()
     motion = _motion_lines(nc)
-    assert all("X" not in line.upper().replace("MISSING", "") for line in motion if line.startswith(("G00", "G01")))
-    assert "no OD" in nc or "diameter missing" in nc.lower()
+    assert not any(line.startswith(("G00", "G01")) for line in motion)
+    assert all("X" not in line.upper() for line in motion if line.startswith(("G00", "G01", "G28")))
     job_polluted = suggest_program({"length": 120}, job={"diameter": 77, "od": 77})
     assert "X77" not in job_polluted["nc"]
     assert "77.000" not in job_polluted["nc"]
@@ -221,6 +220,14 @@ def test_flexible_keys_and_nested_dimension_list():
     assert aliases["ok"] is True
     assert "33" in aliases["nc"]
     assert "90" in aliases["nc"]
+
+
+def test_bore_not_smaller_than_od_is_flagged():
+    result = suggest_program({"diameter": 40, "length": 80, "bore": 42})
+    assert result["ok"] is True
+    assert "not smaller than OD" in result["strategy"]
+    ok_bore = suggest_program({"diameter": 40, "length": 80, "bore": 18})
+    assert "not smaller than OD" not in ok_bore["strategy"]
 
 
 def test_draft_flag_always_true():

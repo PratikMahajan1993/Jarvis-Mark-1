@@ -279,6 +279,26 @@ def test_blank_and_non_numeric_cells_ignored_not_treated_as_zero(tmp_path: Path)
     assert empty_snap["column"] == "OEE"
 
 
+def test_negative_oee_ignored_not_treated_as_zero(tmp_path: Path):
+    path = _save_workbook(
+        tmp_path / "neg-oee.xlsx",
+        {
+            "Production": [
+                ["Machine", "OEE"],
+                ["CNC-1", 90],
+                ["CNC-2", -5],
+                ["CNC-3", 80],
+            ]
+        },
+    )
+    snap = efficiency_snapshot(path, "Production")
+    assert snap["sample_size"] == 2
+    assert snap["oee_percent"] == pytest.approx((90 + 80) / 2)
+    labels = [item["label"] for item in snap["bottlenecks"]]
+    assert labels == ["CNC-3"]
+    assert "CNC-2" not in labels
+
+
 def test_efficiency_alias_column_and_operation_label(tmp_path: Path):
     path = _save_workbook(
         tmp_path / "alias.xlsx",

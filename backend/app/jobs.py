@@ -71,7 +71,10 @@ def _tokens(text: str) -> set[str]:
 def _as_float(value: Any) -> float | None:
     if value is None or value == "":
         return None
-    return float(value)
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _job_row(row: Any) -> Job:
@@ -91,13 +94,16 @@ def _job_row(row: Any) -> Job:
 
 
 def _pack_json(value: Any, default: Any) -> str:
+    """Store native objects as JSON text. Strings are parsed, then re-dumped."""
     if value is None:
         return json.dumps(default)
     if isinstance(value, str):
         if not value.strip():
             return json.dumps(default)
-        json.loads(value)
-        return value
+        try:
+            value = json.loads(value)
+        except json.JSONDecodeError as exc:
+            raise ValueError("RFQ JSON is not valid") from exc
     return json.dumps(value)
 
 
@@ -186,7 +192,8 @@ def seed_demo_job() -> Job | None:
                 now,
             ),
         )
-    return get_job(DEMO_JOB_ID)
+        row = conn.execute("SELECT * FROM jobs WHERE id = ?", (DEMO_JOB_ID,)).fetchone()
+    return _job_row(row) if row else None
 
 
 def create_job(
@@ -225,10 +232,10 @@ def create_job(
                 now,
             ),
         )
-    found = get_job(new_id)
-    if not found:
+        row = conn.execute("SELECT * FROM jobs WHERE id = ?", (new_id,)).fetchone()
+    if not row:
         raise RuntimeError(f"Failed to read job {new_id} after insert")
-    return found
+    return _job_row(row)
 
 
 def get_job(job_id: str) -> Job | None:
@@ -310,10 +317,10 @@ def create_rfq(
                 now,
             ),
         )
-    found = get_rfq(new_id)
-    if not found:
+        row = conn.execute("SELECT * FROM rfqs WHERE id = ?", (new_id,)).fetchone()
+    if not row:
         raise RuntimeError(f"Failed to read RFQ {new_id} after insert")
-    return found
+    return _rfq_row(row)
 
 
 def get_rfq(rfq_id: str) -> Rfq | None:
@@ -339,30 +346,31 @@ def list_rfqs(status: str | None = None) -> list[Rfq]:
 
 
 def update_rfq(rfq_id: str, **fields: Any) -> Rfq | None:
-    current = get_rfq(rfq_id)
-    if not current:
-        return None
     unknown = sorted(key for key in fields if key not in _RFQ_UPDATE_FIELDS)
     if unknown:
         raise ValueError(f"Unknown RFQ field(s): {', '.join(unknown)}")
     if "status" in fields:
         fields = {**fields, "status": _validate_status(fields["status"])}
-    payload = {
-        "mail_id": fields["mail_id"] if "mail_id" in fields else current["mail_id"],
-        "conversation_id": fields["conversation_id"] if "conversation_id" in fields else current["conversation_id"],
-        "status": fields["status"] if "status" in fields else current["status"],
-        "extract": _pack_json(fields["extract"], {}) if "extract" in fields else json.dumps(current["extract"]),
-        "similar_job_ids": (
-            _pack_json(fields["similar_job_ids"], [])
-            if "similar_job_ids" in fields
-            else json.dumps(current["similar_job_ids"])
-        ),
-        "pending_reply": fields["pending_reply"] if "pending_reply" in fields else current["pending_reply"],
-        "deadline_iso": fields["deadline_iso"] if "deadline_iso" in fields else current["deadline_iso"],
-        "updated_at": db.utc_now(),
-        "id": rfq_id,
-    }
     with db.connect() as conn:
+        row = conn.execute("SELECT * FROM rfqs WHERE id = ?", (rfq_id,)).fetchone()
+        if not row:
+            return None
+        current = _rfq_row(row)
+        payload = {
+            "mail_id": fields["mail_id"] if "mail_id" in fields else current["mail_id"],
+            "conversation_id": fields["conversation_id"] if "conversation_id" in fields else current["conversation_id"],
+            "status": fields["status"] if "status" in fields else current["status"],
+            "extract": _pack_json(fields["extract"], {}) if "extract" in fields else json.dumps(current["extract"]),
+            "similar_job_ids": (
+                _pack_json(fields["similar_job_ids"], [])
+                if "similar_job_ids" in fields
+                else json.dumps(current["similar_job_ids"])
+            ),
+            "pending_reply": fields["pending_reply"] if "pending_reply" in fields else current["pending_reply"],
+            "deadline_iso": fields["deadline_iso"] if "deadline_iso" in fields else current["deadline_iso"],
+            "updated_at": db.utc_now(),
+            "id": rfq_id,
+        }
         conn.execute(
             """
             UPDATE rfqs
@@ -378,4 +386,5 @@ def update_rfq(rfq_id: str, **fields: Any) -> Rfq | None:
             """,
             payload,
         )
-    return get_rfq(rfq_id)
+        row = conn.execute("SELECT * FROM rfqs WHERE id = ?", (rfq_id,)).fetchone()
+    return _rfq_row(row) if row else None

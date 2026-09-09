@@ -294,8 +294,13 @@ function isCriticalTone(value: string): value is CriticalTone {
   return (CRITICAL_TONES as readonly string[]).includes(value);
 }
 
-function expandedDrawing(conversations: ReadonlyArray<ConversationLike> | null | undefined): { id: string; title: string } | null {
+function expandedDrawing(
+  conversations: ReadonlyArray<ConversationLike> | null | undefined,
+  preferredId?: string | null,
+): { id: string; title: string } | null {
   if (!Array.isArray(conversations)) return null;
+  const want = typeof preferredId === "string" ? preferredId.trim() : "";
+  let fallback: { id: string; title: string } | null = null;
   for (const row of conversations) {
     if (!row || typeof row !== "object") continue;
     const id = typeof row.id === "string" ? row.id.trim() : "";
@@ -304,16 +309,19 @@ function expandedDrawing(conversations: ReadonlyArray<ConversationLike> | null |
     if (category !== "drawing") continue;
     if (row.minimized) continue;
     const title = typeof row.title === "string" ? row.title.trim() : "";
-    return { id, title: title || "Drawing" };
+    const hit = { id, title: title || "Drawing" };
+    if (want && id === want) return hit;
+    if (!fallback) fallback = hit;
   }
-  return null;
+  return fallback;
 }
 
 /** Local Wave-1 critical: an expanded drawing conversation is an RFQ chip. Mail scenes do not qualify. */
 export function deriveCritical(
   conversations: ReadonlyArray<ConversationLike> | null | undefined,
+  focusedId?: string | null,
 ): (CriticalItem & { sourceId: string }) | null {
-  const drawing = expandedDrawing(conversations);
+  const drawing = expandedDrawing(conversations, focusedId);
   if (!drawing) return null;
   return {
     kind: "rfq",

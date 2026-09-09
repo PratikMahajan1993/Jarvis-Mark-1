@@ -72,9 +72,7 @@ _BANNED_WORDS = re.compile(
 )
 
 # OD-only is allowed (radial pass at the face; no facing-to-length).
-# Length-only is allowed (face Z0; no OD turn). Empty / non-numeric is not.
-_OD_ONLY_OK = True
-_LENGTH_ONLY_OK = True
+# Length-only is allowed as a comment sketch — no axis motion without X.
 
 
 def suggest_program(
@@ -137,20 +135,9 @@ def _payload(*, ok: bool, strategy: str, nc: str, missing: list[str], path: str 
 
 
 def _missing_for(diameter: float | None, length: float | None) -> list[str]:
-    if diameter is not None and length is not None:
+    if diameter is not None or length is not None:
         return []
-    if diameter is not None and _OD_ONLY_OK:
-        return []
-    if length is not None and _LENGTH_ONLY_OK:
-        return []
-    missing: list[str] = []
-    if diameter is None:
-        missing.append("diameter")
-    if length is None:
-        missing.append("length")
-    if not missing:
-        missing = ["diameter", "length"]
-    return missing
+    return ["diameter", "length"]
 
 
 def _read_dims(extract: dict[str, Any]) -> dict[str, Any]:
@@ -417,6 +404,8 @@ def _build_strategy(
         parts.append(
             f"Bore {_fmt(bore, inch)} {unit} is on the extract but this draft does not add a boring cycle."
         )
+        if diameter is not None and bore >= diameter:
+            parts.append("Bore is not smaller than OD — check the extract before this draft is used.")
     if notes["cycle_min"]:
         parts.append(f"Job cycle note: {notes['cycle_min']}.")
     if notes["geometry_notes"]:
@@ -506,16 +495,13 @@ def _build_nc(
             lines.append(f"G00 X{_fmt(x_app, inch)} Z{_fmt(z_clear, inch)}")
     else:
         assert length is not None
-        lines.append("(Facing to establish Z0 — diameter missing, X not moved from drawing)")
+        lines.append("(Facing intent only — diameter missing, no axis motion without X)")
         lines.append(
             _paren(
                 f"Finished length {_fmt(length, inch)} {unit} — far end Z-{_fmt(length, inch)}, no OD turn"
             )
         )
-        lines.append(f"G00 Z{_fmt(z_clear, inch)}")
-        lines.append(_paren(f"Face to Z0, feed {_fmt(face_f, inch)} unproven"))
-        lines.append(f"G01 Z{_fmt(0.0, inch)} F{_fmt(face_f, inch)}")
-        lines.append(f"G00 Z{_fmt(z_clear, inch)}")
+        lines.append("(Set X on the machine before any facing pass)")
 
     lines.append("G28 U0 W0")
     lines.append("M05")

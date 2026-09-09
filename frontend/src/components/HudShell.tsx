@@ -115,6 +115,8 @@ export function HudShell() {
   const spawnAskRef = useRef<PendingAction | null>(null);
   const dockHiddenRef = useRef(false);
   const commandPendingRef = useRef(false);
+  const talkingRef = useRef(false);
+  const convBusyRef = useRef<string | null>(null);
 
   sceneRef.current = scene;
   viewerRef.current = viewerAttachment;
@@ -207,18 +209,22 @@ export function HudShell() {
     listeningRef.current = listening;
     composeRef.current = compose;
     hotRef.current = hot;
+    talkingRef.current = talking;
+    convBusyRef.current = convBusyId;
     pendingRef.current = pending.length > 0 || Boolean(spawnAsk);
     commandPendingRef.current = pending.length > 0;
     pendingIdRef.current = pending[0]?.id || spawnAsk?.id || pendingIdRef.current;
     if (!pending.length && !spawnAsk) pendingIdRef.current = "";
     replyRef.current = reply;
     voiceEnabledRef.current = prefs?.voice_enabled !== false;
-    if (busy || listening || compose || pending.length || spawnAsk) idleSince.current = Date.now();
-  }, [busy, listening, compose, hot, pending, spawnAsk, reply, prefs?.voice_enabled]);
+    if (busy || listening || compose || pending.length || spawnAsk || talking || convBusyId) idleSince.current = Date.now();
+  }, [busy, listening, compose, hot, pending, spawnAsk, reply, prefs?.voice_enabled, talking, convBusyId]);
 
   useEffect(() => {
-    const occupied = busy || listening || talking || compose || hot || pending.length > 0 || Boolean(spawnAsk);
-    if (occupied) return;
+    const occupied = busy || listening || talking || compose || hot || pending.length > 0 || Boolean(spawnAsk) || Boolean(convBusyId);
+    const hasBoard = Boolean(scene?.title) || (scene?.widgets || []).length > 0;
+    const hasReply = Boolean(reply) && !error;
+    if (occupied || (!hasBoard && !hasReply)) return;
     const timer = window.setTimeout(() => {
       if (
         busyRef.current ||
@@ -226,7 +232,9 @@ export function HudShell() {
         composeRef.current ||
         hotRef.current ||
         pendingRef.current ||
-        spawnAskRef.current
+        spawnAskRef.current ||
+        talkingRef.current ||
+        convBusyRef.current
       ) {
         return;
       }
@@ -239,7 +247,7 @@ export function HudShell() {
       }
     }, IDLE_SCENE_MS);
     return () => window.clearTimeout(timer);
-  }, [busy, listening, talking, compose, hot, pending, spawnAsk, scene, reply, error]);
+  }, [busy, listening, talking, compose, hot, pending, spawnAsk, convBusyId, scene, reply, error]);
 
   useEffect(() => {
     nameRef.current = prefs?.assistant_name || "Jarvis";
@@ -988,7 +996,7 @@ export function HudShell() {
 
   const mood = listening || hot ? "listen" : busy ? "think" : "idle";
   const density = prefs?.hud_density === "dense";
-  const critical = deriveCritical(conversations);
+  const critical = deriveCritical(conversations, focusedId);
   const showCritical = Boolean(critical && critical.sourceId !== dismissedCriticalId);
 
   return (

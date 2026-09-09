@@ -272,6 +272,22 @@ def test_extract_json_round_trips():
     assert json.loads(raw["similar_job_ids"]) == ["other"]
 
 
+def test_invalid_rfq_json_rejected():
+    db.init_db()
+    try:
+        jobs.create_rfq(extract="{not-json")
+        raise AssertionError("create_rfq accepted invalid JSON")
+    except ValueError as exc:
+        assert "JSON" in str(exc)
+
+
+def test_jobs_material_lower_index_exists():
+    db.init_db()
+    with db.connect() as conn:
+        names = {row["name"] for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'index'").fetchall()}
+    assert "jobs_material_lc" in names
+
+
 def test_jobs_table_uses_row_factory():
     db.init_db()
     with db.connect() as conn:
@@ -292,6 +308,8 @@ if __name__ == "__main__":
         test_rfq_crud_and_status_filter,
         test_illegal_rfq_status_rejected,
         test_extract_json_round_trips,
+        test_invalid_rfq_json_rejected,
+        test_jobs_material_lower_index_exists,
         test_jobs_table_uses_row_factory,
     ]
     for test in tests:

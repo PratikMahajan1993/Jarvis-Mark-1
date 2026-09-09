@@ -42,12 +42,12 @@ def _as_path(path: str | Path) -> Path:
     return Path(path)
 
 
-def _load(path: str | Path, *, data_only: bool = False):
+def _load(path: str | Path, *, data_only: bool = False, read_only: bool = False):
     target = _as_path(path)
     if not target.is_file():
         raise FileNotFoundError(f"Workbook not found: {target}")
     try:
-        return load_workbook(target, data_only=data_only, read_only=False)
+        return load_workbook(target, data_only=data_only, read_only=read_only)
     except (InvalidFileException, KeyError, OSError) as exc:
         raise ValueError(f"Cannot open workbook: {target}") from exc
 
@@ -96,8 +96,17 @@ def _row_is_empty(values: list[Any]) -> bool:
     return True
 
 
+def _record_from_row(headers: list[str], values: list[Any]) -> dict[str, Any]:
+    record: dict[str, Any] = {}
+    for index, header in enumerate(headers):
+        if not header or header in record:
+            continue
+        record[header] = values[index] if index < len(values) else None
+    return record
+
+
 def list_sheets(path: str | Path) -> list[str]:
-    wb = _load(path)
+    wb = _load(path, read_only=True)
     try:
         return list(wb.sheetnames)
     finally:
@@ -105,8 +114,12 @@ def list_sheets(path: str | Path) -> list[str]:
 
 
 def read_sheet(path: str | Path, sheet_name: str) -> dict[str, Any]:
-    """Read one named sheet. Raises SheetNotFoundError if the name is missing."""
-    wb = _load(path)
+    """Read one named sheet. Raises SheetNotFoundError if the name is missing.
+
+    Uses cached cell values (data_only) so formula results are read when Excel
+    has calculated them. Uncalculated formulas stay missing — never invented.
+    """
+    wb = _load(path, data_only=True, read_only=True)
     try:
         ws = _require_sheet(wb, sheet_name)
         raw: list[list[Any]] = []
@@ -120,12 +133,7 @@ def read_sheet(path: str | Path, sheet_name: str) -> dict[str, Any]:
         for values in raw[1:]:
             if _row_is_empty(values):
                 continue
-            record: dict[str, Any] = {}
-            for index, header in enumerate(headers):
-                if not header or header in record:
-                    continue
-                record[header] = values[index] if index < len(values) else None
-            rows.append(record)
+            rows.append(_record_from_row(headers, values))
         return {
             "sheet": sheet_name,
             "headers": headers,
@@ -212,7 +220,7 @@ def _to_number(value: Any) -> float | None:
         return None
     if isinstance(value, (int, float)):
         number = float(value)
-        if not math.isfinite(number):
+        if not math.isfinite(number) or number < 0:
             return None
         return number
     if isinstance(value, str):
@@ -227,7 +235,7 @@ def _to_number(value: Any) -> float | None:
             number = float(text)
         except ValueError:
             return None
-        if not math.isfinite(number):
+        if not math.isfinite(number) or number < 0:
             return None
         return number
     return None
@@ -285,12 +293,7 @@ def efficiency_snapshot(
         number = _to_number(cell)
         if number is None:
             continue
-        record = {}
-        for idx, header in enumerate(headers):
-            if not header or header in record:
-                continue
-            record[header] = values[idx] if idx < len(values) else None
-        samples.append((excel_row, record, number))
+        samples.append((excel_row, _record_from_row(headers, values), number))
 
     if not samples:
         return {

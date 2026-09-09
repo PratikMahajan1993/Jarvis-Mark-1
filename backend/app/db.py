@@ -187,6 +187,7 @@ def init_db() -> None:
                 created_at TEXT NOT NULL
             );
             CREATE INDEX IF NOT EXISTS jobs_material ON jobs (material);
+            CREATE INDEX IF NOT EXISTS jobs_material_lc ON jobs (lower(material));
             CREATE TABLE IF NOT EXISTS rfqs (
                 id TEXT PRIMARY KEY,
                 mail_id TEXT,
