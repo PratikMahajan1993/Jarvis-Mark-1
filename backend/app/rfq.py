@@ -69,6 +69,8 @@ _DRAWING_EXT = (".pdf", ".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff", ".dwg
 
 def to_public(row: jobs.Rfq) -> dict[str, Any]:
     extract = dict(row.get("extract") or {})
+    if extract.get("title"):
+        extract["title"] = _clean_part_title(str(extract.get("title") or ""))
     catch = str(extract.get("catch") or "").strip()
     similar: list[dict[str, Any]] = []
     for job_id in row.get("similar_job_ids") or []:
@@ -105,9 +107,9 @@ def get_public(rfq_id: str) -> dict[str, Any] | None:
 
 
 def glance_critical() -> dict[str, Any] | None:
-    """One RFQ chip when a reasoned/pending RFQ is waiting. Do not spam intake rows."""
+    """One RFQ chip while Shall I hold/deadline is waiting. Do not spam intake or declined rows."""
     for row in jobs.list_rfqs():
-        if row.get("status") not in {"reasoned", "pending"}:
+        if row.get("status") != "pending":
             continue
         public = to_public(row)
         catch = public.get("catch") or "Drawing RFQ is waiting."
@@ -276,13 +278,15 @@ def reason_rfq(
     assert record is not None
     pending_ids = _queue_hold(session, record, reply, deadline, who)
     updated = jobs.update_rfq(record["id"], status="pending") or record
+    public = to_public(updated)
     focus["rfq_id"] = updated["id"]
     focus["extract"] = parsed
+    focus["catch"] = catch
+    focus["similar_jobs"] = public["similar_jobs"]
     db.update_conversation(conversation_id, focus=focus, status="ready")
     from .familiarity import remember_rfq
 
     remember_rfq(session, updated["id"], conversation_id)
-    public = to_public(updated)
     speak = catch
     return {
         "speak": speak,
@@ -418,9 +422,20 @@ def _tz() -> ZoneInfo:
         return ZoneInfo("Asia/Kolkata")
 
 
+def _clean_part_title(text: str) -> str:
+    """Keep the part name. Drop title-block boilerplate (scale, sheet, material)."""
+    raw = (text or "").strip()
+    if not raw:
+        return ""
+    raw = re.split(r"\s+[—–-]\s+TITLE BLOCK\b", raw, maxsplit=1, flags=re.I)[0]
+    raw = re.split(r",\s*(?:Scale|Sheet|Material)\b", raw, maxsplit=1, flags=re.I)[0]
+    raw = re.sub(r"\btitle block\b[:\s]*", "", raw, flags=re.I)
+    return raw.strip(" —–-,:.")[:60]
+
+
 def _title_from_extract(extract: dict[str, Any]) -> str:
     for key in ("title", "part_name", "drawing", "drawing_no"):
-        text = str(extract.get(key) or "").strip()
+        text = _clean_part_title(str(extract.get(key) or ""))
         if text:
             return text
     material = str(extract.get("material") or "").strip()
@@ -529,6 +544,36 @@ def _rfq_for_conversation(conversation_id: str, mail_id: str = "") -> jobs.Rfq |
     return None
 
 
+def _rfq_gate_pendings(session_id: str, rfq_id: str) -> list[dict[str, Any]]:
+    ident = str(rfq_id or "")
+    if not ident:
+        return []
+    out: list[dict[str, Any]] = []
+    for item in db.list_pending(session_id):
+        if item.get("kind") not in {"email_send", "calendar_create"}:
+            continue
+        payload = item.get("payload") or {}
+        if str(payload.get("rfq_id") or "") == ident:
+            out.append(item)
+    return out
+
+
+def supersede_hold_pendings(session_id: str, rfq_id: str) -> None:
+    """Drop stacked Shall I gates from a prior reason of the same RFQ."""
+    for item in _rfq_gate_pendings(session_id, rfq_id):
+        db.set_pending_status(item["id"], "rejected")
+
+
+def mark_rfq_idle_if_gates_cleared(session_id: str, rfq_id: str) -> None:
+    """After the last hold/deadline is declined, stop treating the RFQ as waiting."""
+    ident = str(rfq_id or "")
+    if not ident or _rfq_gate_pendings(session_id, ident):
+        return
+    row = jobs.get_rfq(ident)
+    if row and row.get("status") == "pending":
+        jobs.update_rfq(ident, status="reasoned")
+
+
 def _queue_hold(
     session_id: str,
     record: jobs.Rfq,
@@ -538,6 +583,7 @@ def _queue_hold(
 ) -> list[str]:
     from .connectors import email as email_conn
 
+    supersede_hold_pendings(session_id, str(record.get("id") or ""))
     to_addr = _reply_address(session_id, record.get("mail_id") or "", who)
     subject = _reply_subject(record)
     mail = email_conn.get_email(record.get("mail_id") or "") if record.get("mail_id") else None
@@ -721,7 +767,7 @@ def _extract_from_grounding(grounding: str) -> dict[str, Any]:
             out["material"] = labeled.group(1).strip().rstrip(".")
     title = re.search(r"title block:\s*([^.]{3,80})", text, re.I)
     if title:
-        out["title"] = title.group(1).strip()
+        out["title"] = _clean_part_title(title.group(1))
     notes: list[str] = []
     if re.search(r"soft-?jaw", text, re.I):
         notes.append("soft-jaw hold")

@@ -291,7 +291,7 @@ const CRITICAL_KIND_LABEL: Record<CriticalKind, string> = {
   efficiency: "Efficiency",
   shift: "Shift",
 };
-const ACTIVE_RFQ = new Set(["reasoned", "pending"]);
+const ACTIVE_RFQ = new Set(["pending"]);
 
 type ConversationLike = Partial<Pick<Conversation, "id" | "category" | "title" | "minimized">> | null | undefined;
 
@@ -337,17 +337,19 @@ function fromApiCritical(item: CriticalAlert | null | undefined): DerivedCritica
 }
 
 function rfqLabel(rfq: RfqPublic): string {
-  const catchLine = typeof rfq.catch === "string" ? rfq.catch.trim() : "";
-  if (catchLine) return catchLine;
   const extract = rfq.extract && typeof rfq.extract === "object" ? rfq.extract : {};
   for (const key of ["part_name", "title", "customer"] as const) {
     const value = extract[key];
     if (typeof value === "string" && value.trim()) return value.trim();
   }
+  const catchLine = typeof rfq.catch === "string" ? rfq.catch.trim() : "";
+  if (catchLine) return catchLine.slice(0, 80);
   return "RFQ";
 }
 
 function rfqDetail(rfq: RfqPublic): string {
+  const catchLine = typeof rfq.catch === "string" ? rfq.catch.trim() : "";
+  if (catchLine) return catchLine;
   const reply = typeof rfq.pending_reply === "string" ? rfq.pending_reply.trim() : "";
   if (reply) return reply;
   const deadline = typeof rfq.deadline_iso === "string" ? rfq.deadline_iso.trim() : "";
@@ -395,7 +397,7 @@ function fromExpandedDrawing(
   };
 }
 
-/** Wave 2: glance/chat critical, then reasoned/pending RFQ, then expanded drawing. */
+/** Wave 2: glance/chat critical, then pending RFQ (Shall I waiting), then expanded drawing. */
 export function deriveCritical(
   conversations: ReadonlyArray<ConversationLike> | null | undefined,
   focusedId?: string | null,

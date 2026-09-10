@@ -157,6 +157,9 @@ def test_pending_hold_and_deadline_no_does_not_send():
         cal = next(item for item in db.list_pending("default") if item["kind"] == "calendar_create")
         resolve_pending(cal["id"], False, "default")
         assert created == []
+        idle = jobs.get_rfq(result["rfq"]["id"])
+        assert idle and idle["status"] == "reasoned"
+        assert rfq.glance_critical() is None
     finally:
         email_mod.send_email = orig_send  # type: ignore[method-assign]
         cal_mod.create_event = orig_create  # type: ignore[method-assign]
@@ -262,3 +265,44 @@ def test_get_rfqs_shape_and_glance_critical():
 
     missing = rfq.glance_critical()
     assert missing and missing["kind"] == "rfq"
+    assert "TITLE BLOCK" not in (missing.get("title") or "")
+    assert missing.get("title") == "Input pinion blank"
+
+
+def test_title_block_boilerplate_stripped():
+    piston = (
+        "Title Block: PISTON — TITLE BLOCK, Scale 1:1, Sheet 1 of 1, Material: EN8. "
+        "Views: FRONT VIEW showing a circular feature. "
+        "Notes: Do not invent dimensions. Bore shown without a readable number."
+    )
+    parsed = rfq._extract_from_grounding(piston)
+    assert parsed.get("title") == "PISTON"
+    assert parsed.get("material") == "EN8"
+    assert rfq._title_from_extract(parsed) == "PISTON"
+    fixture = rfq._extract_from_grounding(FIXTURE_GROUNDING)
+    assert fixture.get("title") == "Input pinion blank"
+
+
+def test_rereason_does_not_stack_shall_i():
+    row = _drawing()
+    first = rfq.reason_rfq(row["id"], session_id="default")
+    second = rfq.reason_rfq(row["id"], session_id="default")
+    pending = db.list_pending("default")
+    holds = [item for item in pending if item["kind"] == "email_send"]
+    cals = [item for item in pending if item["kind"] == "calendar_create"]
+    assert len(holds) == 1
+    assert len(cals) == 1
+    old_hold = db.get_pending(first["pending_ids"][0])
+    assert old_hold and old_hold["status"] == "rejected"
+    assert second["rfq"]["id"] == first["rfq"]["id"]
+    assert second["rfq"]["status"] == "pending"
+
+
+def test_reason_writes_catch_onto_drawing_focus():
+    row = _drawing()
+    rfq.reason_rfq(row["id"], session_id="default")
+    conv = db.get_conversation(row["id"])
+    assert conv
+    focus = conv.get("focus") or {}
+    assert str(focus.get("catch") or "").strip()
+    assert isinstance(focus.get("similar_jobs"), list)

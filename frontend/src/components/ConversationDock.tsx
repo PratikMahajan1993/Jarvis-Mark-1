@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { Conversation, PendingAction, Scene, Widget } from "@/lib/types";
+import type { Conversation, PendingAction, RfqPublic, Scene, Widget } from "@/lib/types";
 import { shallICopy } from "./ConfirmBar";
 import { SceneBoard } from "./SceneBoard";
 import { HudButton, Panel, StatusDot } from "./hud/Hud";
@@ -39,18 +39,25 @@ function asJobs(value: unknown): Array<Record<string, unknown>> {
   return value.filter((row): row is Record<string, unknown> => Boolean(row) && typeof row === "object");
 }
 
-function drawingRfqScene(row: Conversation): Scene {
+const EPHEMERAL_SCENE = new Set(["cancelled", "alright", "sent"]);
+
+function drawingRfqScene(row: Conversation, rfqs: ReadonlyArray<RfqPublic> = []): Scene {
   const scene = row.scene || { title: "", widgets: [] };
-  const widgets: Widget[] = [...(scene.widgets || [])];
+  const ephemeral = EPHEMERAL_SCENE.has((scene.title || "").trim().toLowerCase());
+  const dropScene = row.category === "drawing" && ephemeral;
+  const widgets: Widget[] = dropScene ? [] : [...(scene.widgets || [])];
   if (row.category !== "drawing") {
     return { title: scene.title, subtitle: scene.subtitle, widgets };
   }
   const focus = row.focus || {};
+  const extract =
+    focus.extract && typeof focus.extract === "object" ? (focus.extract as Record<string, unknown>) : {};
+  const matched = rfqs.find((item) => item.conversation_id === row.id);
   const extra = row as Conversation & { catch?: unknown; similar_jobs?: unknown };
-  const catchLine = [focus.catch, extra.catch].find((value) => typeof value === "string" && value.trim()) as
-    | string
-    | undefined;
-  const similar = asJobs(focus.similar_jobs ?? extra.similar_jobs);
+  const catchLine = [focus.catch, extra.catch, extract.catch, matched?.catch].find(
+    (value) => typeof value === "string" && value.trim(),
+  ) as string | undefined;
+  const similar = asJobs(focus.similar_jobs ?? extra.similar_jobs ?? extract.similar_jobs ?? matched?.similar_jobs);
   const hasCatch = widgets.some((widget) => {
     const label = `${widget.title || ""} ${widget.label || ""}`.toLowerCase();
     return label.includes("catch") || (catchLine && (widget.text === catchLine || String(widget.value ?? "") === catchLine));
@@ -74,14 +81,15 @@ function drawingRfqScene(row: Conversation): Scene {
     });
   }
   return {
-    title: scene.title || row.title,
-    subtitle: scene.subtitle,
+    title: dropScene ? row.title : scene.title || row.title,
+    subtitle: dropScene ? undefined : scene.subtitle,
     widgets,
   };
 }
 
 export function ConversationDock({
   conversations,
+  rfqs = [],
   focusedId,
   busyId,
   hidden,
@@ -92,6 +100,7 @@ export function ConversationDock({
   onConfirm,
 }: {
   conversations: Conversation[];
+  rfqs?: ReadonlyArray<RfqPublic>;
   focusedId: string | null;
   busyId: string | null;
   hidden?: boolean;
@@ -110,6 +119,7 @@ export function ConversationDock({
         <ConversationCard
           key={row.id}
           row={row}
+          rfqs={rfqs}
           focused={focusedId === row.id}
           busy={busyId === row.id}
           onFocus={() => onFocus(row.id)}
@@ -150,6 +160,7 @@ export function ConversationDock({
 
 function ConversationCard({
   row,
+  rfqs,
   focused,
   busy,
   onFocus,
@@ -158,6 +169,7 @@ function ConversationCard({
   onConfirm,
 }: {
   row: Conversation;
+  rfqs: ReadonlyArray<RfqPublic>;
   focused: boolean;
   busy: boolean;
   onFocus: () => void;
@@ -168,7 +180,7 @@ function ConversationCard({
   const [draft, setDraft] = useState("");
   const pending = (row.pending || [])[0] as PendingAction | undefined;
   const pendingCopy = pending ? shallICopy(pending) : null;
-  const scene = drawingRfqScene(row);
+  const scene = drawingRfqScene(row, rfqs);
   const turns = (row.turns || []).slice(-6);
   return (
     <div onClick={onFocus}>

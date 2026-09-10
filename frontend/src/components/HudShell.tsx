@@ -1110,6 +1110,7 @@ export function HudShell() {
         </main>
         <ConversationDock
           conversations={conversations}
+          rfqs={rfqs}
           focusedId={focusedId}
           busyId={convBusyId}
           hidden={dockHidden}

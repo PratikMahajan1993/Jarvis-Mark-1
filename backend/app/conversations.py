@@ -81,7 +81,15 @@ def create(
     session_id = f"conv-{conversation_id}"
     label = (title or "Conversation").strip()[:80] or "Conversation"
     kind = (category or "files").strip().lower() or "files"
-    row = db.create_conversation(conversation_id, session_id, kind, label, focus or {}, status)
+    payload = focus or {}
+    if (
+        kind == "drawing"
+        and status == "warming"
+        and str(payload.get("grounding") or "").strip()
+        and payload.get("saw_drawing")
+    ):
+        status = "ready"
+    row = db.create_conversation(conversation_id, session_id, kind, label, payload, status)
     db.add_audit(session_id, "conversation", f"Opened {label}", "ok")
     return public_row(row)
 

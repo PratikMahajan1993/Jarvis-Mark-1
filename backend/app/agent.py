@@ -1066,16 +1066,31 @@ def resolve_pending(action_id: str, approved: bool, session_id: str) -> ChatResp
         db.add_audit(session_id, action["kind"], f"Rejected {action['title']}", "rejected")
         remaining = db.thought_count(session_id)
         db.set_focus_pending(session_id, "" if remaining else None)
+        rfq_id = str((action.get("payload") or {}).get("rfq_id") or "")
+        if rfq_id and action["kind"] in {"email_send", "calendar_create"}:
+            from .rfq import mark_rfq_idle_if_gates_cleared
+
+            mark_rfq_idle_if_gates_cleared(session_id, rfq_id)
+        from .conversations import is_drawing_session
+
+        drawing = is_drawing_session(session_id)
         if action["kind"] == "cnc_promote":
             speak = "Left the draft."
         elif action["kind"] == "clarify":
             speak = "Alright."
         else:
             speak = "Cancelled."
+        if drawing:
+            scene = Scene(title="", widgets=[])
+        else:
+            scene = Scene(
+                title="Alright" if action["kind"] == "clarify" else "Cancelled",
+                widgets=[Widget(type="quote", text=action["title"])],
+            )
         return ChatResponse(
             speak=speak,
             reply=speak,
-            scene=Scene(title="Alright" if action["kind"] == "clarify" else "Cancelled", widgets=[Widget(type="quote", text=action["title"])]),
+            scene=scene,
             artifacts=_collect_artifacts(),
             pending=_pending_models(session_id),
             more=remaining,
