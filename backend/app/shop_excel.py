@@ -255,19 +255,12 @@ def _label_for_row(row: dict[str, Any], label_header: str | None, excel_row: int
     return f"row {excel_row}"
 
 
-def efficiency_snapshot(
-    path: str | Path,
-    sheet_name: str,
+def efficiency_from_payload(
+    payload: dict[str, Any],
     oee_aliases: tuple[str, ...] | list[str] = DEFAULT_OEE_ALIASES,
 ) -> dict[str, Any]:
-    """Mean OEE from a real column, or None if that column is absent.
-
-    Never fills oee_percent with a made-up number. Blank and non-numeric cells
-    are ignored (not treated as 0). Values are treated as a 0–1 ratio only when
-    every present number is <= 1; otherwise they are already percent.
-    """
-    payload = read_sheet(path, sheet_name)
-    headers = payload["headers"]
+    """Mean OEE from a table payload. Never invents a number."""
+    headers = payload.get("headers") or []
     column = find_column(headers, list(oee_aliases))
     if column is None:
         return {
@@ -324,3 +317,17 @@ def efficiency_snapshot(
         "column": column,
         "sample_size": len(samples),
     }
+
+
+def efficiency_snapshot(
+    path: str | Path,
+    sheet_name: str,
+    oee_aliases: tuple[str, ...] | list[str] = DEFAULT_OEE_ALIASES,
+) -> dict[str, Any]:
+    """Mean OEE from a real column, or None if that column is absent.
+
+    Never fills oee_percent with a made-up number. Blank and non-numeric cells
+    are ignored (not treated as 0). Values are treated as a 0–1 ratio only when
+    every present number is <= 1; otherwise they are already percent.
+    """
+    return efficiency_from_payload(read_sheet(path, sheet_name), oee_aliases)

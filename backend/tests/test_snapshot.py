@@ -37,8 +37,11 @@ def test_snapshot_kinds_skip_brain():
     assert not uses_snapshot("chat")
     assert skips_model("calendar_list")
     assert skips_model("calendar_create")
+    assert skips_model("shop_read")
+    assert skips_model("shop_write")
     assert not skips_model("mail_draft")
     assert not uses_snapshot("calendar_create")
+    assert not uses_snapshot("shop_read")
 
 
 def test_local_mail_search_does_not_need_gmail():

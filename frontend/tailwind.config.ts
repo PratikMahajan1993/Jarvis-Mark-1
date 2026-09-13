@@ -16,9 +16,9 @@ const config: Config = {
         green: "#43e0a0",
       },
       fontFamily: {
-        display: ["Rajdhani", "Segoe UI", "sans-serif"],
-        body: ["IBM Plex Sans", "Segoe UI", "sans-serif"],
-        mono: ["IBM Plex Mono", "JetBrains Mono", "monospace"],
+        display: ["Source Serif 4", "Iowan Old Style", "Charter", "Georgia", "serif"],
+        body: ["IBM Plex Sans", "Segoe UI", "system-ui", "sans-serif"],
+        mono: ["IBM Plex Mono", "JetBrains Mono", "ui-monospace", "monospace"],
       },
       boxShadow: {
         hud: "0 0 40px rgba(62, 224, 212, 0.12)",

@@ -40,7 +40,7 @@ CONFLICTS: list[tuple[str, str, tuple[str, ...], tuple[str, ...]]] = [
     ("save to Drive", "drive_upload", ("drive_upload",), ("save_mail_attachments",)),
     ("open the last email", "mail_read", ("read_email",), ("show_artifact", "create_spreadsheet")),
     ("open the spreadsheet", "sheet_open", ("show_artifact",), ("read_email", "create_spreadsheet")),
-    ("make a spreadsheet of blockers", "sheet_create", ("create_spreadsheet",), ("show_artifact", "read_email")),
+    ("make a spreadsheet of blockers", "sheet_create", ("create_spreadsheet",), ("show_artifact", "read_email", "ensure_shop_sheet")),
     ("open DPIS000377", "chat", (), ("read_email", "draft_email", "research")),
     ("view the piston PDF", "chat", (), ("read_email", "save_mail_attachments")),
     ("don't reply", "chat", (), ("draft_email", "read_email")),
@@ -53,6 +53,11 @@ CONFLICTS: list[tuple[str, str, tuple[str, ...], tuple[str, ...]]] = [
     ("write a program from scratch", "cnc_suggest", ("cnc_suggest",), ("reason_rfq", "send_email", "draft_email")),
     ("suggest G-code for this", "cnc_suggest", ("cnc_suggest",), ("reason_rfq", "send_email")),
     ("CNC program for this", "cnc_suggest", ("cnc_suggest",), ("reason_rfq",)),
+    ("what's the OEE", "shop_read", ("read_shop_sheet",), ("update_shop_sheet", "create_spreadsheet", "send_email")),
+    ("create a shop log", "shop_create", ("ensure_shop_sheet",), ("create_spreadsheet", "bind_shop_sheet")),
+    ("bind this google sheet", "shop_bind", ("bind_shop_sheet",), ("create_spreadsheet", "update_shop_sheet")),
+    ("set CNC-1 OEE to 92", "shop_write", ("update_shop_sheet",), ("read_shop_sheet", "send_email", "create_spreadsheet")),
+    ("write 88 in B2", "shop_write", ("update_shop_sheet",), ("create_spreadsheet", "draft_email")),
 ]
 
 _MAIL_OPEN = re.compile(r"\b(mail|email|e-mail|inbox|gmail|message|letter)\b", re.I)
@@ -184,7 +189,10 @@ def test_gemini_tool_config_allowlist():
 
 
 def test_heuristic_obeys_route():
+    from app import db
     from app.agent import _heuristic_tools
+
+    db.init_db()
 
     prefs = {
         "email_enabled": True,
@@ -211,6 +219,9 @@ def test_heuristic_obeys_route():
         ("treat this as an RFQ from Deepak", ["reason_rfq"]),
         ("write a program from scratch", ["cnc_suggest"]),
         ("suggest G-code for this", ["cnc_suggest"]),
+        ("what's the OEE", ["read_shop_sheet"]),
+        ("create a shop log", ["ensure_shop_sheet"]),
+        ("set CNC-1 OEE to 92", ["update_shop_sheet"]),
     )
     fails = []
     for phrase, want in checks:

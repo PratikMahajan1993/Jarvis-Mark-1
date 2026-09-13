@@ -257,6 +257,30 @@ ROUTES: dict[str, Route] = {
         job="Call cnc_suggest only. Draft a program; never send it to a machine.",
         complete="cnc_suggest",
     ),
+    "shop_bind": Route(
+        "shop_bind",
+        tools=("bind_shop_sheet",),
+        job="Call bind_shop_sheet only.",
+        complete="bind_shop_sheet",
+    ),
+    "shop_create": Route(
+        "shop_create",
+        tools=("ensure_shop_sheet",),
+        job="Call ensure_shop_sheet only.",
+        complete="ensure_shop_sheet",
+    ),
+    "shop_read": Route(
+        "shop_read",
+        tools=("read_shop_sheet",),
+        job="Call read_shop_sheet only. Do not write numbers.",
+        complete="read_shop_sheet",
+    ),
+    "shop_write": Route(
+        "shop_write",
+        tools=("update_shop_sheet",),
+        job="Call update_shop_sheet only. Never claim the sheet was saved.",
+        complete="update_shop_sheet",
+    ),
 }
 
 
@@ -377,6 +401,41 @@ def _rule_rfq(text: str, _low: str, person: str) -> Intent | None:
     return None
 
 
+_SHOP_CREATE = re.compile(
+    r"\b(?:create|make|new|start|ensure)\b.{0,48}\b(?:jarvis\s+)?shop\s+(?:log|sheet|book|spreadsheet)"
+    r"|\b(?:create|make|new|start)\b.{0,32}\bproduction\s+(?:log|sheet|book)\b",
+    re.I,
+)
+_SHOP_BIND = re.compile(
+    r"\b(?:bind|use|connect|link)\b.{0,48}\b(?:shop|production|google\s+sheet|this\s+sheet)"
+    r"|docs\.google\.com/spreadsheets/",
+    re.I,
+)
+_SHOP_WRITE = re.compile(
+    r"\b(?:set|put|write|update|change)\b.{0,48}\b(?:oee|efficiency|shop\s+(?:log|sheet)|production\s+sheet|cell\s+[A-Z]+\d+)"
+    r"|\b(?:set|put|write|update)\b.{0,24}\b[A-Z]+\d+\b.{0,16}\b(?:to|=)"
+    r"|\b(?:set|put|write|update)\s+.+\s+(?:in|into|at)\s+(?:cell\s+)?[A-Z]+\d+\b",
+    re.I,
+)
+_SHOP_READ = re.compile(
+    r"\b(?:oee|efficiency|shop log|shop sheet|production numbers|production sheet)\b"
+    r"|\bwhat(?:'s|s| is)\s+(?:the\s+)?(?:shop|oee|efficiency)\b",
+    re.I,
+)
+
+
+def _rule_shop(text: str, low: str, _person: str) -> Intent | None:
+    if _SHOP_CREATE.search(text):
+        return Intent("shop_create")
+    if _SHOP_BIND.search(text):
+        return Intent("shop_bind", query=text)
+    if _SHOP_WRITE.search(text) or _SHOP_WRITE.search(low):
+        return Intent("shop_write", query=text)
+    if _SHOP_READ.search(text) or _SHOP_READ.search(low):
+        return Intent("shop_read")
+    return None
+
+
 def _rule_draft(text: str, low: str, person: str) -> Intent | None:
     if _DRAFT.search(text):
         return Intent("mail_draft", person=person, last=_LAST.search(low) is not None)
@@ -491,6 +550,7 @@ RULES = (
     _rule_briefing,
     _rule_cnc,
     _rule_rfq,
+    _rule_shop,
     _rule_refresh,
     _rule_reply_attach,
     _rule_save,
@@ -529,6 +589,7 @@ _WORK_HINTS = (
     "enquiry", "inquiry", "quotation", "quote", "price", "prices", "meeting",
     "draft", "reply", "forward", "document", "docx", "workbook", "sheet",
     "rfq", "cnc", "g-code", "gcode", "program from scratch",
+    "oee", "shop log", "shop sheet", "production sheet", "efficiency",
 )
 
 
@@ -685,6 +746,16 @@ CASES: list[tuple[str, str]] = [
     ("suggest G-code for this", "cnc_suggest"),
     ("CNC program for this", "cnc_suggest"),
     ("suggest G-code", "cnc_suggest"),
+    ("what's the OEE", "shop_read"),
+    ("what's the shop OEE", "shop_read"),
+    ("read the shop log", "shop_read"),
+    ("bind this google sheet", "shop_bind"),
+    ("use this as the shop log https://docs.google.com/spreadsheets/d/abc123XYZ_def-456/edit", "shop_bind"),
+    ("create a shop log", "shop_create"),
+    ("make a jarvis shop log", "shop_create"),
+    ("set CNC-1 OEE to 92", "shop_write"),
+    ("write 88 in B2", "shop_write"),
+    ("update the shop sheet", "shop_write"),
     ("how are you", "chat"),
     ("thanks Jarvis", "chat"),
     ("who are you", "chat"),

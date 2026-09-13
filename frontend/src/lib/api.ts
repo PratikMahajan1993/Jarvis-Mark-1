@@ -103,7 +103,7 @@ export const api = {
   session: (sessionId = "default") =>
     json<Partial<ChatResponse>>(`/api/session?session_id=${sessionId}`),
   nextThought: (sessionId = "default") => json<ChatResponse>(`/api/thought?session_id=${sessionId}`),
-  googleStatus: () => json<{ configured: boolean; connected: boolean; calendar: boolean; calendar_list: boolean; account: string; task_to: string }>("/api/google/status"),
+  googleStatus: () => json<{ configured: boolean; connected: boolean; calendar: boolean; calendar_list: boolean; sheets?: boolean; account: string; task_to: string }>("/api/google/status"),
   googleAuthUrl: () => `${apiBase()}/api/google/auth`,
   watch: (sessionId = "default") =>
     json<{ watching: boolean; ready: boolean; status?: string; speak?: string; key?: string; scene?: ChatResponse["scene"] }>(

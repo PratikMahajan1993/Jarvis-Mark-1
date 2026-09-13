@@ -75,6 +75,9 @@ def test_yes_no_decisions():
 
 
 def test_prefs_off_blocks_mail_heuristic():
+    from app import db
+
+    db.init_db()
     off = {**PREFS_ON, "email_enabled": False}
     names = [call["name"] for call in _heuristic_tools("open Neha's last email", off, "pref-off")]
     assert "read_email" not in names
@@ -122,11 +125,14 @@ def test_toolconfig_for_other_routes():
 
 
 def test_glance_does_not_lead_with_unread_count():
+    from app import db
+
+    db.init_db()
     glance = build_glance()
     line = str(glance.get("line") or "").lower()
     whisper = str(glance.get("whisper") or "").lower()
     assert "unread" not in line
-    assert "unread" not in whisper or glance.get("key", "").startswith("gemini")
+    assert "unread" not in whisper or str(glance.get("key") or "").startswith(("gemini", "briefing"))
 
 
 def test_social_does_not_steal_work():

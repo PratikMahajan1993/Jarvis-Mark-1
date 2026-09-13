@@ -9,6 +9,11 @@ from .connectors import calendar as calendar_conn
 from .connectors import email as email_conn
 from .familiarity import display_name, first_name
 
+
+def _now():
+    return datetime.now(_tz())
+
+
 _SKIP_SUBSTR = (
     "amazon",
     "linkedin",
@@ -80,7 +85,7 @@ def _tz() -> ZoneInfo:
 
 
 def greeting_slot() -> str:
-    hour = datetime.now(_tz()).hour
+    hour = _now().hour
     if hour < 12:
         return "Morning"
     if hour < 17:
@@ -163,6 +168,20 @@ def filter_priority_mail(rows: list[dict]) -> list[dict]:
     return out
 
 
+def _shop_facts() -> dict:
+    from .shop_log import efficiency_snapshot
+
+    snap = efficiency_snapshot()
+    oee = snap.get("oee_percent")
+    return {
+        "shop_oee": oee if isinstance(oee, (int, float)) else None,
+        "shop_reason": snap.get("reason"),
+        "shop_bottlenecks": snap.get("bottlenecks") or [],
+        "shop_url": snap.get("url") or "",
+        "shop_sheet": snap.get("sheet") or "",
+    }
+
+
 def gather_briefing_facts() -> dict:
     prefs = db.get_preferences()
     unread_total = email_conn.unread_count()
@@ -177,7 +196,8 @@ def gather_briefing_facts() -> dict:
         "unread_total": unread_total,
         "priority_mail": priority_mail,
         "next_event": next_event,
-        "date_subtitle": datetime.now(_tz()).strftime("%A | %d %b %Y"),
+        "date_subtitle": _now().strftime("%A | %d %b %Y"),
+        **_shop_facts(),
     }
 
 
@@ -196,6 +216,9 @@ def briefing_notes(facts: dict) -> str:
         lines.append(f"unread_total|{total}")
     lines.append(f"slot|{facts.get('slot') or ''}")
     lines.append(f"name|{facts.get('name') or ''}")
+    oee = facts.get("shop_oee")
+    if isinstance(oee, (int, float)):
+        lines.append(f"shop_oee|{oee:.1f}")
     return "\n".join(lines)
 
 
@@ -233,6 +256,16 @@ def fallback_briefing_speak(facts: dict) -> str:
             parts.append(f"Next up: {title} at {clock}.")
         else:
             parts.append(f"Next up: {title}.")
+    oee = facts.get("shop_oee")
+    if isinstance(oee, (int, float)):
+        parts.append(f"Shop OEE is {oee:.0f} percent.")
+        labels = [
+            str(item.get("label") or "").strip()
+            for item in (facts.get("shop_bottlenecks") or [])
+            if item.get("label")
+        ]
+        if labels:
+            parts.append("Watch " + ", ".join(labels[:3]) + ".")
     return " ".join(parts)
 
 
@@ -266,11 +299,34 @@ def briefing_scene(facts: dict, speak: str) -> dict:
                 ],
             }
         )
+    oee = facts.get("shop_oee")
+    if isinstance(oee, (int, float)):
+        widgets.append(
+            {
+                "type": "kpi",
+                "label": "Shop OEE",
+                "value": f"{oee:.0f}%",
+                "hint": facts.get("shop_sheet") or "",
+            }
+        )
+        necks = facts.get("shop_bottlenecks") or []
+        if necks:
+            widgets.append(
+                {
+                    "type": "table",
+                    "title": "Below 90%",
+                    "columns": ["Machine", "OEE"],
+                    "rows": [
+                        [item.get("label") or "", f"{float(item.get('oee_percent') or 0):.0f}%"]
+                        for item in necks[:6]
+                    ],
+                }
+            )
     if speak:
         widgets.append({"type": "quote", "text": speak, "cite": "Jarvis"})
     return {
         "title": f"{facts.get('slot') or greeting_slot()} briefing",
-        "subtitle": facts.get("date_subtitle") or datetime.now(_tz()).strftime("%A | %d %b %Y"),
+        "subtitle": facts.get("date_subtitle") or _now().strftime("%A | %d %b %Y"),
         "widgets": widgets,
     }
 
@@ -330,7 +386,7 @@ def build_glance() -> dict:
             "key": watch.get("key") or f"gemini:{watch.get('status')}:{(watch.get('scene') or {}).get('subtitle')}",
             "minutes": None,
         }
-    now = datetime.now(_tz())
+    now = _now()
     upcoming = []
     for event in calendar_conn.upcoming(days=7):
         try:
@@ -340,52 +396,63 @@ def build_glance() -> dict:
             continue
         upcoming.append((start, end, event))
 
-    if not upcoming:
-        return {
-            "line": "",
-            "whisper": "",
-            "speak": "",
-            "key": "",
-            "minutes": None,
-        }
-
-    start, end, event = upcoming[0]
-    title = event["title"]
-    short = title.split("—")[0].split("-")[0].strip()
-    today = now.date()
-    if start.hour == 0 and start.minute == 0:
-        stamp = start.strftime("%a")
-    elif start.date() == today or start.date() == today + timedelta(days=1):
-        stamp = start.strftime("%H:%M")
-    else:
-        stamp = start.strftime("%a %H:%M")
-    line = f"{stamp}  {short}"
-    if start <= now <= end:
-        whisper = f"{short} is on now."
-        return {
-            "line": line,
-            "whisper": whisper,
-            "speak": whisper,
-            "key": f"{event['id']}:now",
-            "minutes": 0,
-        }
-    minutes = int((start - now).total_seconds() // 60)
-    if minutes <= 60:
-        amount = _minutes_phrase(max(minutes, 1))
-        unit = "minute" if minutes <= 1 else "minutes"
-        whisper = f"{amount} {unit} to {short}."
-        bucket = 5 if minutes <= 5 else 15 if minutes <= 15 else 30 if minutes <= 30 else 60
-        return {
-            "line": line,
-            "whisper": whisper,
-            "speak": whisper if minutes <= 30 else "",
-            "key": f"{event['id']}:{bucket}",
-            "minutes": minutes,
-        }
-    return {
-        "line": line,
+    glance = {
+        "line": "",
         "whisper": "",
         "speak": "",
-        "key": f"{event['id']}:later",
-        "minutes": minutes,
+        "key": "",
+        "minutes": None,
     }
+    if upcoming:
+        start, end, event = upcoming[0]
+        title = event["title"]
+        short = title.split("—")[0].split("-")[0].strip()
+        today = now.date()
+        if start.hour == 0 and start.minute == 0:
+            stamp = start.strftime("%a")
+        elif start.date() == today or start.date() == today + timedelta(days=1):
+            stamp = start.strftime("%H:%M")
+        else:
+            stamp = start.strftime("%a %H:%M")
+        line = f"{stamp}  {short}"
+        if start <= now <= end:
+            whisper = f"{short} is on now."
+            glance = {
+                "line": line,
+                "whisper": whisper,
+                "speak": whisper,
+                "key": f"{event['id']}:now",
+                "minutes": 0,
+            }
+        else:
+            minutes = int((start - now).total_seconds() // 60)
+            if minutes <= 60:
+                amount = _minutes_phrase(max(minutes, 1))
+                unit = "minute" if minutes <= 1 else "minutes"
+                whisper = f"{amount} {unit} to {short}."
+                bucket = 5 if minutes <= 5 else 15 if minutes <= 15 else 30 if minutes <= 30 else 60
+                glance = {
+                    "line": line,
+                    "whisper": whisper,
+                    "speak": whisper if minutes <= 30 else "",
+                    "key": f"{event['id']}:{bucket}",
+                    "minutes": minutes,
+                }
+            else:
+                glance = {
+                    "line": line,
+                    "whisper": "",
+                    "speak": "",
+                    "key": f"{event['id']}:later",
+                    "minutes": minutes,
+                }
+
+    if now.hour == 9 and now.minute < 5:
+        facts = gather_briefing_facts()
+        speak = fallback_briefing_speak(facts)
+        glance["speak"] = speak
+        glance["whisper"] = speak
+        glance["key"] = f"briefing:{now.date().isoformat()}:0900"
+        if not glance.get("line"):
+            glance["line"] = "Morning briefing"
+    return glance

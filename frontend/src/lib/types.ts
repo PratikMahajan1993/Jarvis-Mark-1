@@ -163,7 +163,7 @@ export type Health = {
   models: string[];
   model_ready?: boolean;
   provider?: string;
-  google?: { configured: boolean; connected: boolean; calendar?: boolean; account: string; task_to: string };
+  google?: { configured: boolean; connected: boolean; calendar?: boolean; calendar_list?: boolean; sheets?: boolean; account: string; task_to: string };
 };
 
 export type AuditEntry = {

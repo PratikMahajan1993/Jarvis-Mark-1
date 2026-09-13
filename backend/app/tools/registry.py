@@ -816,6 +816,47 @@ def _cnc_suggest(
     )
 
 
+def _shop_result(result: dict[str, Any]) -> dict[str, Any]:
+    return _ok(
+        result.get("data") if "data" in result else result,
+        scene=result.get("scene"),
+        pending=result.get("pending"),
+        speak=result.get("speak"),
+    )
+
+
+def _bind_shop_sheet(session_id: str, query: str = "", sheet_name: str = "", **_: Any) -> dict[str, Any]:
+    from ..shop_log import bind
+
+    return _shop_result(bind(query, sheet_name=sheet_name, session_id=session_id))
+
+
+def _ensure_shop_sheet(session_id: str, title: str = "", **_: Any) -> dict[str, Any]:
+    from ..shop_log import ensure
+
+    return _shop_result(ensure(title=title, session_id=session_id))
+
+
+def _read_shop_sheet(session_id: str, sheet_name: str = "", **_: Any) -> dict[str, Any]:
+    from ..shop_log import read_sheet
+
+    return _shop_result(read_sheet(sheet_name=sheet_name, session_id=session_id))
+
+
+def _update_shop_sheet(
+    session_id: str,
+    message: str = "",
+    updates: list[dict[str, Any]] | None = None,
+    sheet_name: str = "",
+    **_: Any,
+) -> dict[str, Any]:
+    from ..shop_log import queue_write
+
+    return _shop_result(
+        queue_write(session_id, message=message, updates=updates, sheet_name=sheet_name)
+    )
+
+
 HANDLERS.update(
     {
         "get_briefing": _get_briefing,
@@ -842,6 +883,10 @@ HANDLERS.update(
         "update_preferences": _update_preferences,
         "reason_rfq": _reason_rfq,
         "cnc_suggest": _cnc_suggest,
+        "bind_shop_sheet": _bind_shop_sheet,
+        "ensure_shop_sheet": _ensure_shop_sheet,
+        "read_shop_sheet": _read_shop_sheet,
+        "update_shop_sheet": _update_shop_sheet,
     }
 )
 
@@ -1199,6 +1244,61 @@ TOOL_SCHEMAS = [
                 "type": "object",
                 "properties": {
                     "conversation_id": {"type": "string"},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "bind_shop_sheet",
+            "description": "Bind Tony's live shop log Google Sheet by URL or workbook name.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string"},
+                    "sheet_name": {"type": "string"},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "ensure_shop_sheet",
+            "description": "Create the default Jarvis shop log spreadsheet if none is bound. Do not invent OEE numbers.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string"},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "read_shop_sheet",
+            "description": "Read the bound shop log Sheet and report real OEE only. Never invent a number.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "sheet_name": {"type": "string"},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "update_shop_sheet",
+            "description": "Queue a shop-log cell write behind Shall I. Do not claim it was saved.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "message": {"type": "string"},
+                    "sheet_name": {"type": "string"},
+                    "updates": {"type": "array"},
                 },
             },
         },

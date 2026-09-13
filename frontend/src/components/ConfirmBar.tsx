@@ -3,11 +3,17 @@ import { HudButton, Panel } from "./hud/Hud";
 
 const CNC_PROMOTE_SUMMARY =
   "This is a draft program, not proven. It is not for the machine until you say Yes.";
+const SHEETS_WRITE_SUMMARY =
+  "This overwrites production numbers in the bound Google Sheet. Google will autosave.";
 
 export function shallICopy(action: PendingAction): { title: string; summary: string } {
   if (action.kind === "cnc_promote") {
     const title = (action.title || "").trim() || "Shall I promote a draft NC?";
     return { title, summary: CNC_PROMOTE_SUMMARY };
+  }
+  if (action.kind === "sheets_write") {
+    const title = (action.title || "").trim() || "Overwrite production numbers?";
+    return { title, summary: SHEETS_WRITE_SUMMARY };
   }
   return { title: action.title, summary: action.summary };
 }

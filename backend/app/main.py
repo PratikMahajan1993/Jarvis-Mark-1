@@ -154,6 +154,10 @@ def api_glance() -> dict:
     kick_snapshot()
     payload = build_glance()
     critical = glance_critical()
+    if not critical:
+        from .shop_log import glance_efficiency_critical
+
+        critical = glance_efficiency_critical()
     if critical:
         payload["critical"] = critical
     return payload

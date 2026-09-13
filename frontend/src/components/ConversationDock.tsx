@@ -4,7 +4,7 @@ import { useState } from "react";
 import type { Conversation, PendingAction, RfqPublic, Scene, Widget } from "@/lib/types";
 import { shallICopy } from "./ConfirmBar";
 import { SceneBoard } from "./SceneBoard";
-import { HudButton, Panel, StatusDot } from "./hud/Hud";
+import { HudButton, Panel, Ring, StatusDot, type Accent } from "./hud/Hud";
 
 const LABELS: Record<string, string> = {
   drawing: "Drawings",
@@ -13,26 +13,22 @@ const LABELS: Record<string, string> = {
   files: "Files",
 };
 
-const ORDER = ["drawing", "mail", "research", "files"];
+const CATEGORY_ACCENT: Record<string, Accent> = {
+  drawing: "cyan",
+  mail: "violet",
+  research: "magenta",
+  files: "white",
+};
 
-function group(rows: Conversation[]): [string, Conversation[]][] {
-  const buckets = new Map<string, Conversation[]>();
-  for (const row of rows) {
-    const key = row.category || "files";
-    const list = buckets.get(key) || [];
-    list.push(row);
-    buckets.set(key, list);
-  }
-  const ordered: [string, Conversation[]][] = [];
-  for (const key of ORDER) {
-    const list = buckets.get(key);
-    if (list?.length) ordered.push([key, list]);
-  }
-  for (const [key, list] of buckets) {
-    if (!ORDER.includes(key)) ordered.push([key, list]);
-  }
-  return ordered;
-}
+const CORE_GLOW: Record<Accent, string> = {
+  cyan: "bg-cyan/80 shadow-[0_0_28px_rgba(62,224,212,0.35)]",
+  violet: "bg-violet/80 shadow-[0_0_28px_rgba(164,140,242,0.35)]",
+  magenta: "bg-magenta/80 shadow-[0_0_28px_rgba(232,121,249,0.35)]",
+  amber: "bg-amber/80 shadow-[0_0_28px_rgba(245,193,108,0.4)]",
+  red: "bg-red/80 shadow-[0_0_28px_rgba(248,113,113,0.35)]",
+  green: "bg-green/80 shadow-[0_0_28px_rgba(74,222,128,0.35)]",
+  white: "bg-white/50 shadow-[0_0_24px_rgba(255,255,255,0.2)]",
+};
 
 function asJobs(value: unknown): Array<Record<string, unknown>> {
   if (!Array.isArray(value)) return [];
@@ -87,6 +83,20 @@ function drawingRfqScene(row: Conversation, rfqs: ReadonlyArray<RfqPublic> = [])
   };
 }
 
+function bubbleInitials(title: string): string {
+  const parts = title
+    .trim()
+    .split(/[\s._-]+/)
+    .filter(Boolean);
+  if (!parts.length) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return `${parts[0][0] || ""}${parts[1][0] || ""}`.toUpperCase();
+}
+
+function categoryAccent(category: string): Accent {
+  return CATEGORY_ACCENT[category] || "white";
+}
+
 export function ConversationDock({
   conversations,
   rfqs = [],
@@ -111,54 +121,72 @@ export function ConversationDock({
   onConfirm: (id: string, actionId: string, approved: boolean) => void;
 }) {
   if (hidden || !conversations.length) return null;
-  const expanded = conversations.filter((row) => !row.minimized).slice(0, 2);
-  const collapsed = conversations.filter((row) => row.minimized);
+  const maximized = conversations.find((row) => !row.minimized) || null;
+
   return (
-    <aside className="pointer-events-auto relative z-10 flex w-72 shrink-0 flex-col justify-start gap-3 overflow-auto py-2 pr-3">
-      {expanded.map((row) => (
-        <ConversationCard
-          key={row.id}
-          row={row}
-          rfqs={rfqs}
-          focused={focusedId === row.id}
-          busy={busyId === row.id}
-          onFocus={() => onFocus(row.id)}
-          onMinimize={() => onMinimize(row.id)}
-          onSend={(message) => onSend(row.id, message)}
-          onConfirm={(actionId, approved) => onConfirm(row.id, actionId, approved)}
-        />
-      ))}
-      {collapsed.length ? (
-        <div className="space-y-3 overflow-auto">
-          {group(collapsed).map(([category, rows]) => (
-            <div key={category}>
-              <p className="mb-1.5 font-mono text-[10px] uppercase tracking-[0.2em] text-white/25">{LABELS[category] || category}</p>
-              <div className="flex flex-col gap-1.5">
-                {rows.map((row) => (
-                  <button
-                    key={row.id}
-                    type="button"
-                    onClick={() => onExpand(row.id)}
-                    className={`flex items-center justify-between rounded-full border px-3 py-1.5 text-left text-xs transition-colors ${
-                      focusedId === row.id ? "border-cyan/40 text-white" : "border-white/10 text-white/55 hover:text-white"
-                    }`}
-                  >
-                    <span className="truncate">{row.title}</span>
-                    {row.waiting || row.status === "warming" || busyId === row.id ? (
-                      <StatusDot accent="amber" pulse className="ml-2 shrink-0" />
-                    ) : null}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ))}
+    <>
+      {maximized ? (
+        <div
+          className="pointer-events-auto fixed inset-0 z-20 grid place-items-center bg-black/45 backdrop-blur-[2px] animate-[conv-fade_180ms_ease-out]"
+          onClick={() => onMinimize(maximized.id)}
+        >
+          <div
+            className="h-[70vh] w-[70vw] max-w-5xl animate-[conv-pop_220ms_ease-out]"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <ConversationWindow
+              row={maximized}
+              rfqs={rfqs}
+              focused={focusedId === maximized.id}
+              busy={busyId === maximized.id}
+              onFocus={() => onFocus(maximized.id)}
+              onMinimize={() => onMinimize(maximized.id)}
+              onSend={(message) => onSend(maximized.id, message)}
+              onConfirm={(actionId, approved) => onConfirm(maximized.id, actionId, approved)}
+            />
+          </div>
         </div>
       ) : null}
-    </aside>
+
+      <aside className="pointer-events-none absolute inset-y-0 right-0 z-30 flex w-28 flex-col items-end justify-start gap-3 overflow-y-auto overflow-x-visible py-3 pr-4">
+        {conversations.map((row) => {
+          const active = busyId === row.id || row.waiting || row.status === "warming";
+          const open = !row.minimized;
+          const focused = focusedId === row.id;
+          const accent = active ? "amber" : open || focused ? "cyan" : categoryAccent(row.category);
+          return (
+            <button
+              key={row.id}
+              type="button"
+              title={row.title}
+              onClick={() => (open ? onFocus(row.id) : onExpand(row.id))}
+              className="conv-bubble pointer-events-auto relative h-20 w-20 shrink-0 rounded-full border-0 bg-transparent p-0 transition-transform duration-200 hover:scale-105"
+              aria-label={`${open ? "Focus" : "Open"} ${row.title}`}
+            >
+              <Ring
+                size={80}
+                accent={accent}
+                thickness={1.5}
+                spinning={active}
+                className="pointer-events-none absolute inset-0"
+              />
+              <span className="pointer-events-none absolute inset-0 grid place-items-center">
+                <span
+                  className={`grid h-10 w-10 place-items-center rounded-full font-mono text-[11px] tracking-wide text-[#020508] ${CORE_GLOW[accent]}`}
+                >
+                  {bubbleInitials(row.title)}
+                </span>
+              </span>
+              {active ? <StatusDot accent="amber" pulse className="absolute right-1 top-1" /> : null}
+            </button>
+          );
+        })}
+      </aside>
+    </>
   );
 }
 
-function ConversationCard({
+function ConversationWindow({
   row,
   rfqs,
   focused,
@@ -181,13 +209,13 @@ function ConversationCard({
   const pending = (row.pending || [])[0] as PendingAction | undefined;
   const pendingCopy = pending ? shallICopy(pending) : null;
   const scene = drawingRfqScene(row, rfqs);
-  const turns = (row.turns || []).slice(-6);
+  const turns = (row.turns || []).slice(-12);
   return (
-    <div onClick={onFocus}>
+    <div className="flex h-full min-h-0 flex-col" onClick={onFocus}>
       <Panel
         accent={focused ? "cyan" : "white"}
-        className="flex max-h-[36vh] min-h-0 flex-col overflow-hidden"
-        bodyClassName="flex min-h-0 flex-1 flex-col p-3"
+        className="flex h-full min-h-0 flex-col overflow-hidden"
+        bodyClassName="flex min-h-0 flex-1 flex-col p-5"
         eyebrow={row.status === "warming" ? "Warming" : busy ? "Working" : LABELS[row.category] || row.category}
         title={row.title}
         right={
@@ -203,21 +231,20 @@ function ConversationCard({
           </button>
         }
       >
-        <div className="min-h-0 flex-1 space-y-2 overflow-auto text-xs text-white/55">
+        <div className="min-h-0 flex-1 space-y-3 overflow-auto text-sm text-white/60">
           {turns.map((turn, index) => (
             <p key={`${turn.role}-${index}`}>
               <span className="text-white/30">{turn.role === "user" ? "You" : "Jarvis"} · </span>
-              {String(turn.content || "").slice(0, 160)}
-              {String(turn.content || "").length > 160 ? "…" : ""}
+              {String(turn.content || "")}
             </p>
           ))}
           {scene.title || (scene.widgets || []).length ? <SceneBoard scene={scene} compact /> : null}
         </div>
         {pending && pendingCopy ? (
-          <div className="mt-2 border-l-2 border-amber/30 bg-amber/5 px-3 py-2 text-center">
-            <p className="text-xs text-white/70">Shall I? {pendingCopy.title}</p>
-            {pendingCopy.summary ? <p className="mt-1 text-[11px] text-white/40">{pendingCopy.summary}</p> : null}
-            <div className="mt-2 flex justify-center gap-3 text-xs">
+          <div className="mt-4 border-l-2 border-amber/30 bg-amber/5 px-4 py-3 text-center">
+            <p className="text-sm text-white/70">Shall I? {pendingCopy.title}</p>
+            {pendingCopy.summary ? <p className="mt-1 text-xs text-white/40">{pendingCopy.summary}</p> : null}
+            <div className="mt-3 flex justify-center gap-3 text-xs">
               <HudButton variant="ghost" className="px-3 py-1" onClick={() => onConfirm(pending.id, false)}>
                 No
               </HudButton>
@@ -232,7 +259,7 @@ function ConversationCard({
           </div>
         ) : (
           <form
-            className="mt-2"
+            className="mt-4"
             onSubmit={(event) => {
               event.preventDefault();
               const value = draft.trim();
@@ -247,7 +274,7 @@ function ConversationCard({
               onFocus={onFocus}
               placeholder={row.status === "warming" ? "Priming…" : "Speak to this"}
               disabled={busy || row.status === "warming"}
-              className="w-full bg-transparent text-center text-sm text-white outline-none placeholder:text-white/20"
+              className="w-full bg-transparent text-left font-display text-lg text-white outline-none placeholder:text-white/20"
             />
           </form>
         )}

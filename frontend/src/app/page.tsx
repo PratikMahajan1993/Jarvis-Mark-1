@@ -2,14 +2,17 @@
 
 import dynamic from "next/dynamic";
 
-const HudShell = dynamic(
-  () => import("@/components/HudShell").then((mod) => ({ default: mod.HudShell })),
+const OrchestratorShell = dynamic(
+  () =>
+    import("@/components/orchestrator/OrchestratorShell").then((mod) => ({
+      default: mod.OrchestratorShell,
+    })),
   {
     ssr: false,
-    loading: () => <div className="hud-bg relative flex h-screen flex-col overflow-hidden" />,
+    loading: () => <div className="orch-root relative h-screen overflow-hidden" />,
   },
 );
 
 export default function HomePage() {
-  return <HudShell />;
+  return <OrchestratorShell />;
 }

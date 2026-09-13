@@ -19,7 +19,7 @@ export function Composer({ onSubmit, onFocusChange, busy }: Props) {
   };
 
   return (
-    <form onSubmit={submit} className="hud-panel hud-accent-cyan w-full max-w-2xl px-5 py-2.5">
+    <form onSubmit={submit} className="hud-panel hud-accent-cyan w-full px-4 py-2">
       <div className="flex items-center gap-3">
         <span className={`font-mono text-sm ${focused ? "text-cyan" : "text-cyan/40"}`}>&gt;</span>
         <input
@@ -41,7 +41,7 @@ export function Composer({ onSubmit, onFocusChange, busy }: Props) {
             setFocused(false);
             onFocusChange?.(false);
           }}
-          className="w-full bg-transparent text-center font-display text-2xl text-white outline-none placeholder:text-white/20"
+          className="w-full bg-transparent text-left font-display text-xl text-white outline-none placeholder:text-white/20"
         />
       </div>
     </form>

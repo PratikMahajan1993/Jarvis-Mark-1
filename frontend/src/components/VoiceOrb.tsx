@@ -26,12 +26,16 @@ export function VoiceOrb({ mood, onClick }: Props) {
     <button
       type="button"
       onClick={onClick}
-      className="relative grid h-28 w-28 place-items-center rounded-full"
+      className="relative h-24 w-24 shrink-0 rounded-full border-0 bg-transparent p-0"
       aria-label={mood === "listen" ? "Stop listening" : "Speak to Jarvis"}
     >
-      <Ring size={112} accent={accent} thickness={1.5} spinning={mood !== "idle"} className="absolute inset-0" />
-      {mood !== "idle" ? <span className="orb-think absolute inset-0 rounded-full border border-white/25" /> : null}
-      <span className={`orb-core relative h-10 w-10 rounded-full ${MOOD_GLOW[mood]}`} />
+      <Ring size={96} accent={accent} thickness={1.5} spinning={mood !== "idle"} className="pointer-events-none absolute inset-0" />
+      {mood !== "idle" ? (
+        <span className="orb-think pointer-events-none absolute inset-0 rounded-full border border-white/25" />
+      ) : null}
+      <span className="pointer-events-none absolute inset-0 grid place-items-center">
+        <span className={`orb-core h-9 w-9 rounded-full ${MOOD_GLOW[mood]}`} />
+      </span>
     </button>
   );
 }

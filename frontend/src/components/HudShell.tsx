@@ -210,6 +210,23 @@ export function HudShell() {
     }
   }, []);
 
+  const expandConversation = useCallback(
+    async (id: string) => {
+      setDockHidden(false);
+      setFocusedId(id);
+      const others = conversationsRef.current.filter((row) => !row.minimized && row.id !== id);
+      try {
+        await Promise.all(others.map((row) => api.patchConversation(row.id, { minimized: true })));
+        await api.patchConversation(id, { minimized: false });
+        await refreshConversations();
+      } catch {
+        /* keep HUD responsive if one patch fails */
+        await refreshConversations();
+      }
+    },
+    [refreshConversations],
+  );
+
   const refreshRfqs = useCallback(async () => {
     const listed = await api.listRfqs();
     setRfqs(listed.items || []);
@@ -527,9 +544,7 @@ export function HudShell() {
       );
     });
     if (existing) {
-      setDockHidden(false);
-      setFocusedId(existing.id);
-      void api.patchConversation(existing.id, { minimized: false }).then(() => refreshConversations());
+      void expandConversation(existing.id);
       whisper(`Viewing ${item.local_name || item.filename}.`);
       return;
     }
@@ -548,7 +563,7 @@ export function HudShell() {
       return;
     }
     whisper(`Viewing ${item.local_name || item.filename}.`);
-  }, [refreshConversations, whisper]);
+  }, [expandConversation, whisper]);
 
   const decideSpawn = useCallback(async (approved: boolean) => {
     const ask = spawnAskRef.current;
@@ -569,9 +584,7 @@ export function HudShell() {
         mime: payload.mime,
         drive_link: payload.drive_link || "",
       });
-      setDockHidden(false);
-      setFocusedId(created.id);
-      await refreshConversations();
+      await expandConversation(created.id);
       const line = created.speak || "The drawing is in focus.";
       whisper(line);
       if (voiceEnabledRef.current) speak(line, true);
@@ -581,7 +594,7 @@ export function HudShell() {
       setBusy(false);
       setConvBusyId(null);
     }
-  }, [refreshConversations, whisper]);
+  }, [expandConversation, whisper]);
 
   const runViewerVoice = useCallback(
     (text: string): boolean => {
@@ -652,11 +665,10 @@ export function HudShell() {
       return true;
     }
     setDockHidden(false);
-    void api.patchConversation(row.id, { minimized: false }).then(() => refreshConversations());
-    setFocusedId(row.id);
+    void expandConversation(row.id);
     whisper(`${row.title} is open.`);
     return true;
-  }, [refreshConversations, whisper]);
+  }, [expandConversation, refreshConversations, whisper]);
 
   const interceptMessage = useCallback(
     (text: string): boolean => {
@@ -1089,8 +1101,8 @@ export function HudShell() {
         </div>
       </header>
 
-      <div className="relative z-0 flex min-h-0 flex-1">
-        <main className="min-h-0 min-w-0 flex-1 overflow-auto" onClick={() => setFocusedId(null)}>
+      <div className="relative z-0 min-h-0 flex-1">
+        <main className="absolute inset-0 min-h-0 overflow-auto" onClick={() => setFocusedId(null)}>
           {showCritical && critical ? (
             <div className="px-6 pb-2 pt-1" onClick={(event) => event.stopPropagation()}>
               <CriticalStrip
@@ -1120,53 +1132,53 @@ export function HudShell() {
             if (focusedId === id) setFocusedId(null);
           }}
           onExpand={(id) => {
-            setDockHidden(false);
-            setFocusedId(id);
-            void api.patchConversation(id, { minimized: false }).then(() => refreshConversations());
+            void expandConversation(id);
           }}
           onSend={(id, message) => void sendToConversation(id, message)}
           onConfirm={(id, actionId, approved) => void confirmConversation(id, actionId, approved)}
         />
       </div>
 
-      <footer className="relative z-10 flex shrink-0 flex-col items-center gap-3 border-t border-white/5 bg-[#020508] px-6 pb-8 pt-4">
-        {error || reply ? (
-          <Alert
-            tone={error ? "error" : listening ? "warn" : "info"}
-            className="whisper max-h-16 max-w-2xl overflow-auto text-center"
-          >
-            <span className="text-lg">{error || reply}</span>
-          </Alert>
-        ) : null}
-        {turns.length ? (
-          <p className="max-w-2xl text-center font-mono text-[11px] leading-5 text-white/25">
-            {turns.slice(-3).map((turn, index) => (
-              <span key={`${turn.role}-${index}`}>
-                {index ? " · " : ""}
-                {turn.role === "you" ? "You" : "Jarvis"}: {turn.text.slice(0, 72)}
-                {turn.text.length > 72 ? "…" : ""}
-              </span>
-            ))}
-          </p>
-        ) : null}
-        {focusedId ? (
-          <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-cyan/40">
-            {conversations.find((row) => row.id === focusedId)?.title || "Conversation"} in focus
-          </p>
-        ) : null}
-        <Composer
-          onSubmit={(value) => void send(value)}
-          onFocusChange={setCompose}
-          busy={busy}
-        />
-        <div onMouseEnter={() => artifacts.length && setShowFiles(true)}>
-          <VoiceOrb mood={mood} onClick={startListen} />
-        </div>
-        {showFiles ? (
-          <div className="w-full max-w-3xl" onMouseLeave={() => setShowFiles(false)}>
-            <ArtifactTray items={artifacts} />
+      <footer className="relative z-10 flex w-full max-w-xl shrink-0 flex-col items-start gap-2 self-start border-t border-white/5 bg-[#020508]/50 px-6 pb-5 pt-3">
+        <div className="flex w-full flex-col items-start gap-2">
+          {error || reply ? (
+            <Alert
+              tone={error ? "error" : listening ? "warn" : "info"}
+              className="whisper max-h-16 w-full overflow-auto text-left"
+            >
+              <span className="text-base">{error || reply}</span>
+            </Alert>
+          ) : null}
+          {turns.length ? (
+            <p className="w-full text-left font-mono text-[11px] leading-5 text-white/25">
+              {turns.slice(-3).map((turn, index) => (
+                <span key={`${turn.role}-${index}`}>
+                  {index ? " · " : ""}
+                  {turn.role === "you" ? "You" : "Jarvis"}: {turn.text.slice(0, 72)}
+                  {turn.text.length > 72 ? "…" : ""}
+                </span>
+              ))}
+            </p>
+          ) : null}
+          {focusedId ? (
+            <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-cyan/40">
+              {conversations.find((row) => row.id === focusedId)?.title || "Conversation"} in focus
+            </p>
+          ) : null}
+          <Composer
+            onSubmit={(value) => void send(value)}
+            onFocusChange={setCompose}
+            busy={busy}
+          />
+          <div onMouseEnter={() => artifacts.length && setShowFiles(true)}>
+            <VoiceOrb mood={mood} onClick={startListen} />
           </div>
-        ) : null}
+          {showFiles ? (
+            <div className="w-full" onMouseLeave={() => setShowFiles(false)}>
+              <ArtifactTray items={artifacts} />
+            </div>
+          ) : null}
+        </div>
       </footer>
 
       {dragging ? (
@@ -1241,6 +1253,7 @@ function GoogleConnect() {
     connected: boolean;
     calendar?: boolean;
     calendar_list?: boolean;
+    sheets?: boolean;
     account: string;
   } | null>(null);
   useEffect(() => {
@@ -1249,12 +1262,18 @@ function GoogleConnect() {
   if (!status) return null;
   const calendarOn = Boolean(status.calendar);
   const allCalendars = Boolean(status.calendar_list);
+  const sheetsOn = Boolean(status.sheets);
+  const extras = [
+    calendarOn ? "Calendar on" : status.connected ? "Calendar needs reconnect" : "",
+    status.connected && calendarOn && !allCalendars ? "primary only" : "",
+    status.connected ? (sheetsOn ? "Sheets on" : "Sheets needs reconnect") : "",
+  ].filter(Boolean);
   return (
     <div className="border-t border-white/10 pt-4 text-sm text-white/50">
       <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-cyan/60">Google</p>
       <p className="mt-1 text-white/70">
         {status.connected
-          ? `Connected as ${status.account}${calendarOn ? " · Calendar on" : " · Calendar needs reconnect"}${calendarOn && !allCalendars ? " · primary only" : ""}`
+          ? `Connected as ${status.account}${extras.length ? ` · ${extras.join(" · ")}` : ""}`
           : status.configured
             ? "Not connected"
             : "Add Google client keys to .env"}
@@ -1273,6 +1292,11 @@ function GoogleConnect() {
         {status.connected && calendarOn && !allCalendars ? (
           <HudButton variant="ghost" onClick={() => { window.location.href = api.googleAuthUrl(); }}>
             Allow all calendars
+          </HudButton>
+        ) : null}
+        {status.connected && !sheetsOn ? (
+          <HudButton variant="primary" onClick={() => { window.location.href = api.googleAuthUrl(); }}>
+            Add Sheets
           </HudButton>
         ) : null}
       </div>

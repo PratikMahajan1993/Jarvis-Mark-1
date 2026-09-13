@@ -629,6 +629,14 @@ def _heuristic_tools(
         calls.append({"name": "reason_rfq", "arguments": {"message": message}})
     if intent.kind == "cnc_suggest":
         calls.append({"name": "cnc_suggest", "arguments": {}})
+    if intent.kind == "shop_bind":
+        calls.append({"name": "bind_shop_sheet", "arguments": {"query": message}})
+    if intent.kind == "shop_create":
+        calls.append({"name": "ensure_shop_sheet", "arguments": {}})
+    if intent.kind == "shop_read":
+        calls.append({"name": "read_shop_sheet", "arguments": {}})
+    if intent.kind == "shop_write":
+        calls.append({"name": "update_shop_sheet", "arguments": {"message": message}})
 
     seen = set()
     unique = []
@@ -803,7 +811,7 @@ def next_thought(session_id: str = "default") -> ChatResponse:
 
 
 def _skip_brain(kind: str, message: str) -> bool:
-    if kind in {"calendar_create", "calendar_list", "rfq_reason", "cnc_suggest"}:
+    if kind in {"calendar_create", "calendar_list", "rfq_reason", "cnc_suggest", "shop_bind", "shop_create", "shop_read", "shop_write"}:
         return True
     return uses_snapshot(kind) and snapshot_ready() and not wants_fresh(message)
 
@@ -1006,7 +1014,7 @@ def _run_agent(message: str, session_id: str = "default") -> ChatResponse:
             "artifact_id": None,
         })
 
-    if work and intent.kind not in {"rfq_reason", "cnc_suggest"}:
+    if work and intent.kind not in {"rfq_reason", "cnc_suggest", "shop_bind", "shop_create", "shop_read", "shop_write"}:
         for item in unmatched_clauses(heard, message, used_names):
             if "task_for_gemini" in used_names:
                 continue
@@ -1076,6 +1084,8 @@ def resolve_pending(action_id: str, approved: bool, session_id: str) -> ChatResp
         drawing = is_drawing_session(session_id)
         if action["kind"] == "cnc_promote":
             speak = "Left the draft."
+        elif action["kind"] == "sheets_write":
+            speak = "Left the sheet."
         elif action["kind"] == "clarify":
             speak = "Alright."
         else:
@@ -1201,6 +1211,25 @@ def resolve_pending(action_id: str, approved: bool, session_id: str) -> ChatResp
             widgets=[
                 Widget(type="quote", text=detail, cite="Jarvis"),
                 Widget(type="markdown", text="Not proven on the machine. Not emailed."),
+            ],
+        )
+    elif action["kind"] == "sheets_write":
+        from .shop_log import apply_write
+
+        try:
+            written = apply_write(payload)
+        except Exception:
+            db.set_pending_status(action_id, "rejected")
+            speak = "Google Sheets did not take it."
+            return ChatResponse(speak=speak, reply=speak, scene=_fallback_scene(speak), watching=False)
+        cells = ", ".join(str(item) for item in (written.get("updated") or []))
+        detail = "Updated the shop log."
+        scene = Scene(
+            title="Shop log updated",
+            subtitle=payload.get("title") or payload.get("sheet_name") or "",
+            widgets=[
+                Widget(type="quote", text=detail, cite="Jarvis"),
+                Widget(type="markdown", text=cells or str(payload.get("updates") or "")),
             ],
         )
     elif action["kind"] == "handoff_gemini":

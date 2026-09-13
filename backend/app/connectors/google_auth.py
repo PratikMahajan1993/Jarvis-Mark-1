@@ -15,6 +15,7 @@ DRIVE_FILE = "https://www.googleapis.com/auth/drive.file"
 CALENDAR_EVENTS = "https://www.googleapis.com/auth/calendar.events"
 CALENDAR_READONLY = "https://www.googleapis.com/auth/calendar.readonly"
 CALENDAR_FULL = "https://www.googleapis.com/auth/calendar"
+SPREADSHEETS = "https://www.googleapis.com/auth/spreadsheets"
 
 SCOPES = (
     GMAIL_SEND,
@@ -22,6 +23,7 @@ SCOPES = (
     DRIVE_FILE,
     CALENDAR_EVENTS,
     CALENDAR_READONLY,
+    SPREADSHEETS,
 )
 
 
@@ -137,6 +139,11 @@ def has_calendar_list() -> bool:
     return bool(granted & {CALENDAR_FULL, CALENDAR_READONLY})
 
 
+def has_sheets() -> bool:
+    granted = set(token_scopes())
+    return SPREADSHEETS in granted
+
+
 def credentials():
     from google.auth.transport.requests import Request
     from google.oauth2.credentials import Credentials
@@ -166,6 +173,7 @@ def status() -> dict[str, Any]:
         "connected": connected(),
         "calendar": has_calendar(),
         "calendar_list": has_calendar_list(),
+        "sheets": has_sheets(),
         "account": settings.google_account,
         "task_to": settings.gemini_task_to or settings.google_account,
     }
