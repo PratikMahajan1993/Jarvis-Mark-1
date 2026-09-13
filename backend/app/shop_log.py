@@ -437,19 +437,22 @@ def queue_write(
         str(item.get("cell") or f"r{item.get('row')}c{item.get('col')}") + f"={item.get('value')}"
         for item in cells
     )
-    pending = db.add_pending(
-        f"sheet-{db.utc_now()}",
-        session_id,
-        "sheets_write",
-        "Overwrite production numbers?",
-        summary[:180],
-        {
+    from .hermes.hitl import request_human_approval
+
+    pending = request_human_approval(
+        session_id=session_id,
+        kind="sheets_write",
+        title="Overwrite production numbers?",
+        summary=summary[:180],
+        payload={
             "spreadsheet_id": bound["spreadsheet_id"],
             "sheet_name": tab,
             "updates": cells,
             "url": bound.get("url") or "",
             "title": bound.get("title") or "",
         },
+        action_id=f"sheet-{db.utc_now()}",
+        tool_name="update_shop_sheet",
     )
     speak = "This overwrites production numbers. Shall I write it?"
     return {

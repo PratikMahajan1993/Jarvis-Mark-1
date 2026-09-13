@@ -19,9 +19,11 @@ DRAFT_TOOLS = {"draft_email", "forward_email", "reply_with_attachments", "task_f
 CONFLICTS: list[tuple[str, str, tuple[str, ...], tuple[str, ...]]] = [
     ("open Neha's last email", "mail_read", ("read_email",), ("draft_email", "search_emails", "send_email", "forward_email")),
     ("what did Deepak write", "mail_read", ("read_email",), ("draft_email", "search_emails")),
-    ("write to Deepak", "mail_draft", ("draft_email",), ("send_email", "search_emails", "research")),
-    ("reply to the last email", "mail_draft", ("draft_email",), ("send_email",)),
-    ("read the last email and reply", "mail_draft", ("draft_email",), ("send_email",)),
+    ("write an email to Deepak", "mail_draft", (), ("send_email", "search_emails", "research")),
+    ("draft an email to ops@example.com", "mail_draft", (), ("send_email",)),
+    ("reply to the last email", "mail_draft", (), ("send_email",)),
+    ("read the last email and reply", "mail_read", ("read_email",), ("send_email",)),
+    ("write to Deepak", "chat", (), ("draft_email", "send_email")),
     ("check mail from Neha", "mail_search", ("search_emails",), ("read_email", "draft_email")),
     ("show Neha's unread mail", "mail_search", ("search_emails",), ("draft_email", "read_email")),
     ("search my mail", "mail_search", ("search_emails",), ("research", "draft_email")),
@@ -128,14 +130,15 @@ def test_read_cannot_draft():
     assert route.tools == ("read_email",)
     assert "draft_email" not in route.tools
     assert planned_tools("open Neha's last email") == ("read_email",)
-    assert planned_tools("reply to Neha") == ("read_email", "draft_email")
+    assert planned_tools("reply to Neha") == ()
     assert planned_tools("how are you") == ()
 
 
 def test_write_vs_wrote():
     assert classify("what did Deepak write").kind == "mail_read"
-    assert classify("write to Deepak").kind == "mail_draft"
-    assert classify("write back to Neha").kind == "mail_draft"
+    assert classify("write to Deepak").kind == "chat"
+    assert classify("write back to Neha").kind == "chat"
+    assert classify("write an email to Deepak").kind == "mail_draft"
     assert classify("write meeting notes").kind == "doc_create"
 
 
@@ -167,16 +170,20 @@ def test_gemini_tool_config_allowlist():
         "open Neha's last email": ["read_email"],
         "check my mail": ["search_emails"],
         "search the web for Paladon": ["research"],
-        "reply to Neha": ["read_email", "draft_email"],
+        "draft an email to ops@example.com": [],
     }
     decls = TOOL_SCHEMAS
     for phrase, allowed in phrases.items():
+        tools = list(planned_tools(phrase))
+        if not tools:
+            assert allowed == []
+            continue
         body = _payload(
             [{"role": "user", "content": phrase}],
             decls,
             False,
             None,
-            list(planned_tools(phrase)),
+            tools,
         )
         cfg = body["toolConfig"]["functionCallingConfig"]
         names = [item["name"] for item in body["tools"][0]["functionDeclarations"]]

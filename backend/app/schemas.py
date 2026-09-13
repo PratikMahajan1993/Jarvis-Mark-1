@@ -57,6 +57,23 @@ class PendingAction(BaseModel):
     title: str
     summary: str
     payload: dict[str, Any]
+    agent_id: str = ""
+    tool_name: str = ""
+
+
+class ActivityEvent(BaseModel):
+    id: str = ""
+    time: str = ""
+    agent: str = ""
+    message: str = ""
+
+
+class AgentStatus(BaseModel):
+    id: str
+    code: str
+    label: str = ""
+    domain: str = ""
+    state: str = ""
 
 
 class ChatRequest(BaseModel):
@@ -97,6 +114,9 @@ class ChatResponse(BaseModel):
     more: int = 0
     watching: bool = False
     critical: dict[str, Any] | None = None
+    activity: list[ActivityEvent] = Field(default_factory=list)
+    agents: list[AgentStatus] = Field(default_factory=list)
+    wake_reason: str | None = None
 
 
 class ConversationCreate(BaseModel):
@@ -122,6 +142,13 @@ class ConfirmRequest(BaseModel):
     action_id: str
     approved: bool
     session_id: str = "default"
+
+
+class ComposeUpdateRequest(BaseModel):
+    session_id: str = "default"
+    to: str | None = None
+    subject: str | None = None
+    body: str | None = None
 
 
 class Preferences(BaseModel):

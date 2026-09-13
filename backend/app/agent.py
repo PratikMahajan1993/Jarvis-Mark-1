@@ -30,12 +30,40 @@ _YES_SHORT = {
     "y", "yes", "yeah", "yep", "yup", "yea", "confirm", "send", "send it", "do it",
     "go ahead", "proceed", "affirmative", "yes please", "yes send it", "yeah do it",
     "yes do it", "go for it", "do that", "ship it", "do so", "that's a yes", "thats a yes",
+    "authorize", "authorise", "authorize it", "authorise it", "authorize to send",
+    "authorise to send", "send the email", "send the mail", "send email", "send mail",
 }
 _NO_SHORT = {
     "n", "no", "nope", "nah", "cancel", "stop", "dont", "don't", "do not", "never",
     "reject", "negative", "abort", "wait", "no thanks", "no thank you", "not now",
-    "hold on", "leave it", "later", "not yet", "hold off",
+    "hold on", "leave it", "later", "not yet", "hold off", "dont send", "don't send",
+    "do not send", "discard", "throw it away",
 }
+
+_YES_RE = re.compile(
+    r"\b(authorize|authorise|send it|send the (?:e-?mail|mail)|go ahead|ship it|yes)\b",
+    re.I,
+)
+_NO_RE = re.compile(
+    r"\b(reject|cancel|don'?t send|do not send|discard|nope|nah|abort)\b|\bno\b",
+    re.I,
+)
+
+_EMAIL_RE = re.compile(
+    r"\b([A-Za-z0-9._%+-]+@(?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,}|"
+    r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+,[A-Za-z]{2,})\b"
+)
+_DRAFT_REVISE_RE = re.compile(
+    r"\b(shorter|brief|concise|tighten|rewrite|trim|subject|body|edit|change|update)\b",
+    re.I,
+)
+
+
+def _extract_email_address(message: str) -> str:
+    """Pull a compose target out of free text; fix common speech/typo forms."""
+    from .mail_compose import extract_email_address
+
+    return extract_email_address(message)
 
 
 def classify_decision(text: str) -> bool | None:
@@ -44,11 +72,24 @@ def classify_decision(text: str) -> bool | None:
     if not cleaned:
         return None
     lowered = cleaned.lower().replace("'", "")
+    words = lowered.split()
     no = {item.replace("'", "") for item in _NO_SHORT}
     yes = {item.replace("'", "") for item in _YES_SHORT}
     if lowered in no:
         return False
     if lowered in yes:
+        return True
+    # Long utterances are content (body dictation), not authorize/reject —
+    # e.g. "please confirm copper prices" must not approve a draft.
+    if len(words) > 6:
+        return None
+    # Prefer reject phrases before authorize/send (e.g. "don't send")
+    if _NO_RE.search(cleaned) and not re.search(r"\b(yes|authorize|authorise)\b", cleaned, re.I):
+        if re.search(r"\bdon'?t\b|\bdo not\b|\breject\b|\bcancel\b|\bdiscard\b|\bnope\b|\bnah\b", cleaned, re.I):
+            return False
+        if re.fullmatch(r"no", lowered):
+            return False
+    if _YES_RE.search(cleaned) and not re.search(r"\bdon'?t\b|\bdo not\b|\breject\b", cleaned, re.I):
         return True
     return None
 
@@ -509,46 +550,78 @@ def _heuristic_tools(
         elif intent.kind == "mail_search":
             calls.append({"name": "search_emails", "arguments": _fill_tool_args("search_emails", {}, message, prefs, intent)})
         elif intent.kind == "mail_draft":
-            inbox = refs.get("mail")
-            if not inbox and refs.get("thread") and refs["thread"].get("id"):
-                inbox = email_conn_get(refs["thread"])
-            if not inbox and pointed:
-                inbox = email_hint()
-            if inbox:
+            # Prefer an explicit address in the user message over inbox reply context
+            raw_addr = _extract_email_address(message)
+            if raw_addr:
+                local = raw_addr.split("@", 1)[0]
+                person_name = re.sub(r"[._+-]+", " ", local).strip().title() or "there"
+                subject_match = re.search(r"\b(?:subject|about|re:?)\s+(.+)$", message, re.I)
+                saying = re.search(
+                    r"\b(?:saying|that says|that says that|to say)\s+(.+)$",
+                    message,
+                    re.I,
+                )
+                body_core = (saying.group(1).strip() if saying else "").rstrip(" .")
+                if subject_match and not saying:
+                    subject = subject_match.group(1).strip()[:80]
+                elif body_core:
+                    subject = body_core[:60]
+                else:
+                    subject = "Quick note"
+                body = f"Hi {person_name},\n\n"
+                if body_core:
+                    body += f"{body_core}.\n"
                 calls.append(
                     {
                         "name": "draft_email",
                         "arguments": {
-                            "to": inbox["sender"],
-                            "subject": f"Re: {inbox['subject']}" if not str(inbox.get("subject") or "").lower().startswith("re:") else inbox["subject"],
-                            "body": reply_draft(inbox),
-                            "in_reply_to": inbox["id"],
+                            "to": raw_addr,
+                            "subject": subject,
+                            "body": body,
                         },
                     }
                 )
             else:
-                compose_match = re.search(r"\b(?:mail|email|write to)\s+([A-Za-z][A-Za-z'-]+)\b", text)
-                person_name = (compose_match.group(1) if compose_match else intent.person) or ""
-                to_addr = ""
-                if refs.get("person") and refs["person"].get("first", "").lower() == person_name.lower():
-                    to_addr = refs["person"].get("email") or refs["person"].get("sender") or ""
-                if not to_addr and person_name:
-                    rows = email_conn_search(person_name, limit=1)
-                    if rows:
-                        to_addr = rows[0].get("sender") or ""
-                if to_addr:
-                    subject_match = re.search(r"\b(?:that|about|re:?)\s+(.+)$", message, re.I)
-                    subject = subject_match.group(1).strip()[:80] if subject_match else f"Note for {person_name}"
+                inbox = refs.get("mail")
+                if not inbox and refs.get("thread") and refs["thread"].get("id"):
+                    inbox = email_conn_get(refs["thread"])
+                if not inbox and pointed:
+                    inbox = email_hint()
+                if inbox:
                     calls.append(
                         {
                             "name": "draft_email",
                             "arguments": {
-                                "to": to_addr,
-                                "subject": subject,
-                                "body": f"Hi {person_name},\n\n",
+                                "to": inbox["sender"],
+                                "subject": f"Re: {inbox['subject']}" if not str(inbox.get("subject") or "").lower().startswith("re:") else inbox["subject"],
+                                "body": reply_draft(inbox),
+                                "in_reply_to": inbox["id"],
                             },
                         }
                     )
+                else:
+                    compose_match = re.search(r"\b(?:mail|email|write to)\s+([A-Za-z][A-Za-z'-]+)\b", text)
+                    person_name = (compose_match.group(1) if compose_match else intent.person) or ""
+                    to_addr = ""
+                    if refs.get("person") and refs["person"].get("first", "").lower() == person_name.lower():
+                        to_addr = refs["person"].get("email") or refs["person"].get("sender") or ""
+                    if not to_addr and person_name:
+                        rows = email_conn_search(person_name, limit=1)
+                        if rows:
+                            to_addr = rows[0].get("sender") or ""
+                    if to_addr:
+                        subject_match = re.search(r"\b(?:that|about|re:?)\s+(.+)$", message, re.I)
+                        subject = subject_match.group(1).strip()[:80] if subject_match else f"Note for {person_name}"
+                        calls.append(
+                            {
+                                "name": "draft_email",
+                                "arguments": {
+                                    "to": to_addr,
+                                    "subject": subject,
+                                    "body": f"Hi {person_name},\n\n",
+                                },
+                            }
+                        )
         elif intent.kind == "mail_forward":
             mail = _session_mail(refs, session_id, pointed)
             forward_match = re.search(
@@ -811,9 +884,81 @@ def next_thought(session_id: str = "default") -> ChatResponse:
 
 
 def _skip_brain(kind: str, message: str) -> bool:
-    if kind in {"calendar_create", "calendar_list", "rfq_reason", "cnc_suggest", "shop_bind", "shop_create", "shop_read", "shop_write"}:
+    if kind in {"calendar_create", "calendar_list", "rfq_reason", "cnc_suggest", "shop_bind", "shop_create", "shop_read", "shop_write", "mail_draft", "mail_forward"}:
         return True
     return uses_snapshot(kind) and snapshot_ready() and not wants_fresh(message)
+
+
+def _revise_pending_email(session_id: str, message: str, pending: dict[str, Any]) -> ChatResponse | None:
+    """Revise an awaiting email draft instead of starting a new Hermes/legacy loop."""
+    if (pending.get("kind") or "") != "email_send":
+        return None
+    if not _DRAFT_REVISE_RE.search(message or ""):
+        return None
+    payload = dict(pending.get("payload") or {})
+    to_addr = str(payload.get("to") or "")
+    subject = str(payload.get("subject") or "")
+    body = str(payload.get("body") or "")
+    if not to_addr or not body:
+        return None
+    try:
+        revised = ollama_chat(
+            [
+                {
+                    "role": "system",
+                    "content": (
+                        "You revise email drafts. Reply with JSON only: "
+                        '{"subject":"...","body":"...","speak":"one short confirmation"}'
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": (
+                        f"Operator request: {message}\n\n"
+                        f"To: {to_addr}\nSubject: {subject}\nBody:\n{body}"
+                    ),
+                },
+            ],
+            tools=None,
+            timeout=45,
+        )
+        text = (revised.get("content") or "").strip()
+        start = text.find("{")
+        end = text.rfind("}")
+        data = json.loads(text[start : end + 1]) if start >= 0 and end > start else {}
+    except Exception:
+        data = {}
+    new_subject = str(data.get("subject") or subject).strip() or subject
+    new_body = str(data.get("body") or "").strip()
+    if not new_body:
+        parts = [p.strip() for p in body.split("\n\n") if p.strip()]
+        new_body = parts[0] if parts else body[:400].rstrip()
+    payload["subject"] = new_subject
+    payload["body"] = new_body
+    db.update_pending_payload(pending["id"], payload, title=f"Send: {new_subject}", summary=f"To {to_addr}")
+    speak = str(data.get("speak") or "").strip() or f"Shortened the draft to {to_addr}. Authorize when ready."
+    db.add_message(session_id, "assistant", speak)
+    db.set_focus_pending(session_id, pending["id"])
+    action = PendingAction(
+        id=pending["id"],
+        kind=pending["kind"],
+        title=f"Send: {new_subject}",
+        summary=f"To {to_addr}",
+        payload=payload,
+        agent_id=pending.get("agent_id") or "ops",
+        tool_name=pending.get("tool_name") or "draft_email",
+    )
+    return ChatResponse(
+        speak=speak,
+        reply=speak,
+        scene=Scene(
+            title="Authorization required",
+            subtitle=action.title,
+            widgets=[Widget(type="markdown", text=f"**{new_subject}**\n\n{new_body}")],
+        ),
+        pending=[action],
+        offline=False,
+    )
 
 
 def run_agent(message: str, session_id: str = "default") -> ChatResponse:
@@ -829,6 +974,10 @@ def _run_agent(message: str, session_id: str = "default") -> ChatResponse:
     if waiting and decision is not None:
         return resolve_pending(waiting[0]["id"], decision, session_id)
 
+    from .conversations import chat_drawing, is_drawing_session
+    from .config import settings as app_settings
+    from .hermes.bridge import hermes_available, run_hermes_turn
+
     prefs = db.get_preferences()
     db.clear_thoughts(session_id)
     heard = message
@@ -836,10 +985,69 @@ def _run_agent(message: str, session_id: str = "default") -> ChatResponse:
     db.add_message(session_id, "user", message)
     if not message.strip():
         return _chat_response(session_id, speak="Yes?")
+
+    intent = classify(message)
+    if is_drawing_session(session_id) and intent.kind == "chat":
+        return chat_drawing(session_id, message)
+
+    # Fill / revise focused email compose from chat before other routing
+    if waiting:
+        from .intent import match_mail_trigger
+        from .mail_compose import merge_compose_from_message, start_email_compose
+
+        top = waiting[0]
+        if top.get("kind") == "email_compose" and match_mail_trigger(message):
+            db.set_pending_status(top["id"], "rejected")
+            db.set_focus_pending(session_id, None)
+            if prefs.get("email_enabled", True):
+                result = start_email_compose(session_id, message, intent)
+                db.add_message(session_id, "assistant", result.speak or "")
+                return result
+        merged = merge_compose_from_message(session_id, message, top)
+        if merged is not None:
+            return merged
+        revised = _revise_pending_email(session_id, message, top)
+        if revised is not None:
+            return revised
+
+    # Tight draft/reply triggers → LLM fill + compose modal (no Hermes, no instant send)
+    if intent.kind == "mail_draft" and prefs.get("email_enabled", True):
+        from .mail_compose import start_email_compose
+
+        result = start_email_compose(session_id, message, intent)
+        db.add_message(session_id, "assistant", result.speak or "")
+        return result
+
+    # Prefer Hermes for all turns (including casual). On timeout/error → Gemini legacy.
+    # mail_draft / drawing / pending authorize already returned above.
+    use_hermes = app_settings.hermes_enabled and hermes_available()
+    if use_hermes:
+        try:
+            result = run_hermes_turn(message, session_id)
+            db.add_message(session_id, "assistant", result.speak or result.reply or "")
+            db.add_audit(session_id, "hermes", (result.speak or "")[:400], "ok")
+            return result
+        except Exception as exc:
+            db.add_audit(session_id, "hermes", str(exc)[:400], "error")
+            # Fall through to Gemini / legacy agent loop
+
+    return _run_agent_legacy(message, session_id, prefs=prefs, intent=intent, heard=heard)
+
+
+def _run_agent_legacy(
+    message: str,
+    session_id: str = "default",
+    *,
+    prefs: dict[str, Any] | None = None,
+    intent: Any = None,
+    heard: str = "",
+) -> ChatResponse:
+    prefs = prefs or db.get_preferences()
+    if intent is None:
+        intent = classify(message)
     memories = db.list_memories(session_id)
     inbox = db.list_inbox_files(6)
     tools = _enabled_tools(prefs)
-    intent = classify(message)
     from .conversations import chat_drawing, is_drawing_session
 
     if is_drawing_session(session_id) and intent.kind == "chat":
@@ -1108,14 +1316,40 @@ def resolve_pending(action_id: str, approved: bool, session_id: str) -> ChatResp
 
     payload = action["payload"]
     watching = False
-    if action["kind"] == "email_send":
+    spoken_line = ""
+    if action["kind"] in {"email_send", "email_compose"}:
         from .connectors.email import send_email
 
+        to_addr = str(payload.get("to") or "").strip()
+        subject = str(payload.get("subject") or "").strip()
+        body = str(payload.get("body") or "").strip()
+        if action["kind"] == "email_compose":
+            from .mail_compose import _subject_from_body
+
+            if body and not subject:
+                subject = _subject_from_body(body)
+                payload["subject"] = subject
+            if not to_addr or not body:
+                db.set_pending_status(action_id, "pending")
+                need = []
+                if not to_addr:
+                    need.append("recipient")
+                if not body:
+                    need.append("body")
+                speak = f"I still need the {', '.join(need)} before I can send."
+                db.set_focus_pending(session_id, action_id)
+                return ChatResponse(
+                    speak=speak,
+                    reply=speak,
+                    scene=Scene(title="Draft incomplete", widgets=[]),
+                    pending=_pending_models(session_id),
+                    watching=False,
+                )
         try:
             sent = send_email(
-                payload["to"],
-                payload["subject"],
-                payload["body"],
+                to_addr,
+                subject,
+                body,
                 payload.get("source_id"),
                 payload.get("thread_id") or "",
                 attachment_paths=payload.get("attachment_paths") or None,
@@ -1124,21 +1358,27 @@ def resolve_pending(action_id: str, approved: bool, session_id: str) -> ChatResp
             db.set_pending_status(action_id, "rejected")
             speak = "Gmail did not take it."
             return ChatResponse(speak=speak, reply=speak, scene=_fallback_scene(speak), watching=False)
-        remember_person(session_id, payload["to"], sent.get("id") or payload.get("source_id"), payload.get("subject"))
-        if payload.get("watch") or payload.get("subject") == "Task for Gemini":
+        remember_person(session_id, to_addr, sent.get("id") or payload.get("source_id"), subject)
+        if payload.get("watch") or subject == "Task for Gemini":
             from .watch import start_gemini_watch
 
             start_gemini_watch(session_id, sent.get("thread_id") or "", sent.get("gmail_id") or sent.get("id") or "")
             watching = True
-            detail = "Sent the task to Gemini. I will watch the thread."
+            spoken_line = "Sent the task to Gemini. I will watch the thread."
+            detail = spoken_line
         else:
-            detail = speak_sent(payload["to"])
+            spoken_line = speak_sent(to_addr)
+            preview = re.sub(r"\s+", " ", body).strip()
+            if len(preview) > 220:
+                preview = preview[:217].rstrip() + "…"
+            detail = f"Sent to {to_addr}.\nSubject: {subject}.\n\n{preview}"
         scene = Scene(
             title="Sent",
-            subtitle=payload["subject"],
+            subtitle=subject,
             widgets=[
-                Widget(type="kpi", label="To", value=payload["to"]),
-                Widget(type="markdown", title="Message", text=payload["body"]),
+                Widget(type="kpi", label="To", value=to_addr),
+                Widget(type="kpi", label="Subject", value=subject),
+                Widget(type="markdown", title="Message", text=body),
             ],
         )
     elif action["kind"] == "email_forward":
@@ -1279,7 +1519,7 @@ def resolve_pending(action_id: str, approved: bool, session_id: str) -> ChatResp
     db.add_audit(session_id, action["kind"], detail, "approved")
     remaining = db.thought_count(session_id)
     db.set_focus_pending(session_id, "" if remaining else None)
-    speak = detail
+    speak = spoken_line or detail
     return ChatResponse(
         speak=speak,
         reply=detail,

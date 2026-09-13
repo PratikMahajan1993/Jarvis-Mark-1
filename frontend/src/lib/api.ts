@@ -100,6 +100,15 @@ export const api = {
       body: JSON.stringify(patch),
     }),
   pending: (sessionId = "default") => json<{ items: PendingAction[] }>(`/api/pending?session_id=${sessionId}`),
+  updatePending: (
+    actionId: string,
+    fields: { to?: string; subject?: string; body?: string },
+    sessionId = "default",
+  ) =>
+    json<ChatResponse>(`/api/pending/${encodeURIComponent(actionId)}/update`, {
+      method: "POST",
+      body: JSON.stringify({ session_id: sessionId, ...fields }),
+    }),
   session: (sessionId = "default") =>
     json<Partial<ChatResponse>>(`/api/session?session_id=${sessionId}`),
   nextThought: (sessionId = "default") => json<ChatResponse>(`/api/thought?session_id=${sessionId}`),

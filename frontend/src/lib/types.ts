@@ -48,6 +48,23 @@ export type PendingAction = {
   title: string;
   summary: string;
   payload: Record<string, unknown>;
+  agent_id?: string;
+  tool_name?: string;
+};
+
+export type ActivityEvent = {
+  id?: string;
+  time?: string;
+  agent?: string;
+  message?: string;
+};
+
+export type AgentStatus = {
+  id: string;
+  code: string;
+  label?: string;
+  domain?: string;
+  state?: string;
 };
 
 export type ConversationTurn = {
@@ -138,6 +155,9 @@ export type ChatResponse = {
   more?: number;
   watching?: boolean;
   critical?: CriticalAlert | null;
+  activity?: ActivityEvent[];
+  agents?: AgentStatus[];
+  wake_reason?: string | null;
 };
 
 export type Preferences = {

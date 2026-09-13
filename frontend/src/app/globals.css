@@ -201,6 +201,97 @@ body {
   100% { transform: scale(1.5); opacity: 0; }
 }
 
+/* Draft compose modal: center pop, then ease right; soft accent glow */
+.orch-compose-glow {
+  background: radial-gradient(
+    circle at center,
+    color-mix(in srgb, var(--accent) 28%, transparent) 0%,
+    color-mix(in srgb, var(--accent) 10%, transparent) 42%,
+    transparent 72%
+  );
+  filter: blur(28px);
+  opacity: 0;
+  transition:
+    opacity 500ms ease,
+    transform 700ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.orch-compose-glow-on {
+  opacity: 1;
+  animation: orch-compose-glow-pulse 2.8s ease-in-out infinite;
+}
+
+.orch-compose-glow-shift {
+  transform: translate(calc(-50% + 9vw), -50%);
+}
+
+.orch-compose-modal {
+  background: rgba(14, 14, 16, 0.82);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--accent) 12%, transparent),
+    0 28px 80px rgba(0, 0, 0, 0.72),
+    0 0 60px color-mix(in srgb, var(--accent) 18%, transparent);
+  opacity: 0;
+  transform: translate(0, 12px) scale(0.92);
+  transition:
+    opacity 420ms ease,
+    transform 700ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 500ms ease;
+}
+
+.orch-compose-modal-in {
+  opacity: 1;
+  transform: translate(0, 0) scale(1);
+}
+
+.orch-compose-modal-shift {
+  transform: translate(9vw, 0) scale(1);
+}
+
+.orch-compose-modal-out {
+  opacity: 0;
+  transform: translate(0, 10px) scale(0.94);
+}
+
+@keyframes orch-compose-glow-pulse {
+  0%,
+  100% { opacity: 0.75; filter: blur(28px); }
+  50% { opacity: 1; filter: blur(34px); }
+}
+
+.orch-sending-ring {
+  width: 52px;
+  height: 52px;
+  border-radius: 9999px;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  box-shadow: 0 0 24px color-mix(in srgb, var(--accent) 22%, transparent);
+  animation: orch-sending-spin 1.1s linear infinite;
+  position: relative;
+}
+
+.orch-sending-ring::after {
+  content: "";
+  position: absolute;
+  inset: 8px;
+  border-radius: 9999px;
+  border: 1px solid transparent;
+  border-top-color: var(--accent);
+  animation: orch-sending-spin 0.7s linear infinite reverse;
+}
+
+@keyframes orch-sending-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 900px) {
+  .orch-compose-modal-shift {
+    transform: translate(0, 0) scale(1);
+  }
+  .orch-compose-glow-shift {
+    transform: translate(-50%, -50%);
+  }
+}
+
 /* ---- Legacy HUD (canvas / lab / unused shell) ---------------------- */
 
 .hud-bg {

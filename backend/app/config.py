@@ -47,6 +47,15 @@ class Settings(BaseSettings):
     google_account: str = "pgeneration.mech@gmail.com"
     gemini_task_to: str = "pgeneration.mech@gmail.com"
     hud_url: str = "http://localhost:3000"
+    hermes_enabled: bool = False
+    hermes_bin: str = "hermes"
+    hermes_home: str = ""
+    hermes_timeout_sec: float = 30.0
+    hermes_mcp_name: str = "jarvis"
+    # Warm Hermes API server (hermes gateway). Prefer over CLI --oneshot.
+    hermes_gateway_url: str = "http://127.0.0.1:8642"
+    hermes_api_key: str = ""
+    hermes_prefer_gateway: bool = True
 
     @property
     def origin_list(self) -> list[str]:

@@ -42,7 +42,7 @@ export function ConversationRail({
             <span className="uppercase tracking-[0.05em] transition hover:text-[color:var(--fg)]">{item.title}</span>
           </button>
           {!item.minimized && item.preview ? (
-            <div className="px-4 pb-4 text-[0.85rem] leading-relaxed text-[color:var(--muted)]">
+            <div className="max-h-40 overflow-y-auto whitespace-pre-wrap break-words px-4 pb-4 text-[0.85rem] leading-relaxed text-[color:var(--muted)]">
               {item.preview}
             </div>
           ) : null}

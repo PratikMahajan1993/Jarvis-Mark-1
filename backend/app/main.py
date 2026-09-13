@@ -25,6 +25,7 @@ from .schemas import (
     CANVAS_ITEM_BASE_FIELDS,
     CanvasBoardCreate,
     CanvasBoardUpdate,
+    ComposeUpdateRequest,
     ConversationCreate,
     ConversationPatch,
     DrawingSpawn,
@@ -63,6 +64,21 @@ def startup() -> None:
     settings.exports_dir.mkdir(parents=True, exist_ok=True)
     resume_watches()
     kick_snapshot()
+    if settings.hermes_enabled:
+        try:
+            from .hermes.bridge import ensure_jarvis_mcp_registered, hermes_available
+
+            if hermes_available():
+                ensure_jarvis_mcp_registered()
+        except Exception:
+            pass
+
+
+@app.get("/api/agents")
+def api_agents() -> dict:
+    from .agents import agent_status_payload
+
+    return {"items": agent_status_payload()}
 
 
 @app.get("/api/health")
@@ -70,6 +86,22 @@ def api_health() -> dict:
     status = health()
     status["ok"] = True
     status["google"] = google_auth.status()
+    try:
+        from .hermes.bridge import hermes_available, hermes_cli_available, hermes_gateway_reachable
+
+        gateway_up = hermes_gateway_reachable()
+        status["hermes"] = {
+            "enabled": bool(settings.hermes_enabled),
+            "available": hermes_available(),
+            "bin": settings.hermes_bin,
+            "gateway_url": settings.hermes_gateway_url,
+            "gateway": gateway_up,
+            "cli": hermes_cli_available(),
+            "prefer_gateway": bool(settings.hermes_prefer_gateway),
+            "transport": "gateway" if (settings.hermes_prefer_gateway and gateway_up) else "cli",
+        }
+    except Exception:
+        status["hermes"] = {"enabled": bool(settings.hermes_enabled), "available": False}
     return status
 
 
@@ -137,6 +169,22 @@ def api_chat(payload: ChatRequest) -> dict:
 @app.post("/api/confirm")
 def api_confirm(payload: ConfirmRequest) -> dict:
     result = resolve_pending(payload.action_id, payload.approved, payload.session_id)
+    data = result.model_dump()
+    remember_hud(payload.session_id, data)
+    return data
+
+
+@app.post("/api/pending/{action_id}/update")
+def api_pending_update(action_id: str, payload: ComposeUpdateRequest) -> dict:
+    from .mail_compose import update_compose_fields
+
+    result = update_compose_fields(
+        payload.session_id,
+        action_id,
+        to_addr=payload.to,
+        subject=payload.subject,
+        body=payload.body,
+    )
     data = result.model_dump()
     remember_hud(payload.session_id, data)
     return data

@@ -13,7 +13,29 @@ from ..connectors import email as email_conn
 from ..connectors import search as search_conn
 from ..config import settings
 from ..familiarity import get_set, note_tool, speak_calendar, speak_for_tool
+from ..hermes.hitl import request_human_approval
 from . import documents
+
+
+def _queue_pending(
+    session_id: str,
+    kind: str,
+    title: str,
+    summary: str,
+    payload: dict[str, Any],
+    *,
+    action_id: str | None = None,
+    tool_name: str = "",
+) -> dict[str, Any]:
+    return request_human_approval(
+        session_id=session_id,
+        kind=kind,
+        title=title,
+        summary=summary,
+        payload=payload,
+        action_id=action_id,
+        tool_name=tool_name,
+    )
 
 
 def _briefing_payload() -> dict[str, Any]:
@@ -228,8 +250,7 @@ def _draft_email(
         "subtitle": subject,
         "widgets": widgets,
     }
-    pending = db.add_pending(
-        f"send-{draft['id']}",
+    pending = _queue_pending(
         session_id,
         "email_send",
         f"Send: {subject}",
@@ -242,6 +263,8 @@ def _draft_email(
             "thread_id": thread_id,
             "attachment_paths": paths,
         },
+        action_id=f"send-{draft['id']}",
+        tool_name="draft_email",
     )
     return _ok(draft, scene=scene, pending=pending)
 
@@ -269,8 +292,7 @@ def _forward_email(
     subject = mail.get("subject") or ""
     if not subject.lower().startswith("fwd:"):
         subject = f"Fwd: {subject}".strip()
-    pending = db.add_pending(
-        f"fwd-{mail.get('id')}-{db.utc_now()}",
+    pending = _queue_pending(
         session_id,
         "email_forward",
         f"Forward: {subject}",
@@ -281,6 +303,8 @@ def _forward_email(
             "subject": subject,
             "note": forward_note,
         },
+        action_id=f"fwd-{mail.get('id')}-{db.utc_now()}",
+        tool_name="forward_email",
     )
     scene = {
         "title": "Forward ready",
@@ -302,13 +326,14 @@ def _send_email(
     in_reply_to: str = "",
     **_: Any,
 ) -> dict[str, Any]:
-    pending = db.add_pending(
-        f"send-{db.utc_now()}",
+    pending = _queue_pending(
         session_id,
         "email_send",
         f"Send: {subject}",
         f"To {to}",
         {"to": to, "subject": subject, "body": body, "source_id": in_reply_to},
+        action_id=f"send-{db.utc_now()}",
+        tool_name="send_email",
     )
     return _ok({"queued": True}, pending=pending)
 
@@ -377,8 +402,7 @@ def _create_calendar_event(
     notes: str = "",
     **_: Any,
 ) -> dict[str, Any]:
-    pending = db.add_pending(
-        f"cal-{title[:12]}-{db.utc_now()}",
+    pending = _queue_pending(
         session_id,
         "calendar_create",
         f"Add event: {title}",
@@ -390,6 +414,8 @@ def _create_calendar_event(
             "location": location,
             "notes": notes,
         },
+        action_id=f"cal-{title[:12]}-{db.utc_now()}",
+        tool_name="create_calendar_event",
     )
     scene = {
         "title": "Event draft",
@@ -468,13 +494,14 @@ def _review_inbox(session_id: str, name: str = "", **_: Any) -> dict[str, Any]:
     db.add_memory(session_id, "last_file", item["name"])
     if len(text) < 40:
         speak = "I cannot read that here. Shall I send it to Gemini?"
-        pending = db.add_pending(
-            f"gem-{item['id']}",
+        pending = _queue_pending(
             session_id,
             "handoff_gemini",
             "Send this file to Gemini",
             item["name"],
             {"inbox_id": item["id"], "steps": "Extract the useful facts from this file.", "reply_format": DEFAULT_GEMINI_REPLY},
+            action_id=f"gem-{item['id']}",
+            tool_name="review_inbox",
         )
         scene = {
             "title": item["name"],
@@ -706,13 +733,14 @@ def _task_for_gemini(
     body = gemini_body(file_line, steps or "Follow the spoken ask.", reply_format)
     to_addr = settings.gemini_task_to or settings.google_account
     subject = "Task for Gemini"
-    pending = db.add_pending(
-        f"gem-task-{db.utc_now()}",
+    pending = _queue_pending(
         session_id,
         "email_send",
         "Send: Task for Gemini",
         f"To {to_addr}",
         {"to": to_addr, "subject": subject, "body": body, "source_id": "", "watch": True},
+        action_id=f"gem-task-{db.utc_now()}",
+        tool_name="task_for_gemini",
     )
     scene = {
         "title": "Task for Gemini",

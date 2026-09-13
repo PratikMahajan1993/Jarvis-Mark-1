@@ -461,16 +461,36 @@ export async function startWakeWatch(handlers: WakeHandlers): Promise<void> {
   }, 3000);
 }
 
-const YES_SHORT = new Set(["y", "yes", "yeah", "yep", "yup", "yea", "confirm", "send", "send it", "do it", "go ahead", "proceed", "affirmative", "yes please", "yes send it", "yeah do it", "yes do it", "go for it", "do that", "ship it", "do so", "that's a yes", "thats a yes"]);
-const NO_SHORT = new Set(["n", "no", "nope", "nah", "cancel", "stop", "dont", "don't", "do not", "never", "reject", "negative", "abort", "wait", "no thanks", "no thank you", "not now", "hold on", "leave it", "later", "not yet", "hold off"]);
+const YES_SHORT = new Set([
+  "y", "yes", "yeah", "yep", "yup", "yea", "confirm", "send", "send it", "do it",
+  "go ahead", "proceed", "affirmative", "yes please", "yes send it", "yeah do it",
+  "yes do it", "go for it", "do that", "ship it", "do so", "that's a yes", "thats a yes",
+  "authorize", "authorise", "authorize it", "authorise it", "authorize to send",
+  "authorise to send", "send the email", "send the mail", "send email", "send mail",
+]);
+const NO_SHORT = new Set([
+  "n", "no", "nope", "nah", "cancel", "stop", "dont", "don't", "do not", "never",
+  "reject", "negative", "abort", "wait", "no thanks", "no thank you", "not now",
+  "hold on", "leave it", "later", "not yet", "hold off", "dont send", "don't send",
+  "do not send", "discard", "throw it away",
+]);
 
 export function classifyDecision(text: string): "yes" | "no" | null {
   const cleaned = text.toLowerCase().trim().replace(/[!.?,]/g, "").replace(/\s+/g, " ").replace(/'/g, "");
   if (!cleaned) return null;
+  const words = cleaned.split(/\s+/).filter(Boolean);
   const no = new Set([...NO_SHORT].map((item) => item.replace(/'/g, "")));
   const yes = new Set([...YES_SHORT].map((item) => item.replace(/'/g, "")));
   if (no.has(cleaned)) return "no";
   if (yes.has(cleaned)) return "yes";
+  // Long utterances are body/content, not authorize/reject.
+  if (words.length > 6) return null;
+  if (/\b(dont|do not|reject|cancel|discard|nope|nah|abort)\b/.test(cleaned) || /(?:^|\s)no(?:\s|$)/.test(cleaned)) {
+    if (!/\b(yes|authorize|authorise)\b/.test(cleaned)) return "no";
+  }
+  if (/\b(authorize|authorise|send it|send the (?:e-?mail|mail)|go ahead|ship it|yes)\b/.test(cleaned)) {
+    if (!/\b(dont|do not|reject)\b/.test(cleaned)) return "yes";
+  }
   return null;
 }
 

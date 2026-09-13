@@ -39,7 +39,7 @@ def test_snapshot_kinds_skip_brain():
     assert skips_model("calendar_create")
     assert skips_model("shop_read")
     assert skips_model("shop_write")
-    assert not skips_model("mail_draft")
+    assert skips_model("mail_draft")
     assert not uses_snapshot("calendar_create")
     assert not uses_snapshot("shop_read")
 

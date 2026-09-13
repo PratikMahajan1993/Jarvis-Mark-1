@@ -217,6 +217,11 @@ def init_db() -> None:
         rfq_cols = {row[1] for row in conn.execute("PRAGMA table_info(rfqs)").fetchall()}
         if "updated_at" not in rfq_cols:
             conn.execute("ALTER TABLE rfqs ADD COLUMN updated_at TEXT")
+        pending_cols = {row[1] for row in conn.execute("PRAGMA table_info(pending_actions)").fetchall()}
+        if "agent_id" not in pending_cols:
+            conn.execute("ALTER TABLE pending_actions ADD COLUMN agent_id TEXT DEFAULT ''")
+        if "tool_name" not in pending_cols:
+            conn.execute("ALTER TABLE pending_actions ADD COLUMN tool_name TEXT DEFAULT ''")
         existing = conn.execute("SELECT data FROM preferences WHERE id = 1").fetchone()
         if not existing:
             conn.execute(
@@ -389,22 +394,47 @@ def add_pending(
     title: str,
     summary: str,
     payload: dict[str, Any],
+    agent_id: str = "",
+    tool_name: str = "",
 ) -> dict[str, Any]:
     with connect() as conn:
-        conn.execute(
-            """
-            INSERT INTO pending_actions
-            (id, session_id, kind, title, summary, payload, status, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)
-            """,
-            (action_id, session_id, kind, title, summary, json.dumps(payload), utc_now()),
-        )
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(pending_actions)").fetchall()}
+        if "agent_id" in cols and "tool_name" in cols:
+            conn.execute(
+                """
+                INSERT INTO pending_actions
+                (id, session_id, kind, title, summary, payload, status, created_at, agent_id, tool_name)
+                VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)
+                """,
+                (
+                    action_id,
+                    session_id,
+                    kind,
+                    title,
+                    summary,
+                    json.dumps(payload),
+                    utc_now(),
+                    agent_id or "",
+                    tool_name or "",
+                ),
+            )
+        else:
+            conn.execute(
+                """
+                INSERT INTO pending_actions
+                (id, session_id, kind, title, summary, payload, status, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)
+                """,
+                (action_id, session_id, kind, title, summary, json.dumps(payload), utc_now()),
+            )
     return {
         "id": action_id,
         "kind": kind,
         "title": title,
         "summary": summary,
         "payload": payload,
+        "agent_id": agent_id or "",
+        "tool_name": tool_name or "",
     }
 
 
@@ -418,6 +448,8 @@ def get_pending(action_id: str) -> dict[str, Any] | None:
         return None
     data = dict(row)
     data["payload"] = json.loads(data["payload"])
+    data.setdefault("agent_id", "")
+    data.setdefault("tool_name", "")
     return data
 
 
@@ -429,11 +461,40 @@ def set_pending_status(action_id: str, status: str) -> None:
         )
 
 
+def update_pending_payload(
+    action_id: str,
+    payload: dict[str, Any],
+    *,
+    title: str | None = None,
+    summary: str | None = None,
+) -> None:
+    with connect() as conn:
+        row = conn.execute(
+            "SELECT title, summary FROM pending_actions WHERE id = ?",
+            (action_id,),
+        ).fetchone()
+        if not row:
+            return
+        conn.execute(
+            """
+            UPDATE pending_actions
+            SET payload = ?, title = ?, summary = ?
+            WHERE id = ?
+            """,
+            (
+                json.dumps(payload),
+                title if title is not None else row["title"],
+                summary if summary is not None else row["summary"],
+                action_id,
+            ),
+        )
+
+
 def list_pending(session_id: str) -> list[dict[str, Any]]:
     with connect() as conn:
         rows = conn.execute(
             """
-            SELECT id, kind, title, summary, payload FROM pending_actions
+            SELECT * FROM pending_actions
             WHERE session_id = ? AND status = 'pending'
             ORDER BY created_at DESC
             """,
@@ -443,6 +504,8 @@ def list_pending(session_id: str) -> list[dict[str, Any]]:
     for row in rows:
         item = dict(row)
         item["payload"] = json.loads(item["payload"])
+        item.setdefault("agent_id", "")
+        item.setdefault("tool_name", "")
         items.append(item)
     return items
 

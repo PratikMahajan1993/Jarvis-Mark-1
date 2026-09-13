@@ -69,9 +69,15 @@ _BRIEF = (
     "what's my day",
     "whats my day",
 )
-_DRAFT = re.compile(
-    r"\b(reply|write back|respond|tell her|tell him|compose|write to|send (?:this |that |it |the )?(?:mail|email)|draft)\b",
-    re.I,
+# Tight mail compose / reply: must START with these phrases (after prepare()).
+_COMPOSE_START = re.compile(
+    r"^(?:"
+    r"draft\s+an?\s+(?:e-?mails?|mails?)|draft\s+(?:e-?mails?|mails?)|"
+    r"send\s+an?\s+(?:e-?mails?|mails?)|send\s+(?:e-?mails?|mails?)|"
+    r"compose\s+an?\s+(?:e-?mails?|mails?)|compose\s+a\s+mails?|"
+    r"write\s+an?\s+(?:e-?mails?|mails?)"
+    r")\b[\s,]*(.*)$",
+    re.I | re.S,
 )
 _FORWARD = re.compile(r"\bforward\b", re.I)
 _SAVE = re.compile(
@@ -149,10 +155,10 @@ ROUTES: dict[str, Route] = {
     ),
     "mail_draft": Route(
         "mail_draft",
-        tools=("read_email", "draft_email"),
-        job="Read the thread if needed, then draft_email. Never claim it was sent.",
+        tools=(),
+        job="Open the compose modal with LLM-filled to/subject/body. Never claim it was sent.",
         pref="email_enabled",
-        complete="draft_email",
+        complete="",
     ),
     "mail_forward": Route(
         "mail_forward",
@@ -367,8 +373,46 @@ def _rule_forward(text: str, low: str, person: str) -> Intent | None:
 
 
 def _rule_cancel(text: str, _low: str, _person: str) -> Intent | None:
-    if _NEGATE.search(text) and (_DRAFT.search(text) or _FORWARD.search(text)):
+    if _NEGATE.search(text) and (match_mail_trigger(text) is not None or _FORWARD.search(text)):
         return Intent("chat")
+    return None
+
+
+def match_mail_trigger(message: str) -> dict[str, str | bool] | None:
+    """Return compose/reply trigger match: mode, remainder, person, last — or None."""
+    text = prepare(message)
+    if not text:
+        return None
+    fixed = re.match(
+        r"^(reply\s+to\s+that|reply\s+to\s+this|reply\s+to\s+the\s+last\s+(?:e-?mail|mails?)|"
+        r"draft\s+a\s+reply|write\s+a\s+reply)\b[\s,]*(.*)$",
+        text,
+        re.I | re.S,
+    )
+    if fixed:
+        starter = fixed.group(1).lower()
+        return {
+            "mode": "reply",
+            "remainder": (fixed.group(2) or "").strip(),
+            "person": "",
+            "last": "last" in starter,
+        }
+    named = re.match(r"^reply\s+to\s+([A-Za-z][A-Za-z'-]+)\b[\s,]*(.*)$", text, re.I | re.S)
+    if named:
+        return {
+            "mode": "reply",
+            "remainder": (named.group(2) or "").strip(),
+            "person": named.group(1).strip(),
+            "last": False,
+        }
+    compose = _COMPOSE_START.match(text)
+    if compose:
+        return {
+            "mode": "compose",
+            "remainder": (compose.group(1) or "").strip(),
+            "person": "",
+            "last": False,
+        }
     return None
 
 
@@ -437,9 +481,16 @@ def _rule_shop(text: str, low: str, _person: str) -> Intent | None:
 
 
 def _rule_draft(text: str, low: str, person: str) -> Intent | None:
-    if _DRAFT.search(text):
-        return Intent("mail_draft", person=person, last=_LAST.search(low) is not None)
-    return None
+    hit = match_mail_trigger(text)
+    if not hit:
+        return None
+    reply_person = str(hit.get("person") or "") or person
+    return Intent(
+        "mail_draft",
+        query=str(hit.get("remainder") or ""),
+        person=reply_person,
+        last=bool(hit.get("last")),
+    )
 
 
 def _rule_read(text: str, low: str, person: str) -> Intent | None:
@@ -464,7 +515,15 @@ def _rule_search(text: str, low: str, person: str) -> Intent | None:
 
 
 def _rule_mail_loose(text: str, low: str, person: str) -> Intent | None:
+    # Do not steal tight compose/reply phrasing that failed for other reasons
+    if match_mail_trigger(text) is not None:
+        return None
     if re.search(r"\b(mail|email|gmail)\b", low) and not person:
+        # Bare "send this email" / vague "email them" stay chat unless a tight starter matched
+        if re.search(r"\b(send this|maybe|them|someone)\b", low):
+            return Intent("chat")
+        if re.search(r"^(?:don'?t|do not)\b", low):
+            return Intent("chat")
         return Intent("mail_search", unread_only="unread" in low)
     return None
 
@@ -682,13 +741,20 @@ CASES: list[tuple[str, str]] = [
     ("reply to that", "mail_draft"),
     ("reply to Neha", "mail_draft"),
     ("reply to the last email", "mail_draft"),
-    ("read the last email and reply", "mail_draft"),
-    ("open Neha's last email and reply", "mail_draft"),
+    ("reply to the last mail", "mail_draft"),
     ("draft a reply", "mail_draft"),
-    ("write to Deepak", "mail_draft"),
-    ("write back to Neha", "mail_draft"),
+    ("write a reply", "mail_draft"),
+    ("draft an email to ops@example.com", "mail_draft"),
+    ("draft a mail saying hello", "mail_draft"),
+    ("send an email to ops@example.com", "mail_draft"),
     ("compose an email to Pratik", "mail_draft"),
-    ("send this email", "mail_draft"),
+    ("write an email to Deepak", "mail_draft"),
+    ("read the last email and reply", "mail_read"),
+    ("open Neha's last email and reply", "mail_read"),
+    ("write to Deepak", "chat"),
+    ("write back to Neha", "chat"),
+    ("send this email", "chat"),
+    ("can you maybe email them", "chat"),
     ("don't reply", "chat"),
     ("do not send this email", "chat"),
     ("forward this to Pratik", "mail_forward"),

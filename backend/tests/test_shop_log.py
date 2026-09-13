@@ -101,13 +101,15 @@ def test_queue_write_is_shall_i_not_api(monkeypatch):
         },
     )
     monkeypatch.setattr(
-        "app.shop_log.db.add_pending",
-        lambda action_id, session_id, kind, title, summary, payload: {
+        "app.hermes.hitl.db.add_pending",
+        lambda action_id, session_id, kind, title, summary, payload, agent_id="", tool_name="": {
             "id": action_id,
             "kind": kind,
             "title": title,
             "summary": summary,
             "payload": payload,
+            "agent_id": agent_id,
+            "tool_name": tool_name,
         },
     )
     monkeypatch.setattr(

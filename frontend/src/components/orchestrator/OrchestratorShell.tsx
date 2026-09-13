@@ -25,6 +25,7 @@ import {
 import { ActivityStream } from "./ActivityStream";
 import { CommandBaton } from "./CommandBaton";
 import { ConversationRail, type RailConversation } from "./ConversationRail";
+import { DraftComposeModal } from "./DraftComposeModal";
 import { HitlModal } from "./HitlModal";
 import { JarvisCore } from "./JarvisCore";
 import { Orchestra } from "./Orchestra";
@@ -32,10 +33,29 @@ import { Orchestra } from "./Orchestra";
 const SESSION = "default";
 const IDLE_VOICE = "Awaiting instruction.";
 
-function highlightAuthorization(text: string): string {
-  return text.replace(
-    /(authorization required|authorize|shall i)/gi,
-    '<span class="text-[color:var(--accent)]">$1</span>',
+function VoiceLine({ text, dimmed }: { text: string; dimmed?: boolean }) {
+  const compact = text.length > 220 || text.split("\n").length > 4;
+  const parts = text.split(/(authorization required|authorize to send|authorize|shall i)/gi);
+  return (
+    <h1
+      className={[
+        "orch-voice mx-auto max-h-[42vh] max-w-[min(800px,90vw)] overflow-y-auto text-center font-display font-normal leading-snug tracking-[-0.01em] whitespace-pre-wrap break-words transition-all duration-[600ms]",
+        compact ? "text-[1.35rem]" : "text-[2.25rem]",
+        dimmed ? "opacity-20 blur-[2px]" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+    >
+      {parts.map((part, index) =>
+        /^(authorization required|authorize to send|authorize|shall i)$/i.test(part) ? (
+          <span key={index} className="text-[color:var(--accent)]">
+            {part}
+          </span>
+        ) : (
+          <span key={index}>{part}</span>
+        ),
+      )}
+    </h1>
   );
 }
 
@@ -52,17 +72,27 @@ export function OrchestratorShell() {
   const [rail, setRail] = useState<RailConversation[]>([]);
   const [prefs, setPrefs] = useState<Preferences | null>(null);
   const [error, setError] = useState("");
+  const [sending, setSending] = useState(false);
 
   const busyRef = useRef(false);
   const pendingIdRef = useRef("");
   const voiceEnabledRef = useRef(true);
   const speakToken = useRef(0);
-  const decideRef = useRef<(id: string, approved: boolean) => Promise<void>>(async () => undefined);
-  const listenConfirmRef = useRef<(actionId: string) => Promise<void>>(async () => undefined);
+  const decideRef = useRef<(id: string, approved: boolean, fields?: { to: string; subject: string; body: string }) => Promise<void>>(
+    async () => undefined,
+  );
+  const listenConfirmRef = useRef<(actionId: string, fillCompose?: boolean) => Promise<void>>(async () => undefined);
+  const sendRef = useRef<(message: string) => Promise<void>>(async () => undefined);
 
   const focused = pending[0] || null;
-  const hitl = Boolean(focused);
-  const mode: OrchestratorMode = hitl ? "hitl" : busy ? "busy" : listening ? "listening" : "idle";
+  const composeDraft = !sending && focused?.kind === "email_compose" ? focused : null;
+  const composeMissing = Array.isArray(composeDraft?.payload?.missing)
+    ? (composeDraft!.payload.missing as string[])
+    : [];
+  const composeNeedsInput = Boolean(composeDraft && composeMissing.length > 0);
+  const hitlAction = composeDraft || sending ? null : focused;
+  const hitl = Boolean(focused) && !sending;
+  const mode: OrchestratorMode = sending ? "busy" : hitl ? "hitl" : busy ? "busy" : listening ? "listening" : "idle";
 
   const pushLog = useCallback((agent: string, message: string) => {
     setActivity((prev) =>
@@ -106,10 +136,31 @@ export function OrchestratorShell() {
       setPending(waiting);
       pendingIdRef.current = waiting[0]?.id || "";
 
-      const line = (result.speak || result.reply || "").trim() || IDLE_VOICE;
-      showVoice(line);
+      // Prefer reply for on-screen HUD text; speak stays short for TTS
+      const display = (result.reply || result.speak || "").trim() || IDLE_VOICE;
+      const tts = (result.speak || result.reply || "").trim();
+      showVoice(display);
 
-      if (waiting[0]) {
+      if (result.activity?.length) {
+        setActivity((prev) => {
+          const mapped = result.activity!.map((item, index) => ({
+            id: item.id || `act-${Date.now()}-${index}`,
+            time: item.time || formatClock(),
+            agent: item.agent || "SYS",
+            message: item.message || "",
+          }));
+          return [...mapped, ...prev].slice(0, 8);
+        });
+      }
+
+      if (result.agents?.length) {
+        setAgents((prev) =>
+          prev.map((agent) => {
+            const match = result.agents!.find((row) => row.id === agent.id);
+            return match ? { ...agent, state: (match.state as AgentNode["state"]) || "" } : agent;
+          }),
+        );
+      } else if (waiting[0]) {
         const agentId = agentForPending(waiting[0]);
         clearAgents();
         setAgentStates([agentId], "waiting");
@@ -123,7 +174,7 @@ export function OrchestratorShell() {
           clearAgents();
           pushLog("SYS", "Operator rejected sequence.");
         }
-      } else {
+      } else if (!result.agents?.length) {
         clearAgents();
       }
 
@@ -133,31 +184,43 @@ export function OrchestratorShell() {
 
       speakToken.current += 1;
       const token = speakToken.current;
-      if (voiceEnabledRef.current && result.speak) {
-        speak(result.speak, true, () => {
+      const missing = waiting[0]?.payload?.missing;
+      const needsFill =
+        waiting[0]?.kind === "email_compose" && Array.isArray(missing) && missing.length > 0;
+      if (voiceEnabledRef.current && tts) {
+        speak(tts, true, () => {
           if (token !== speakToken.current) return;
           if (pendingIdRef.current) {
-            void listenConfirmRef.current(pendingIdRef.current);
+            void listenConfirmRef.current(pendingIdRef.current, needsFill);
           }
         });
       } else if (waiting[0]) {
-        void listenConfirmRef.current(waiting[0].id);
+        void listenConfirmRef.current(waiting[0].id, needsFill);
       }
     },
     [clearAgents, pushLog, setAgentStates, showVoice],
   );
 
-  const listenForConfirm = useCallback(async (actionId: string) => {
+  const listenForConfirm = useCallback(async (actionId: string, fillCompose = false) => {
     if (!canListen() || !actionId) return;
     stopListening();
     setConfirmListening(true);
     try {
       await startListening({
         onFinal: (text) => {
+          if (pendingIdRef.current !== actionId) return;
           const decision = classifyDecision(text);
-          if (decision && pendingIdRef.current === actionId) {
+          const words = text.trim().split(/\s+/).filter(Boolean).length;
+          // Short authorize/reject phrases always win; otherwise body dictation goes to chat.
+          if (decision && words <= 5) {
             setConfirmListening(false);
             void decideRef.current(actionId, decision === "yes");
+            return;
+          }
+          if (fillCompose) {
+            setConfirmListening(false);
+            void sendRef.current(text);
+            return;
           }
         },
         onEnd: () => setConfirmListening(false),
@@ -169,25 +232,40 @@ export function OrchestratorShell() {
   }, []);
 
   const decide = useCallback(
-    async (id: string, approved: boolean) => {
+    async (id: string, approved: boolean, fields?: { to: string; subject: string; body: string }) => {
       if (busyRef.current) return;
       busyRef.current = true;
       setBusy(true);
       setConfirmListening(false);
       stopListening();
       silence();
+      if (approved) {
+        // Close compose/HITL modal immediately; show processing until Gmail confirms
+        setPending([]);
+        pendingIdRef.current = "";
+        setSending(true);
+        showVoice("Sending…");
+        setAgentStates(["ops"], "active");
+        pushLog("OPS.04", "Sending authorized mail…");
+      }
       try {
+        if (approved && fields) {
+          await api.updatePending(id, fields, SESSION);
+        }
         const result = await api.confirm(id, approved, SESSION);
+        setSending(false);
         applyResponse(result, { fromConfirm: true, approved });
       } catch (err) {
+        setSending(false);
         setError(err instanceof Error ? err.message : "Confirm failed");
         pushLog("SYS", "Confirm failed.");
+        showVoice("Send failed. Awaiting instruction.");
       } finally {
         busyRef.current = false;
         setBusy(false);
       }
     },
-    [applyResponse, pushLog],
+    [applyResponse, pushLog, setAgentStates, showVoice],
   );
 
   useEffect(() => {
@@ -204,7 +282,8 @@ export function OrchestratorShell() {
       if (!text || busyRef.current) return;
 
       const decision = pendingIdRef.current ? classifyDecision(text) : null;
-      if (decision && pendingIdRef.current) {
+      const words = text.trim().split(/\s+/).filter(Boolean).length;
+      if (decision && pendingIdRef.current && words <= 5) {
         await decide(pendingIdRef.current, decision === "yes");
         setCompose("");
         return;
@@ -239,8 +318,12 @@ export function OrchestratorShell() {
     [applyResponse, clearAgents, decide, pushLog, setAgentStates, showVoice],
   );
 
+  useEffect(() => {
+    sendRef.current = send;
+  }, [send]);
+
   const startMic = useCallback(async () => {
-    if (busyRef.current || hitl || !canListen()) return;
+    if (busyRef.current || (hitl && !composeNeedsInput) || !canListen()) return;
     stopListening();
     setListening(true);
     try {
@@ -261,7 +344,7 @@ export function OrchestratorShell() {
       setListening(false);
       setError(err instanceof Error ? err.message : "Microphone unavailable");
     }
-  }, [hitl, send]);
+  }, [composeNeedsInput, hitl, send]);
 
   useEffect(() => {
     setVoiceVisible(true);
@@ -329,7 +412,7 @@ export function OrchestratorShell() {
           return;
         }
       }
-      if (event.code === "Space" && !typing && !hitl && !busyRef.current) {
+      if (event.code === "Space" && !typing && !(hitl && !composeNeedsInput) && !busyRef.current) {
         event.preventDefault();
         void startMic();
       }
@@ -341,7 +424,7 @@ export function OrchestratorShell() {
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [decide, hitl, startMic]);
+  }, [composeNeedsInput, decide, hitl, startMic]);
 
   return (
     <div className="orch-root relative flex h-screen flex-col overflow-hidden">
@@ -361,16 +444,22 @@ export function OrchestratorShell() {
       />
 
       <main className="relative z-[1] flex flex-1 flex-col items-center justify-center px-16">
-        <h1
+        <div
           className={[
-            "orch-voice max-w-[800px] text-center font-display text-[2.25rem] font-normal leading-snug tracking-[-0.01em] transition-all duration-[600ms]",
+            "transition-all duration-[600ms]",
             voiceVisible ? "translate-y-0 opacity-100" : "translate-y-2.5 opacity-0",
-            hitl ? "opacity-20 blur-[2px]" : "",
-          ]
-            .filter(Boolean)
-            .join(" ")}
-          dangerouslySetInnerHTML={{ __html: highlightAuthorization(voice) }}
-        />
+          ].join(" ")}
+        >
+          <VoiceLine text={voice} dimmed={Boolean(hitlAction)} />
+        </div>
+        {sending ? (
+          <div className="orch-sending mt-10 flex flex-col items-center gap-3" aria-live="polite">
+            <div className="orch-sending-ring" />
+            <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--accent)]/80">
+              Transmitting…
+            </p>
+          </div>
+        ) : null}
         {error ? (
           <p className="mt-4 max-w-lg text-center font-mono text-xs text-red-300/80">{error}</p>
         ) : null}
@@ -394,11 +483,19 @@ export function OrchestratorShell() {
       />
 
       <HitlModal
-        action={focused}
-        visible={hitl}
+        action={hitlAction}
+        visible={Boolean(hitlAction)}
         listening={confirmListening}
         busy={busy}
         onDecide={(id, approved) => void decide(id, approved)}
+      />
+
+      <DraftComposeModal
+        action={composeDraft}
+        visible={Boolean(composeDraft)}
+        listening={confirmListening}
+        busy={busy}
+        onDecide={(id, approved, fields) => void decide(id, approved, fields)}
       />
     </div>
   );

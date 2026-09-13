@@ -9,7 +9,17 @@ from . import db
 
 STALE_SECONDS = 180
 SNAPSHOT_KINDS = frozenset({"briefing", "mail_search", "mail_read", "calendar_list"})
-SKIP_MODEL = SNAPSHOT_KINDS | {"calendar_create", "rfq_reason", "cnc_suggest", "shop_bind", "shop_create", "shop_read", "shop_write"}
+SKIP_MODEL = SNAPSHOT_KINDS | {
+    "calendar_create",
+    "rfq_reason",
+    "cnc_suggest",
+    "shop_bind",
+    "shop_create",
+    "shop_read",
+    "shop_write",
+    "mail_draft",
+    "mail_forward",
+}
 
 _FRESH = re.compile(
     r"\b("
