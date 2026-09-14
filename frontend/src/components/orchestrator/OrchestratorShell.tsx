@@ -43,6 +43,25 @@ const IDLE_VOICE = "Awaiting instruction.";
 const EMPTY_SCENE: Scene = { title: "", widgets: [] };
 const MAX_OPEN_CONVERSATIONS = 3;
 
+/** Mail / HITL / tool boards keep widgets; speak-only chat shells do not. */
+function sceneHasBoardContent(scene: Scene | null | undefined): boolean {
+  if (!scene) return false;
+  const widgets = scene.widgets || [];
+  const title = (scene.title || "").trim();
+  const decorativeTitle = !title || /^jarvis$/i.test(title);
+
+  if (widgets.length === 0) {
+    // Title-only shells like "Draft email" still show; empty/Jarvis do not
+    return Boolean(title) && !/^jarvis$/i.test(title);
+  }
+
+  // Quote-only + empty/Jarvis title duplicates the VoiceLine reply
+  const onlyQuotes = widgets.every((w) => w.type === "quote");
+  if (onlyQuotes && decorativeTitle) return false;
+
+  return true;
+}
+
 function mapDeskItems(
   rows: Conversation[],
   activeConversationId: string | null,
@@ -252,7 +271,7 @@ export function OrchestratorShell() {
       const display = (result.reply || result.speak || "").trim() || IDLE_VOICE;
       const tts = (result.speak || result.reply || "").trim();
       showVoice(display);
-      setScene(result.scene?.title || (result.scene?.widgets || []).length ? result.scene : EMPTY_SCENE);
+      setScene(sceneHasBoardContent(result.scene) ? result.scene! : EMPTY_SCENE);
 
       if (result.activity?.length) {
         setActivity((prev) => {
@@ -291,7 +310,7 @@ export function OrchestratorShell() {
         clearAgents();
       }
 
-      if (result.scene?.title) {
+      if (sceneHasBoardContent(result.scene) && result.scene?.title) {
         pushLog("SYS", result.scene.title);
       }
 
@@ -666,7 +685,7 @@ export function OrchestratorShell() {
         >
           <VoiceLine text={voice} dimmed={Boolean(hitlAction)} />
         </div>
-        {scene.title || (scene.widgets || []).length ? (
+        {sceneHasBoardContent(scene) ? (
           <SpotlightCard
             className="orch-board mt-8 w-full max-w-[min(720px,92vw)] rounded-2xl border border-[color:var(--border)] bg-black/35 backdrop-blur-md"
             bodyClassName="max-h-[38vh] overflow-y-auto p-4"

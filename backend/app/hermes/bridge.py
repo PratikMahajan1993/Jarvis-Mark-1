@@ -7,6 +7,7 @@ import os
 import re
 import shutil
 import subprocess
+import threading
 import time
 from datetime import datetime
 from pathlib import Path
@@ -50,8 +51,9 @@ def hermes_gateway_reachable(timeout: float = 1.5) -> bool:
 def hermes_available() -> bool:
     if not settings.hermes_enabled:
         return False
-    if settings.hermes_prefer_gateway and hermes_gateway_reachable():
-        return True
+    if settings.hermes_prefer_gateway:
+        # Gateway preferred: skip cold CLI when down — agent soft-falls to Gemini/legacy.
+        return hermes_gateway_reachable()
     return hermes_cli_available()
 
 
@@ -337,6 +339,93 @@ def _extract_responses_text(payload: dict[str, Any]) -> str:
     return ""
 
 
+def warm_hermes() -> None:
+    """Prime the Hermes gateway so the first casual HUD turn is not a cold 30–60s stall."""
+    if not settings.hermes_enabled or not settings.hermes_prefer_gateway:
+        return
+
+    def _run() -> None:
+        try:
+            if not hermes_gateway_reachable(timeout=2.0):
+                return
+            base = hermes_gateway_url()
+            headers = {
+                "Authorization": f"Bearer {settings.hermes_api_key}",
+                "Content-Type": "application/json",
+            }
+            with httpx.Client(timeout=90.0) as client:
+                client.post(
+                    f"{base}/v1/chat/completions",
+                    headers=headers,
+                    json={
+                        "model": "hermes-agent",
+                        "messages": [
+                            {
+                                "role": "system",
+                                "content": "Reply with exactly one word: Ready. Do not use tools.",
+                            },
+                            {"role": "user", "content": "ping"},
+                        ],
+                        "stream": False,
+                    },
+                )
+        except Exception:
+            pass
+
+    threading.Thread(target=_run, name="jarvis-hermes-warm", daemon=True).start()
+
+
+def _gateway_chat(
+    *,
+    base: str,
+    headers: dict[str, str],
+    message: str,
+    session_id: str,
+    casual: bool,
+    timeout: float,
+) -> tuple[str, str, int]:
+    """Warm chat/completions path — faster and more reliable than /v1/responses for short turns."""
+    title = hermes_session_title(session_id)
+    messages: list[dict[str, str]] = [
+        {"role": "system", "content": _instructions(casual, session_id)},
+    ]
+    # Carry recent Jarvis turns so follow-ups work without Hermes conversation store.
+    # Keep this short — Hermes already injects a large tool system prompt (~15k tokens).
+    history = db.recent_messages(session_id, 6 if casual else 10)
+    for item in history:
+        role = str(item.get("role") or "")
+        content = str(item.get("content") or "").strip()
+        if role not in {"user", "assistant"} or not content:
+            continue
+        cap = 400 if casual else 2000
+        messages.append({"role": role, "content": content[:cap]})
+    if not any(m.get("role") == "user" and m.get("content") == message for m in messages):
+        messages.append({"role": "user", "content": message})
+
+    chat_body = {
+        "model": "hermes-agent",
+        "messages": messages,
+        "stream": False,
+    }
+    started = time.monotonic()
+    try:
+        with httpx.Client(timeout=timeout) as client:
+            response = client.post(f"{base}/v1/chat/completions", headers=headers, json=chat_body)
+    except httpx.TimeoutException as exc:
+        elapsed_ms = int((time.monotonic() - started) * 1000)
+        raise RuntimeError(
+            f"Hermes timed out after {timeout:.0f}s ({elapsed_ms}ms)"
+        ) from exc
+    elapsed_ms = int((time.monotonic() - started) * 1000)
+    if response.status_code >= 400:
+        raise RuntimeError(
+            f"Hermes gateway chat HTTP {response.status_code}: {(response.text or '')[:500]}"
+        )
+    data = response.json() if response.content else {}
+    speak = _extract_responses_text(data if isinstance(data, dict) else {})
+    return speak or "I am here.", title, elapsed_ms
+
+
 def _run_via_gateway(message: str, session_id: str, casual: bool) -> tuple[str, str, int]:
     """Warm API path. Returns (speak, session_label, elapsed_ms)."""
     base = hermes_gateway_url()
@@ -347,25 +436,40 @@ def _run_via_gateway(message: str, session_id: str, casual: bool) -> tuple[str, 
         "X-Hermes-Session-Id": title,
         "X-Hermes-Session-Key": f"jarvis:{session_id}",
     }
+    # Casual: skip /v1/responses (hangs). Prefer chat/completions only.
+    timeout = float(settings.hermes_timeout_sec)
+    if casual:
+        timeout = min(timeout, 35.0)
+        return _gateway_chat(
+            base=base,
+            headers=headers,
+            message=message,
+            session_id=session_id,
+            casual=True,
+            timeout=timeout,
+        )
+
     body: dict[str, Any] = {
         "model": "hermes-agent",
         "input": message,
-        "instructions": _instructions(casual, session_id),
+        "instructions": _instructions(False, session_id),
         "conversation": title,
         "store": True,
     }
-    timeout = float(settings.hermes_timeout_sec)
-    if casual:
-        timeout = min(timeout, 12.0)
     started = time.monotonic()
     try:
         with httpx.Client(timeout=timeout) as client:
             r = client.post(f"{base}/v1/responses", headers=headers, json=body)
-    except httpx.TimeoutException as exc:
-        elapsed_ms = int((time.monotonic() - started) * 1000)
-        raise RuntimeError(
-            f"Hermes timed out after {settings.hermes_timeout_sec:.0f}s ({elapsed_ms}ms)"
-        ) from exc
+    except httpx.TimeoutException:
+        # Fall through — chat path still warm even when Responses stalls.
+        return _gateway_chat(
+            base=base,
+            headers=headers,
+            message=message,
+            session_id=session_id,
+            casual=False,
+            timeout=timeout,
+        )
     elapsed_ms = int((time.monotonic() - started) * 1000)
     if r.status_code >= 400:
         detail = (r.text or "")[:500]
@@ -375,30 +479,14 @@ def _run_via_gateway(message: str, session_id: str, casual: bool) -> tuple[str, 
     hermes_id = str(payload.get("id") or title)
     if speak:
         return speak, hermes_id, elapsed_ms
-    # Fallback: chat completions (stateless messages, still warm process)
-    chat_body = {
-        "model": "hermes-agent",
-        "messages": [
-            {"role": "system", "content": _instructions(casual, session_id)},
-            {"role": "user", "content": message},
-        ],
-        "stream": False,
-    }
-    started = time.monotonic()
-    try:
-        with httpx.Client(timeout=timeout) as client:
-            r2 = client.post(f"{base}/v1/chat/completions", headers=headers, json=chat_body)
-    except httpx.TimeoutException as exc:
-        elapsed_ms = int((time.monotonic() - started) * 1000)
-        raise RuntimeError(
-            f"Hermes timed out after {settings.hermes_timeout_sec:.0f}s ({elapsed_ms}ms)"
-        ) from exc
-    elapsed_ms = int((time.monotonic() - started) * 1000)
-    if r2.status_code >= 400:
-        raise RuntimeError(f"Hermes gateway chat HTTP {r2.status_code}: {(r2.text or '')[:500]}")
-    data = r2.json()
-    speak = _extract_responses_text(data)
-    return speak or "I am here.", title, elapsed_ms
+    return _gateway_chat(
+        base=base,
+        headers=headers,
+        message=message,
+        session_id=session_id,
+        casual=False,
+        timeout=timeout,
+    )
 
 
 def _run_via_cli(message: str, session_id: str, casual: bool) -> tuple[str, str | None, int]:
@@ -482,10 +570,15 @@ def run_hermes_turn(message: str, session_id: str = "default") -> ChatResponse:
         transport = "gateway"
         if hermes_id:
             _save_hermes_session(session_id, hermes_id)
+    elif settings.hermes_prefer_gateway:
+        raise RuntimeError(
+            "Hermes gateway is unreachable; soft fallback to legacy chat "
+            "(start with: hermes gateway run, API_SERVER_ENABLED=true)"
+        )
     else:
         if not hermes_cli_available():
             raise RuntimeError(
-                "Hermes gateway is down and CLI is unavailable. "
+                "Hermes CLI is unavailable. "
                 "Start with: hermes gateway run (API_SERVER_ENABLED=true)"
             )
         speak, hermes_id, elapsed_ms = _run_via_cli(message, session_id, casual)
@@ -552,7 +645,8 @@ def run_hermes_turn(message: str, session_id: str = "default") -> ChatResponse:
             )
         ]
 
-    scene = Scene(title="Jarvis", subtitle="Hermes", widgets=[])
+    # Speak-only Hermes turns: VoiceLine carries the reply — no empty decorative board.
+    scene = Scene(title="", widgets=[])
     if pending:
         scene = Scene(
             title="Authorization required",

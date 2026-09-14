@@ -26,7 +26,11 @@ export function SceneBoard({
   busy?: boolean;
 }) {
   const widgets = scene.widgets || [];
-  if (!scene.title && !widgets.length) return null;
+  const title = (scene.title || "").trim();
+  const decorativeTitle = !title || /^jarvis$/i.test(title);
+  // Speak-only shells (empty/Jarvis title, no real widgets or quote-only) — VoiceLine owns the reply
+  if (!widgets.length && decorativeTitle) return null;
+  if (widgets.length && decorativeTitle && widgets.every((w) => w.type === "quote")) return null;
   const kpis = widgets.filter((widget) => widget.type === "kpi");
   const rest = widgets.filter((widget) => widget.type !== "kpi");
   const widgetProps = { onSaveAttachments, onReplyAttachments, onViewAttachment, busy };

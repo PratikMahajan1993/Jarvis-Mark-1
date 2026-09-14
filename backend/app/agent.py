@@ -15,7 +15,17 @@ from .schemas import Artifact, ChatResponse, MailAttachment, PendingAction, Scen
 from .tools.registry import TOOL_SCHEMAS, _guess_file_title, execute_tool
 from .familiarity import get_set, remember_person, resolve as resolve_refs, speak_sent, wants_familiarity
 from .think import refine_research, refine_mail, refine_briefing, MAIL_TOOLS
-from .intent import ROUTES, calendar_span, classify, intent_for_kind, looks_like_work, prepare, route_for
+from .intent import (
+    ROUTES,
+    Intent,
+    calendar_span,
+    classify,
+    intent_for_kind,
+    is_rfq_definition,
+    looks_like_work,
+    prepare,
+    route_for,
+)
 from .snapshot import (
     calendar_ready,
     ready as snapshot_ready,
@@ -1054,6 +1064,10 @@ def _run_agent(message: str, session_id: str = "default") -> ChatResponse:
             db.add_audit(session_id, "hermes", str(exc)[:400], "error")
             # Fall through to Gemini / legacy agent loop
 
+    # Soft fallback / Hermes-down: definitional RFQ must be chat, never reason_rfq.
+    if is_rfq_definition(message):
+        intent = Intent("chat")
+
     return _run_agent_legacy(message, session_id, prefs=prefs, intent=intent, heard=heard)
 
 
@@ -1192,10 +1206,8 @@ def _run_agent_legacy(
                 speak = str(payload.get("speak") or "")
                 reply = speak
         else:
-            scene = Scene(
-                title="",
-                widgets=[Widget(type="quote", text=reply)] if reply else [],
-            )
+            # Speak-only replies: VoiceLine carries text — no duplicate quote board
+            scene = Scene(title="", widgets=[])
 
     refs = resolve_refs(session_id, message)
     if refs["open_sheet"] and "show_artifact" not in used_names and "create_spreadsheet" not in used_names and "task_for_gemini" not in used_names:

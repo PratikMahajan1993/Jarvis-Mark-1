@@ -93,6 +93,12 @@ def startup() -> None:
         warm_voicebox()
     except Exception:
         pass
+    try:
+        from .hermes.bridge import warm_hermes
+
+        warm_hermes()
+    except Exception:
+        pass
 
 
 @app.get("/api/agents")

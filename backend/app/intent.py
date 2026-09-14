@@ -450,6 +450,22 @@ _RFQ = re.compile(
     r"|\bdrawing\b.{0,48}(?:\bquote\b|\bquotation\b|\brfq\b)",
     re.I,
 )
+# Definitional / explanatory RFQ asks → chat (not reason_rfq / email_send).
+# Keep "what's in this RFQ" as work; do not match "what's in …".
+_RFQ_DEFINITION = re.compile(
+    r"\bwhat(?:'s|s)?\s+(?:an?\s+)?rfq\b"
+    r"|\bwhat\s+is\s+(?:an?\s+)?rfq\b"
+    r"|\bwhat\s+are\s+rfqs?\b"
+    r"|\b(?:explain|define|meaning of)\s+(?:an?\s+)?rfq\b"
+    r"|\b(?:summar(?:y|ise|ize)|tell me)\b.{0,64}\b(?:what\s+)?(?:an?\s+)?rfq\s+is\b"
+    r"|\b(?:an?\s+)?rfq\b.{0,32}\b(?:mean|means|stand(?:s)? for|definition)\b",
+    re.I,
+)
+
+
+def is_rfq_definition(message: str) -> bool:
+    """True when the user asks what an RFQ is, not to process one."""
+    return bool(_RFQ_DEFINITION.search(prepare(message)))
 
 
 def _rule_cnc(text: str, _low: str, _person: str) -> Intent | None:
@@ -459,6 +475,8 @@ def _rule_cnc(text: str, _low: str, _person: str) -> Intent | None:
 
 
 def _rule_rfq(text: str, _low: str, person: str) -> Intent | None:
+    if is_rfq_definition(text):
+        return None
     if _RFQ.search(text):
         return Intent("rfq_reason", person=person)
     return None
@@ -675,6 +693,8 @@ _WORK_HINTS = (
 
 
 def looks_like_work(message: str) -> bool:
+    if is_rfq_definition(message):
+        return False
     low = prepare(message).lower()
     return any(hint in low for hint in _WORK_HINTS)
 
@@ -829,6 +849,12 @@ CASES: list[tuple[str, str]] = [
     ("treat this as RFQ from Deepak", "rfq_reason"),
     ("quote on this drawing", "rfq_reason"),
     ("this drawing quotation", "rfq_reason"),
+    ("what is an RFQ for a machine shop", "chat"),
+    ("what is an RFQ for our shop", "chat"),
+    ("In one short sentence, what is an RFQ for a machine shop?", "chat"),
+    ("Summarize what an RFQ is for our shop", "chat"),
+    ("explain RFQ", "chat"),
+    ("what does RFQ mean", "chat"),
     ("write a program from scratch", "cnc_suggest"),
     ("write a program", "cnc_suggest"),
     ("suggest G-code for this", "cnc_suggest"),

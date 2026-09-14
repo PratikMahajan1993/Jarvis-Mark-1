@@ -129,16 +129,19 @@ API mirror: `GET /api/turns/recent`.
 
 ## Suggested test order (first pass)
 
-1. **A1** casual latency  
-2. **B1–B4** HITL trust  
-3. **C3–C5** draft compose  
-4. **D1** morning brief  
-5. **E1–E4** HUD cards  
-6. **F1** shop OEE  
-7. **G2–G5** quote path  
-8. **G6** full office-day dry-run  
-9. **H1–H4** memory/RAG  
-10. Stretch **J*** only after G6 green  
+1. **A1** casual latency — **PASS-ish (retest 2026-09-15):** multi-turn on `default` (greet → √3 → ×7 → thanks). Hermes `ok` each turn; follow-up math kept context; HUD single voice line. Earlier “what can you do” still Hermes-identity bleed once. Warm chat path live; ≤5s still limited by Hermes tool prompt size.  
+2. **A2** work chat no tools — **PASS (2026-09-15 API):** RFQ summary for shop; ~11s; no fake $-style numbers; empty scene.  
+3. **A3** Hermes down → fallback — **PASS (retest 2026-09-15):** gateway down → ~9.5s Gemini definition of RFQ; no pending/email_send; no Drawing RFQ board. Fix: `is_rfq_definition` + skip cold CLI when gateway preferred.  
+4. **A4** voice+type parity — **PASS partial (2026-09-15):** same typed ask twice via `/api/chat` both nonempty (~12–15s). Mic not exercised (same API pipeline).  
+5. **B1–B4** HITL trust  
+6. **C3–C5** draft compose  
+7. **D1** morning brief  
+8. **E1–E4** HUD cards  
+9. **F1** shop OEE  
+10. **G2–G5** quote path  
+11. **G6** full office-day dry-run  
+12. **H1–H4** memory/RAG  
+13. Stretch **J*** only after G6 green  
 
 ## Log template (per case)
 
