@@ -34,7 +34,14 @@ export function HitlModal({
           {copy.meta}
         </div>
         <h2 className="mb-4 font-display text-2xl font-normal text-[color:var(--fg)]">{copy.title}</h2>
-        <p className="mb-10 text-[0.95rem] leading-relaxed text-[color:var(--muted)]">{copy.summary}</p>
+        <p className="mb-4 text-[0.95rem] leading-relaxed text-[color:var(--muted)]">{copy.summary}</p>
+        <p className="mb-10 max-w-md text-left text-[0.85rem] leading-relaxed text-[color:var(--fg)]/80">
+          <span className="font-mono text-[0.65rem] uppercase tracking-[0.08em] text-[color:var(--accent)]">
+            Blast radius · {copy.irreversibility}/5
+          </span>
+          <br />
+          {copy.consequence}
+        </p>
         <div className="flex w-full gap-4">
           <button
             type="button"

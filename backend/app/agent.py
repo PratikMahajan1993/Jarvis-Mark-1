@@ -1317,7 +1317,7 @@ def resolve_pending(action_id: str, approved: bool, session_id: str) -> ChatResp
     payload = action["payload"]
     watching = False
     spoken_line = ""
-    if action["kind"] in {"email_send", "email_compose"}:
+    if action["kind"] in {"email_send", "email_compose", "quote_send"}:
         from .connectors.email import send_email
 
         to_addr = str(payload.get("to") or "").strip()
@@ -1342,6 +1342,18 @@ def resolve_pending(action_id: str, approved: bool, session_id: str) -> ChatResp
                     speak=speak,
                     reply=speak,
                     scene=Scene(title="Draft incomplete", widgets=[]),
+                    pending=_pending_models(session_id),
+                    watching=False,
+                )
+        elif action["kind"] in {"email_send", "quote_send"}:
+            if not to_addr or not body:
+                db.set_pending_status(action_id, "pending")
+                speak = "I still need recipient and body before I can send."
+                db.set_focus_pending(session_id, action_id)
+                return ChatResponse(
+                    speak=speak,
+                    reply=speak,
+                    scene=Scene(title="Send incomplete", widgets=[]),
                     pending=_pending_models(session_id),
                     watching=False,
                 )
@@ -1408,7 +1420,14 @@ def resolve_pending(action_id: str, approved: bool, session_id: str) -> ChatResp
         from .connectors.calendar import clock, create_event
 
         try:
-            create_event(**payload)
+            event_kwargs = {
+                "title": str(payload.get("title") or ""),
+                "start_at": str(payload.get("start_at") or ""),
+                "end_at": str(payload.get("end_at") or ""),
+                "location": str(payload.get("location") or ""),
+                "notes": str(payload.get("notes") or ""),
+            }
+            create_event(**event_kwargs)
         except Exception as exc:
             db.set_pending_status(action_id, "rejected")
             speak = str(exc).strip() or "Calendar did not take it."
@@ -1511,9 +1530,27 @@ def resolve_pending(action_id: str, approved: bool, session_id: str) -> ChatResp
             subtitle=title,
             widgets=[Widget(type="markdown", title="Envelope", text=body)],
         )
+    elif action["kind"] == "memory_wipe":
+        from .memory import forget
+
+        ns = str(payload.get("namespace") or "").strip()
+        if not ns:
+            db.set_pending_status(action_id, "rejected")
+            speak = "No memory namespace to wipe."
+            return ChatResponse(speak=speak, reply=speak, scene=_fallback_scene(speak), watching=False)
+        result = forget(namespace=ns, wipe_namespace=True)
+        detail = f"Wiped local memory namespace `{ns}` ({result.get('deleted') or 0} docs)."
+        scene = Scene(title="Memory wiped", subtitle=ns, widgets=[Widget(type="quote", text=detail)])
+    elif action["kind"] == "browser_action":
+        # Foundation stretch: evidence-only; do not pretend a browser ran.
+        db.set_pending_status(action_id, "rejected")
+        speak = "Browser actions are not executable yet — evidence can be recorded, but I will not Authorize a live browse until that path is wired."
+        return ChatResponse(speak=speak, reply=speak, scene=_fallback_scene(speak), watching=False)
     else:
-        detail = f"Approved {action['kind']}"
-        scene = _fallback_scene(detail)
+        # Unknown kinds must not look like success
+        db.set_pending_status(action_id, "rejected")
+        speak = f"I cannot execute `{action['kind']}` yet."
+        return ChatResponse(speak=speak, reply=speak, scene=_fallback_scene(speak), watching=False)
 
     db.set_pending_status(action_id, "approved")
     db.add_audit(session_id, action["kind"], detail, "approved")

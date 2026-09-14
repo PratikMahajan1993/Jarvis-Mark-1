@@ -29,6 +29,7 @@ import { DraftComposeModal } from "./DraftComposeModal";
 import { HitlModal } from "./HitlModal";
 import { JarvisCore } from "./JarvisCore";
 import { Orchestra } from "./Orchestra";
+import { SuggestedTasksPanel, type SuggestedTask } from "./SuggestedTasksPanel";
 
 const SESSION = "default";
 const IDLE_VOICE = "Awaiting instruction.";
@@ -73,11 +74,14 @@ export function OrchestratorShell() {
   const [prefs, setPrefs] = useState<Preferences | null>(null);
   const [error, setError] = useState("");
   const [sending, setSending] = useState(false);
+  const [suggested, setSuggested] = useState<SuggestedTask[]>([]);
+  const [weatherLine, setWeatherLine] = useState("");
 
   const busyRef = useRef(false);
   const pendingIdRef = useRef("");
   const voiceEnabledRef = useRef(true);
   const speakToken = useRef(0);
+  const composeFieldsRef = useRef({ to: "", subject: "", body: "" });
   const decideRef = useRef<(id: string, approved: boolean, fields?: { to: string; subject: string; body: string }) => Promise<void>>(
     async () => undefined,
   );
@@ -239,33 +243,49 @@ export function OrchestratorShell() {
       setConfirmListening(false);
       stopListening();
       silence();
+      const focusedKind = pending.find((p) => p.id === id)?.kind || "";
+      const syncFields =
+        fields ||
+        (focusedKind === "email_compose" || composeDraft?.id === id
+          ? composeFieldsRef.current
+          : undefined);
       if (approved) {
-        // Close compose/HITL modal immediately; show processing until Gmail confirms
-        setPending([]);
-        pendingIdRef.current = "";
         setSending(true);
-        showVoice("Sending…");
+        showVoice(focusedKind === "email_compose" || focusedKind === "email_send" || focusedKind === "quote_send" ? "Sending…" : "Working…");
         setAgentStates(["ops"], "active");
-        pushLog("OPS.04", "Sending authorized mail…");
+        pushLog("OPS.04", "Executing authorized action…");
       }
       try {
-        if (approved && fields) {
-          await api.updatePending(id, fields, SESSION);
+        if (approved && syncFields && (focusedKind === "email_compose" || composeDraft?.id === id)) {
+          await api.updatePending(id, syncFields, SESSION);
         }
         const result = await api.confirm(id, approved, SESSION);
         setSending(false);
+        if (approved) {
+          setPending([]);
+          pendingIdRef.current = "";
+        }
         applyResponse(result, { fromConfirm: true, approved });
       } catch (err) {
         setSending(false);
+        // Restore pending from server so HUD doesn't strand without Authorize
+        try {
+          const waiting = await api.pending(SESSION);
+          const items = waiting.items || [];
+          setPending(items);
+          pendingIdRef.current = items[0]?.id || "";
+        } catch {
+          /* ignore */
+        }
         setError(err instanceof Error ? err.message : "Confirm failed");
         pushLog("SYS", "Confirm failed.");
-        showVoice("Send failed. Awaiting instruction.");
+        showVoice("That did not go through. Awaiting instruction.");
       } finally {
         busyRef.current = false;
         setBusy(false);
       }
     },
-    [applyResponse, pushLog, setAgentStates, showVoice],
+    [applyResponse, composeDraft?.id, pending, pushLog, setAgentStates, showVoice],
   );
 
   useEffect(() => {
@@ -351,11 +371,13 @@ export function OrchestratorShell() {
     let cancelled = false;
     (async () => {
       try {
-        const [preferences, waiting, session, conversations] = await Promise.all([
+        const [preferences, waiting, session, conversations, tasks] = await Promise.all([
           api.preferences().catch(() => null),
           api.pending(SESSION).catch(() => ({ items: [] as PendingAction[] })),
           api.session(SESSION).catch(() => null),
           api.conversations().catch(() => ({ items: [] as Conversation[] })),
+          // Fast path: do not block HUD on Gmail/weather refresh
+          api.suggestedTasks(false, SESSION).catch(() => ({ items: [], weather: undefined })),
         ]);
         if (cancelled) return;
         if (preferences) {
@@ -365,6 +387,36 @@ export function OrchestratorShell() {
         const items = waiting.items || [];
         setPending(items);
         pendingIdRef.current = items[0]?.id || "";
+        const taskItems = (tasks.items || [])
+          .map((raw) => {
+            const t = raw as SuggestedTask;
+            return {
+              ...t,
+              actions: Array.isArray(t.actions) ? t.actions : [],
+              detail: typeof t.detail === "string" ? t.detail : "",
+              title: typeof t.title === "string" ? t.title : "Task",
+              kind: typeof t.kind === "string" ? t.kind : "task",
+              id: typeof t.id === "string" ? t.id : "",
+            };
+          })
+          .filter((t) => t.id);
+        setSuggested(taskItems);
+        const speakWeather = (tasks.weather as { speak?: string } | undefined)?.speak || "";
+        setWeatherLine(speakWeather);
+        // Background refresh — never blocks first paint
+        void api
+          .officeRefresh(SESSION)
+          .then((payload) => {
+            if (cancelled) return;
+            const refreshed = ((payload.tasks as SuggestedTask[]) || []).map((t) => ({
+              ...t,
+              actions: Array.isArray(t.actions) ? t.actions : [],
+            }));
+            if (refreshed.length) setSuggested(refreshed);
+            const w = (payload.weather as { speak?: string } | undefined)?.speak;
+            if (w) setWeatherLine(w);
+          })
+          .catch(() => null);
         if (session?.speak) showVoice(session.speak);
         if (items[0]) {
           const agentId = agentForPending(items[0]);
@@ -472,6 +524,28 @@ export function OrchestratorShell() {
 
       <Orchestra agents={agents} dimmed={hitl} />
 
+      {!hitl ? (
+        <SuggestedTasksPanel
+          tasks={suggested}
+          weather={weatherLine}
+          onDismiss={(id) => {
+            void api.setSuggestedTaskStatus(id, "dismissed").catch(() => null);
+            setSuggested((prev) => prev.filter((t) => t.id !== id));
+          }}
+          onAction={(task, actionId) => {
+            if (task.kind === "rfq" && actionId === "engineering") {
+              void send(`Start engineering review and quote for task ${task.id}`);
+            } else if (actionId === "calendar" || actionId === "meeting") {
+              void send(`Create a calendar event for: ${task.title}`);
+            } else if (actionId === "chat" || actionId === "review") {
+              void send(`Let's discuss: ${task.title}`);
+            } else {
+              void send(`${actionId} for suggested task: ${task.title}`);
+            }
+          }}
+        />
+      ) : null}
+
       <CommandBaton
         value={compose}
         onChange={setCompose}
@@ -495,6 +569,9 @@ export function OrchestratorShell() {
         visible={Boolean(composeDraft)}
         listening={confirmListening}
         busy={busy}
+        onFieldsChange={(fields) => {
+          composeFieldsRef.current = fields;
+        }}
         onDecide={(id, approved, fields) => void decide(id, approved, fields)}
       />
     </div>

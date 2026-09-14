@@ -125,7 +125,7 @@ def llm_fill_compose(
     reply_mail: dict[str, Any] | None = None,
     follow_up: bool = False,
 ) -> dict[str, Any]:
-    """Return {to, subject, body, missing, speak} refined by the LLM."""
+    """Return {to, subject, body, missing, speak} refined by Hermes (preferred) or Gemini."""
     explicit = extract_email_address(user_message) or extract_email_address(remainder)
     seed_to = seed_to or explicit
     context = ""
@@ -169,20 +169,68 @@ def llm_fill_compose(
         f"{context}"
     )
     to_addr, subject, body, speak = seed_to, seed_subject, seed_body, ""
-    try:
-        raw = brain_chat(
-            [{"role": "system", "content": system}, {"role": "user", "content": user}],
-            tools=None,
-            timeout=45,
-        )
-        text = (raw.get("content") or "").strip()
+
+    def _apply_json(text: str) -> bool:
+        nonlocal to_addr, subject, body, speak
         start, end = text.find("{"), text.rfind("}")
-        data = json.loads(text[start : end + 1]) if start >= 0 and end > start else {}
+        if start < 0 or end <= start:
+            return False
+        data = json.loads(text[start : end + 1])
         to_addr = str(data.get("to") or to_addr or "").strip() or seed_to
         subject = str(data.get("subject") or subject or "").strip()
         body = str(data.get("body") or body or "").strip()
         speak = str(data.get("speak") or "").strip()
+        return True
+
+    filled = False
+    # Prefer warm Hermes gateway (no tools) for compose fill when available
+    try:
+        from .config import settings
+        from .hermes.bridge import hermes_gateway_reachable
+
+        if settings.hermes_enabled and hermes_gateway_reachable():
+            import httpx
+
+            headers = {
+                "Authorization": f"Bearer {settings.hermes_api_key}",
+                "Content-Type": "application/json",
+            }
+            chat_body = {
+                "model": "hermes-agent",
+                "messages": [
+                    {"role": "system", "content": system + " Do not use tools."},
+                    {"role": "user", "content": user},
+                ],
+                "stream": False,
+            }
+            with httpx.Client(timeout=min(25.0, float(settings.hermes_timeout_sec))) as client:
+                r = client.post(
+                    f"{settings.hermes_gateway_url.rstrip('/')}/v1/chat/completions",
+                    headers=headers,
+                    json=chat_body,
+                )
+            if r.status_code < 400:
+                data = r.json()
+                choice = (data.get("choices") or [None])[0] or {}
+                msg = choice.get("message") or {}
+                content = str(msg.get("content") or "")
+                filled = _apply_json(content)
     except Exception:
+        filled = False
+
+    if not filled:
+        try:
+            raw = brain_chat(
+                [{"role": "system", "content": system}, {"role": "user", "content": user}],
+                tools=None,
+                timeout=45,
+            )
+            text = (raw.get("content") or "").strip()
+            filled = _apply_json(text)
+        except Exception:
+            filled = False
+
+    if not filled:
         if not body and remainder and not _is_address_only_remainder(remainder):
             saying = re.search(r"\b(?:saying|that says|to say)\s+(.+)$", remainder, re.I)
             core = (saying.group(1) if saying else "").strip()
@@ -304,6 +352,8 @@ def start_email_compose(session_id: str, message: str, intent: Any) -> ChatRespo
         payload=payload,
         agent_id="ops",
         tool_name="draft_email",
+        irreversibility=int(pending.get("irreversibility") or 2),
+        consequence=str(pending.get("consequence") or ""),
     )
     return ChatResponse(
         speak=speak,
@@ -367,6 +417,8 @@ def merge_compose_from_message(session_id: str, message: str, pending: dict[str,
         payload=payload,
         agent_id=pending.get("agent_id") or "ops",
         tool_name=pending.get("tool_name") or "draft_email",
+        irreversibility=int(pending.get("irreversibility") or 2),
+        consequence=str(pending.get("consequence") or ""),
     )
     return ChatResponse(
         speak=speak,
@@ -414,6 +466,8 @@ def update_compose_fields(
         payload=payload,
         agent_id=pending.get("agent_id") or "ops",
         tool_name=pending.get("tool_name") or "draft_email",
+        irreversibility=int(pending.get("irreversibility") or 2),
+        consequence=str(pending.get("consequence") or ""),
     )
     return ChatResponse(
         speak=speak,

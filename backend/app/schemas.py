@@ -59,6 +59,8 @@ class PendingAction(BaseModel):
     payload: dict[str, Any]
     agent_id: str = ""
     tool_name: str = ""
+    irreversibility: int = 2
+    consequence: str = ""
 
 
 class ActivityEvent(BaseModel):

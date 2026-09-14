@@ -61,6 +61,21 @@ def init_db() -> None:
                 status TEXT NOT NULL,
                 created_at TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS mission_steps (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id TEXT NOT NULL,
+                mission_id TEXT NOT NULL,
+                step INTEGER NOT NULL,
+                role TEXT NOT NULL,
+                detail TEXT NOT NULL,
+                latency_ms INTEGER,
+                status TEXT NOT NULL,
+                tokens INTEGER,
+                cost REAL,
+                created_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_mission_steps_mission
+                ON mission_steps(mission_id, step);
             CREATE TABLE IF NOT EXISTS pending_actions (
                 id TEXT PRIMARY KEY,
                 session_id TEXT NOT NULL,
@@ -387,6 +402,77 @@ def list_audit(limit: int = 50) -> list[dict[str, Any]]:
     return [dict(row) for row in rows]
 
 
+def add_mission_step(
+    *,
+    session_id: str,
+    mission_id: str,
+    step: int,
+    role: str,
+    detail: str = "",
+    latency_ms: int | None = None,
+    status: str = "ok",
+    tokens: int | None = None,
+    cost: float | None = None,
+) -> None:
+    with connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO mission_steps
+            (session_id, mission_id, step, role, detail, latency_ms, status, tokens, cost, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                session_id,
+                mission_id,
+                int(step),
+                role,
+                detail or "",
+                latency_ms,
+                status,
+                tokens,
+                cost,
+                utc_now(),
+            ),
+        )
+
+
+def list_mission_steps(
+    limit: int = 50,
+    *,
+    mission_id: str | None = None,
+    session_id: str | None = None,
+) -> list[dict[str, Any]]:
+    with connect() as conn:
+        if mission_id:
+            rows = conn.execute(
+                """
+                SELECT * FROM mission_steps
+                WHERE mission_id = ?
+                ORDER BY step ASC, id ASC
+                LIMIT ?
+                """,
+                (mission_id, limit),
+            ).fetchall()
+        elif session_id:
+            rows = conn.execute(
+                """
+                SELECT * FROM mission_steps
+                WHERE session_id = ?
+                ORDER BY id DESC LIMIT ?
+                """,
+                (session_id, limit),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """
+                SELECT * FROM mission_steps
+                ORDER BY id DESC LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+    return [dict(row) for row in rows]
+
+
 def add_pending(
     action_id: str,
     session_id: str,
@@ -427,7 +513,7 @@ def add_pending(
                 """,
                 (action_id, session_id, kind, title, summary, json.dumps(payload), utc_now()),
             )
-    return {
+    result = {
         "id": action_id,
         "kind": kind,
         "title": title,
@@ -436,6 +522,22 @@ def add_pending(
         "agent_id": agent_id or "",
         "tool_name": tool_name or "",
     }
+    return _attach_blast_radius(result)
+
+
+def _attach_blast_radius(data: dict[str, Any]) -> dict[str, Any]:
+    from .hitl_meta import blast_radius_for
+
+    payload = data.get("payload") or {}
+    if isinstance(payload, str):
+        try:
+            payload = json.loads(payload)
+        except json.JSONDecodeError:
+            payload = {}
+    score, consequence = blast_radius_for(str(data.get("kind") or ""), payload if isinstance(payload, dict) else {})
+    data["irreversibility"] = score
+    data["consequence"] = consequence
+    return data
 
 
 def get_pending(action_id: str) -> dict[str, Any] | None:
@@ -450,7 +552,7 @@ def get_pending(action_id: str) -> dict[str, Any] | None:
     data["payload"] = json.loads(data["payload"])
     data.setdefault("agent_id", "")
     data.setdefault("tool_name", "")
-    return data
+    return _attach_blast_radius(data)
 
 
 def set_pending_status(action_id: str, status: str) -> None:
@@ -506,7 +608,7 @@ def list_pending(session_id: str) -> list[dict[str, Any]]:
         item["payload"] = json.loads(item["payload"])
         item.setdefault("agent_id", "")
         item.setdefault("tool_name", "")
-        items.append(item)
+        items.append(_attach_blast_radius(item))
     return items
 
 

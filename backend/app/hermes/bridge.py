@@ -191,6 +191,22 @@ def _clean_speak(text: str) -> str:
     return speak
 
 
+def _speak_usable(speak: str, *, casual: bool) -> bool:
+    """Reject empty / tool-dump / truncated junk so agent can fall back to Gemini."""
+    text = (speak or "").strip()
+    if len(text) < 2:
+        return False
+    low = text.lower()
+    if low.startswith(("traceback", "exception:", "error:", "http 4", "http 5")):
+        return False
+    # Tiny pipe-table fragments like "Theater|...|" are never valid HUD speech
+    if text.count("|") >= 2 and len(text) < 48:
+        return False
+    if casual and len(text) > 600:
+        return False
+    return True
+
+
 def _parse_hermes_output(stdout: str, stderr: str) -> tuple[str, str | None]:
     """Quiet (-Q) mode: final answer on stdout, `session_id: …` on stderr."""
     hermes_id = _extract_session_id(stderr, stdout)
@@ -227,6 +243,8 @@ def _pending_models(session_id: str) -> list[PendingAction]:
                 payload=row.get("payload") or {},
                 agent_id=row.get("agent_id") or agent_for_kind(row["kind"]),
                 tool_name=row.get("tool_name") or "",
+                irreversibility=int(row.get("irreversibility") or 2),
+                consequence=str(row.get("consequence") or ""),
             )
         )
     return items
@@ -337,6 +355,8 @@ def _run_via_gateway(message: str, session_id: str, casual: bool) -> tuple[str, 
         "store": True,
     }
     timeout = float(settings.hermes_timeout_sec)
+    if casual:
+        timeout = min(timeout, 12.0)
     started = time.monotonic()
     try:
         with httpx.Client(timeout=timeout) as client:
@@ -469,6 +489,45 @@ def run_hermes_turn(message: str, session_id: str = "default") -> ChatResponse:
                 "Start with: hermes gateway run (API_SERVER_ENABLED=true)"
             )
         speak, hermes_id, elapsed_ms = _run_via_cli(message, session_id, casual)
+
+    from ..metrics import new_mission_id, record_hermes_latency, record_mission_step
+
+    if not _speak_usable(speak, casual=casual):
+        record_hermes_latency(
+            session_id=session_id,
+            transport=transport,
+            casual=casual,
+            latency_ms=elapsed_ms,
+            ok=False,
+        )
+        raise RuntimeError("Hermes returned empty or unusable speech")
+
+    mission_id = new_mission_id()
+    record_hermes_latency(
+        session_id=session_id,
+        transport=transport,
+        casual=casual,
+        latency_ms=elapsed_ms,
+        ok=True,
+    )
+    record_mission_step(
+        session_id=session_id,
+        mission_id=mission_id,
+        step=0,
+        role="prompt",
+        detail=message[:800],
+        latency_ms=None,
+        status="ok",
+    )
+    record_mission_step(
+        session_id=session_id,
+        mission_id=mission_id,
+        step=1,
+        role="hermes",
+        detail=(speak or "")[:800],
+        latency_ms=elapsed_ms,
+        status="ok",
+    )
 
     pending = _pending_models(session_id)
     if pending:

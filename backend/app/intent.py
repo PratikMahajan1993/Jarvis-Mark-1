@@ -3,6 +3,25 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+# ---------------------------------------------------------------------------
+# Hermes-first routing (Aspect 7)
+# When Hermes is available, `run_agent` owns judgment for almost everything.
+# Jarvis keeps ONLY:
+#   - tight mail_draft compose chrome (modal UX)
+#   - pending Authorize / drawing-session exceptions (in agent.py)
+#   - this tiny safety deny surface (phrases that must never auto-execute)
+# Legacy RULES below remain for Gemini/legacy fallback when Hermes is down.
+# ---------------------------------------------------------------------------
+
+SAFETY_DENY_PHRASES = (
+    "send without approval",
+    "skip authorize",
+    "bypass hitl",
+    "auto send all mail",
+    "delete all memory",
+    "wipe all memory",
+)
+
 
 @dataclass(frozen=True)
 class Intent:
@@ -633,6 +652,9 @@ def classify(message: str) -> Intent:
     if not text:
         return Intent("chat")
     low = text.lower()
+    # Tiny safety deny-list — never treat as a normal work intent
+    if any(phrase in low for phrase in SAFETY_DENY_PHRASES):
+        return Intent("chat", query=text)
     person = person_in(text)
     for rule in RULES:
         hit = rule(text, low, person)

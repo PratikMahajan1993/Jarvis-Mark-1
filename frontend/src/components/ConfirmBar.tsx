@@ -6,16 +6,29 @@ const CNC_PROMOTE_SUMMARY =
 const SHEETS_WRITE_SUMMARY =
   "This overwrites production numbers in the bound Google Sheet. Google will autosave.";
 
-export function shallICopy(action: PendingAction): { title: string; summary: string } {
+export function shallICopy(action: PendingAction): {
+  title: string;
+  summary: string;
+  consequence?: string;
+  irreversibility?: number;
+} {
+  const score = Math.min(5, Math.max(1, Number(action.irreversibility) || 2));
+  const consequence =
+    (action.consequence || "").trim() || "Queued action — review before authorizing.";
   if (action.kind === "cnc_promote") {
     const title = (action.title || "").trim() || "Shall I promote a draft NC?";
-    return { title, summary: CNC_PROMOTE_SUMMARY };
+    return { title, summary: CNC_PROMOTE_SUMMARY, consequence, irreversibility: score };
   }
   if (action.kind === "sheets_write") {
     const title = (action.title || "").trim() || "Overwrite production numbers?";
-    return { title, summary: SHEETS_WRITE_SUMMARY };
+    return { title, summary: SHEETS_WRITE_SUMMARY, consequence, irreversibility: score };
   }
-  return { title: action.title, summary: action.summary };
+  return {
+    title: action.title,
+    summary: action.summary,
+    consequence,
+    irreversibility: score,
+  };
 }
 
 export function ConfirmBar({
@@ -36,6 +49,15 @@ export function ConfirmBar({
         <p className="font-display text-3xl text-white">Shall I?</p>
         <p className="mt-3 text-lg text-white/70">{copy.title}</p>
         <p className="mt-1 text-sm text-white/40">{copy.summary}</p>
+        {copy.consequence ? (
+          <p className="mt-3 text-left text-sm text-amber-200/80">
+            <span className="font-mono text-[10px] uppercase tracking-wider text-amber-400/90">
+              Blast radius · {copy.irreversibility ?? 2}/5
+            </span>
+            <br />
+            {copy.consequence}
+          </p>
+        ) : null}
         <div className="mt-7 flex justify-center gap-4">
           <HudButton variant="ghost" onClick={() => onDecide(action.id, false)}>
             No

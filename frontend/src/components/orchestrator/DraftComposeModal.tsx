@@ -20,12 +20,14 @@ export function DraftComposeModal({
   listening = false,
   busy = false,
   onDecide,
+  onFieldsChange,
 }: {
   action: PendingAction | null;
   visible: boolean;
   listening?: boolean;
   busy?: boolean;
   onDecide: (id: string, approved: boolean, fields: { to: string; subject: string; body: string }) => void;
+  onFieldsChange?: (fields: { to: string; subject: string; body: string }) => void;
 }) {
   const [to, setTo] = useState("");
   const [subject, setSubject] = useState("");
@@ -38,6 +40,10 @@ export function DraftComposeModal({
     setSubject(fieldValue(action.payload, "subject"));
     setBody(fieldValue(action.payload, "body"));
   }, [action?.id, action?.payload]);
+
+  useEffect(() => {
+    onFieldsChange?.({ to, subject, body });
+  }, [to, subject, body, onFieldsChange]);
 
   useEffect(() => {
     if (!visible) {

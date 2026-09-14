@@ -134,6 +134,195 @@ def jarvis_agent_for_tool(tool_name: str) -> str:
     return json.dumps({"tool": tool_name, "agent_id": agent_for_tool(tool_name)})
 
 
+@mcp.tool()
+def jarvis_memory_search(query: str, namespace: str = "", limit: int = 8) -> str:
+    """Search local dual-write memory / RAG. Read-only."""
+    return _dump(
+        execute_tool(
+            "memory_search",
+            {"query": query, "namespace": namespace, "limit": limit},
+            _session(),
+        )
+    )
+
+
+@mcp.tool()
+def jarvis_memory_upsert(text: str, namespace: str = "corpus", key: str = "") -> str:
+    """Upsert a durable fact/doc into local memory (mirrored for offline RAG)."""
+    return _dump(
+        execute_tool(
+            "memory_upsert",
+            {"text": text, "namespace": namespace, "key": key},
+            _session(),
+        )
+    )
+
+
+@mcp.tool()
+def jarvis_memory_forget(
+    namespace: str = "",
+    key: str = "",
+    doc_id: str = "",
+    wipe_namespace: bool = False,
+) -> str:
+    """Forget a local memory doc. Namespace wipe queues HITL Authorize."""
+    return _dump(
+        execute_tool(
+            "memory_forget",
+            {
+                "namespace": namespace,
+                "key": key,
+                "doc_id": doc_id,
+                "wipe_namespace": wipe_namespace,
+            },
+            _session(),
+        )
+    )
+
+
+@mcp.tool()
+def jarvis_memory_summary() -> str:
+    """Summarize local memory (what Jarvis knows offline)."""
+    return _dump(execute_tool("memory_summary", {}, _session()))
+
+
+@mcp.tool()
+def jarvis_save_mail_attachments(
+    email_id: str = "",
+    attachment_ids: str = "",
+    filenames: str = "",
+    query: str = "",
+) -> str:
+    """Save selected mail attachments locally (and Drive when connected)."""
+    ids = [x.strip() for x in attachment_ids.split(",") if x.strip()] if attachment_ids else []
+    names = [x.strip() for x in filenames.split(",") if x.strip()] if filenames else []
+    return _dump(
+        execute_tool(
+            "save_mail_attachments",
+            {
+                "email_id": email_id,
+                "attachment_ids": ids,
+                "filenames": names,
+                "query": query,
+            },
+            _session(),
+        )
+    )
+
+
+@mcp.tool()
+def jarvis_reason_rfq(mail_id: str = "", conversation_id: str = "", message: str = "") -> str:
+    """Intake / reason a drawing RFQ from mail."""
+    return _dump(
+        execute_tool(
+            "reason_rfq",
+            {"mail_id": mail_id, "conversation_id": conversation_id, "message": message},
+            _session(),
+        )
+    )
+
+
+@mcp.tool()
+def jarvis_create_pdf(title: str, body: str) -> str:
+    """Create a local PDF artifact."""
+    return _dump(execute_tool("create_pdf", {"title": title, "body": body}, _session()))
+
+
+@mcp.tool()
+def jarvis_create_spreadsheet(title: str, columns: str = "Item,Qty", rows: str = "") -> str:
+    """Create a local spreadsheet artifact. columns is comma-separated; rows is optional JSON list of lists."""
+    cols = [c.strip() for c in columns.split(",") if c.strip()] or ["Item", "Qty"]
+    args: dict[str, Any] = {"title": title, "columns": cols, "rows": []}
+    if rows.strip():
+        try:
+            args["rows"] = json.loads(rows)
+        except json.JSONDecodeError:
+            pass
+    return _dump(execute_tool("create_spreadsheet", args, _session()))
+
+
+@mcp.tool()
+def jarvis_quote_analyze_drawing(path: str, prompt: str = "") -> str:
+    """Gemini vision dimensional analysis of a local drawing file path."""
+    return _dump(execute_tool("quote_analyze_drawing", {"path": path, "prompt": prompt}, _session()))
+
+
+@mcp.tool()
+def jarvis_quote_build(
+    part_name: str,
+    material: str = "",
+    vision_summary: str = "",
+    customer: str = "",
+) -> str:
+    """Build a quotation spreadsheet from part + vision notes."""
+    return _dump(
+        execute_tool(
+            "quote_build",
+            {
+                "part_name": part_name,
+                "material": material,
+                "vision_summary": vision_summary,
+                "customer": customer,
+            },
+            _session(),
+        )
+    )
+
+
+@mcp.tool()
+def jarvis_quote_pdf(part_name: str = "") -> str:
+    """Create a PDF artifact for the current quotation."""
+    return _dump(execute_tool("quote_pdf", {"part_name": part_name}, _session()))
+
+
+@mcp.tool()
+def jarvis_quote_send(to: str, subject: str = "", body: str = "", pdf_path: str = "") -> str:
+    """Queue quote PDF email for HITL Authorize (does not send)."""
+    return _dump(
+        execute_tool(
+            "quote_send",
+            {"to": to, "subject": subject, "body": body, "pdf_path": pdf_path},
+            _session(),
+        )
+    )
+
+
+@mcp.tool()
+def jarvis_office_refresh_tasks() -> str:
+    """Refresh morning suggested-task cards (RFQ + production)."""
+    return _dump(execute_tool("office_refresh_tasks", {}, _session()))
+
+
+@mcp.tool()
+def jarvis_get_weather(city: str = "Pune") -> str:
+    """Current weather for the office city (Open-Meteo)."""
+    return _dump(execute_tool("get_weather", {"city": city}, _session()))
+
+
+@mcp.tool()
+def jarvis_browser_record_evidence(url: str, title: str = "", notes: str = "") -> str:
+    """Record evidence for a novel browser task (path + notes; screenshot optional later)."""
+    return _dump(
+        execute_tool(
+            "browser_record_evidence",
+            {"url": url, "title": title, "notes": notes},
+            _session(),
+        )
+    )
+
+
+@mcp.tool()
+def jarvis_browser_queue_action(title: str, summary: str, url: str, evidence_id: str = "") -> str:
+    """Queue a consequential browser action for HITL Authorize."""
+    return _dump(
+        execute_tool(
+            "browser_queue_action",
+            {"title": title, "summary": summary, "url": url, "evidence_id": evidence_id},
+            _session(),
+        )
+    )
+
+
 def main() -> None:
     mcp.run(transport="stdio")
 

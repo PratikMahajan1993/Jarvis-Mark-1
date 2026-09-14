@@ -60,24 +60,41 @@ export function inferBusyAgents(message: string, toolHint = ""): AgentId[] {
   return ids;
 }
 
-export function shallICopy(action: PendingAction): { title: string; summary: string; meta: string } {
+export function shallICopy(action: PendingAction): {
+  title: string;
+  summary: string;
+  meta: string;
+  consequence: string;
+  irreversibility: number;
+} {
+  const score = Math.min(5, Math.max(1, Number(action.irreversibility) || 2));
+  const consequence =
+    (action.consequence || "").trim() ||
+    "Queued action — review before authorizing.";
+  const risk = `Irreversibility ${score}/5`;
   if (action.kind === "cnc_promote") {
     return {
       title: (action.title || "").trim() || "Promote draft NC?",
       summary: "This is a draft program, not proven. It is not for the machine until you authorize it.",
-      meta: `Authorization Required // ${agentCode(agentForPending(action))}`,
+      meta: `Authorization Required // ${agentCode(agentForPending(action))} // ${risk}`,
+      consequence,
+      irreversibility: score,
     };
   }
   if (action.kind === "sheets_write") {
     return {
       title: (action.title || "").trim() || "Overwrite production numbers?",
       summary: "This overwrites production numbers in the bound Google Sheet. Google will autosave.",
-      meta: `Authorization Required // ${agentCode(agentForPending(action))}`,
+      meta: `Authorization Required // ${agentCode(agentForPending(action))} // ${risk}`,
+      consequence,
+      irreversibility: score,
     };
   }
   return {
     title: action.title || "Authorize action",
     summary: action.summary || "The operations agent requests authorization to proceed.",
-    meta: `Authorization Required // ${agentCode(agentForPending(action))}`,
+    meta: `Authorization Required // ${agentCode(agentForPending(action))} // ${risk}`,
+    consequence,
+    irreversibility: score,
   };
 }

@@ -179,4 +179,17 @@ export const api = {
     },
     fileUrl: (fileId: string) => `${apiBase()}/api/canvas/files/${fileId}`,
   },
+  suggestedTasks: (refresh = false, sessionId = "default") =>
+    json<{ items: Array<Record<string, unknown>>; weather?: { speak?: string } }>(
+      `/api/suggested-tasks?refresh=${refresh ? "true" : "false"}&session_id=${encodeURIComponent(sessionId)}`,
+    ),
+  setSuggestedTaskStatus: (taskId: string, status = "dismissed") =>
+    json<Record<string, unknown>>(`/api/suggested-tasks/${encodeURIComponent(taskId)}/status?status=${encodeURIComponent(status)}`, {
+      method: "POST",
+    }),
+  officeRefresh: (sessionId = "default") =>
+    json<Record<string, unknown>>(`/api/office/refresh?session_id=${encodeURIComponent(sessionId)}`, {
+      method: "POST",
+    }),
+  metrics: () => json<Record<string, unknown>>("/api/metrics"),
 };

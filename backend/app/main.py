@@ -64,14 +64,26 @@ def startup() -> None:
     settings.exports_dir.mkdir(parents=True, exist_ok=True)
     resume_watches()
     kick_snapshot()
-    if settings.hermes_enabled:
-        try:
-            from .hermes.bridge import ensure_jarvis_mcp_registered, hermes_available
+    try:
+        from .memory.store import _ensure_schema
 
-            if hermes_available():
-                ensure_jarvis_mcp_registered()
-        except Exception:
-            pass
+        _ensure_schema()
+    except Exception:
+        pass
+    if settings.hermes_enabled:
+        # Never block API readiness on MCP registration (can take minutes).
+        import threading
+
+        def _mcp_bg() -> None:
+            try:
+                from .hermes.bridge import ensure_jarvis_mcp_registered, hermes_available
+
+                if hermes_available():
+                    ensure_jarvis_mcp_registered()
+            except Exception:
+                pass
+
+        threading.Thread(target=_mcp_bg, name="jarvis-mcp-register", daemon=True).start()
 
 
 @app.get("/api/agents")
@@ -103,6 +115,18 @@ def api_health() -> dict:
     except Exception:
         status["hermes"] = {"enabled": bool(settings.hermes_enabled), "available": False}
     return status
+
+
+@app.get("/api/metrics")
+def api_metrics() -> dict:
+    from .metrics import metrics_snapshot
+
+    return metrics_snapshot()
+
+
+@app.get("/api/missions")
+def api_missions(limit: int = 40, mission_id: str | None = None, session_id: str | None = None) -> dict:
+    return {"items": db.list_mission_steps(limit=limit, mission_id=mission_id, session_id=session_id)}
 
 
 @app.get("/api/google/status")
@@ -193,6 +217,35 @@ def api_pending_update(action_id: str, payload: ComposeUpdateRequest) -> dict:
 @app.get("/api/briefing")
 def api_briefing() -> dict:
     return build_briefing()
+
+
+@app.get("/api/suggested-tasks")
+def api_suggested_tasks(refresh: bool = False, session_id: str = "default") -> dict:
+    from .office_day import list_tasks, refresh_suggested_tasks
+
+    weather = None
+    if refresh:
+        payload = refresh_suggested_tasks(session_id)
+        weather = payload.get("weather")
+        return {"items": payload.get("tasks") or list_tasks(), "weather": weather}
+    return {"items": list_tasks(), "weather": weather}
+
+
+@app.post("/api/suggested-tasks/{task_id}/status")
+def api_suggested_task_status(task_id: str, status: str = "dismissed") -> dict:
+    from .office_day import set_task_status
+
+    row = set_task_status(task_id, status)
+    if not row:
+        raise HTTPException(404, "Task not found")
+    return row
+
+
+@app.post("/api/office/refresh")
+def api_office_refresh(session_id: str = "default") -> dict:
+    from .office_day import refresh_suggested_tasks
+
+    return refresh_suggested_tasks(session_id)
 
 
 @app.get("/api/glance")

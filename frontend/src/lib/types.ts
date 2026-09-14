@@ -50,6 +50,8 @@ export type PendingAction = {
   payload: Record<string, unknown>;
   agent_id?: string;
   tool_name?: string;
+  irreversibility?: number;
+  consequence?: string;
 };
 
 export type ActivityEvent = {

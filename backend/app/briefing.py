@@ -190,6 +190,13 @@ def gather_briefing_facts() -> dict:
     upcoming = calendar_conn.upcoming(days=2)
     next_event = upcoming[0] if upcoming else None
     slot = greeting_slot()
+    weather: dict = {}
+    try:
+        from .office_day import fetch_weather
+
+        weather = fetch_weather()
+    except Exception:
+        weather = {"speak": ""}
     return {
         "slot": slot,
         "name": prefs.get("display_name") or "Sir",
@@ -197,6 +204,8 @@ def gather_briefing_facts() -> dict:
         "priority_mail": priority_mail,
         "next_event": next_event,
         "date_subtitle": _now().strftime("%A | %d %b %Y"),
+        "weather": weather,
+        "weather_speak": weather.get("speak") or "",
         **_shop_facts(),
     }
 
@@ -230,6 +239,9 @@ def fallback_briefing_speak(facts: dict) -> str:
     unread_total = int(facts.get("unread_total") or 0)
 
     parts = [f"{slot}, {name}."]
+    weather_speak = str(facts.get("weather_speak") or "").strip()
+    if weather_speak:
+        parts.append(weather_speak + ".")
     if priority:
         names: list[str] = []
         for mail in priority[:4]:

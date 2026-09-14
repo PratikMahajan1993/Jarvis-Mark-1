@@ -171,22 +171,65 @@ HANDLERS: dict[str, Callable[..., dict[str, Any]]] = {}
 
 
 def execute_tool(name: str, args: dict[str, Any], session_id: str) -> dict[str, Any]:
+    from ..metrics import new_mission_id, record_mission_step
+
+    mission_id = new_mission_id()
     handler = HANDLERS.get(name)
     if not handler:
         db.add_audit(session_id, name, f"Unknown tool {name}", "error")
+        record_mission_step(
+            session_id=session_id,
+            mission_id=mission_id,
+            step=0,
+            role="tool",
+            detail=f"unknown:{name}",
+            status="error",
+        )
         return {"ok": False, "error": f"Unknown tool: {name}"}
     try:
+        record_mission_step(
+            session_id=session_id,
+            mission_id=mission_id,
+            step=0,
+            role="tool",
+            detail=f"{name} {str(args)[:400]}",
+            status="ok",
+        )
         result = handler(session_id=session_id, **args)
         db.add_audit(session_id, name, str(result.get("data", result))[:400], "ok")
         note_tool(session_id, name, result)
         if not result.get("speak"):
             result["speak"] = speak_for_tool(name, result, session_id)
+        record_mission_step(
+            session_id=session_id,
+            mission_id=mission_id,
+            step=1,
+            role="result",
+            detail=str(result.get("data", result))[:800],
+            status="ok" if result.get("ok", True) else "error",
+        )
         return result
     except TypeError as exc:
         db.add_audit(session_id, name, str(exc), "error")
+        record_mission_step(
+            session_id=session_id,
+            mission_id=mission_id,
+            step=1,
+            role="result",
+            detail=str(exc)[:800],
+            status="error",
+        )
         return {"ok": False, "error": f"Bad arguments for {name}: {exc}"}
     except Exception as exc:
         db.add_audit(session_id, name, str(exc), "error")
+        record_mission_step(
+            session_id=session_id,
+            mission_id=mission_id,
+            step=1,
+            role="result",
+            detail=str(exc)[:800],
+            status="error",
+        )
         return {"ok": False, "error": str(exc)}
 
 
@@ -768,7 +811,86 @@ def _open_artifact(session_id: str, artifact_id: str = "", **_: Any) -> dict[str
 
 def _remember(session_id: str, key: str, value: str, **_: Any) -> dict[str, Any]:
     db.add_memory(session_id, key, value)
+    from ..memory.dual_write import mirror_fact
+
+    mirror_fact(f"{key}: {value}", namespace="profile", key=f"pref:{key}", meta={"session_id": session_id})
     return _ok({"key": key, "value": value})
+
+
+def _memory_search(session_id: str, query: str, namespace: str = "", limit: int = 8, **_: Any) -> dict[str, Any]:
+    from ..memory import search
+
+    hits = search(query, namespace=namespace or None, limit=limit)
+    scene = {
+        "title": "Local memory",
+        "subtitle": query[:80],
+        "widgets": [
+            {
+                "type": "markdown",
+                "text": "\n\n".join(
+                    f"**{h['namespace']}/{h['key']}** ({h['score']})\n{h['text'][:400]}" for h in hits
+                )
+                or "No matches.",
+            }
+        ],
+    }
+    return _ok({"hits": hits}, scene=scene)
+
+
+def _memory_upsert(
+    session_id: str,
+    text: str,
+    namespace: str = "corpus",
+    key: str = "",
+    **_: Any,
+) -> dict[str, Any]:
+    from ..memory import upsert
+
+    doc = upsert(namespace=namespace, key=key, text=text, meta={"session_id": session_id})
+    return _ok(doc)
+
+
+def _memory_forget(
+    session_id: str,
+    namespace: str = "",
+    key: str = "",
+    doc_id: str = "",
+    wipe_namespace: bool = False,
+    **_: Any,
+) -> dict[str, Any]:
+    from ..memory import forget
+
+    if wipe_namespace and namespace:
+        pending = _queue_pending(
+            session_id,
+            "memory_wipe",
+            f"Wipe memory namespace: {namespace}",
+            f"Deletes all local memory docs in `{namespace}`.",
+            {"namespace": namespace, "wipe_namespace": True},
+            tool_name="memory_forget",
+        )
+        return _ok({"queued": True}, pending=pending, speak="Authorize to wipe that memory namespace.")
+    result = forget(namespace=namespace or None, key=key or None, doc_id=doc_id or None, wipe_namespace=False)
+    return _ok(result)
+
+
+def _memory_summary(session_id: str, **_: Any) -> dict[str, Any]:
+    from ..memory import get_summary
+
+    summary = get_summary()
+    lines = [f"- {row['namespace']}/{row['key']}: {row['text'][:160]}" for row in summary.get("recent") or []]
+    scene = {
+        "title": "What I know (local)",
+        "subtitle": summary.get("engine") or "memory",
+        "widgets": [{"type": "markdown", "text": "\n".join(lines) or "Nothing stored yet."}],
+    }
+    return _ok(summary, scene=scene)
+
+
+def _memory_reindex_mail(session_id: str, limit: int = 20, **_: Any) -> dict[str, Any]:
+    from ..memory.ingest import reindex_recent_mail
+
+    return _ok(reindex_recent_mail(limit=limit))
 
 
 def _update_preferences(session_id: str, **fields: Any) -> dict[str, Any]:
@@ -885,6 +1007,153 @@ def _update_shop_sheet(
     )
 
 
+def _quote_analyze_drawing(session_id: str, path: str = "", prompt: str = "", **_: Any) -> dict[str, Any]:
+    from ..quote import analyze_drawing_vision
+
+    result = analyze_drawing_vision(path, prompt=prompt)
+    scene = {
+        "title": "Drawing vision",
+        "subtitle": result.get("name") or path,
+        "widgets": [{"type": "markdown", "text": result.get("summary") or result.get("error") or ""}],
+    }
+    return _ok(result, scene=scene, speak=(result.get("summary") or "")[:280])
+
+
+def _quote_build(
+    session_id: str,
+    part_name: str = "Component",
+    material: str = "",
+    vision_summary: str = "",
+    customer: str = "",
+    line_items: list[dict[str, Any]] | None = None,
+    **_: Any,
+) -> dict[str, Any]:
+    from ..quote import build_quote
+
+    result = build_quote(
+        session_id=session_id,
+        part_name=part_name,
+        material=material,
+        vision_summary=vision_summary,
+        line_items=line_items,
+        customer=customer,
+    )
+    artifact = result.get("artifact") or {}
+    scene = {
+        "title": "Quotation sheet",
+        "subtitle": artifact.get("name") or part_name,
+        "widgets": [
+            {"type": "table", "columns": result.get("columns") or [], "rows": (result.get("rows") or [])[:12]},
+            {"type": "markdown", "text": f"Saved as **{artifact.get('name') or 'quote'}**. Edit locally or ask for changes."},
+        ],
+    }
+    return _ok(result, scene=scene)
+
+
+def _quote_pdf(session_id: str, part_name: str = "", **_: Any) -> dict[str, Any]:
+    from ..quote import quote_to_pdf
+
+    # Prefer last quote rows from memory if present
+    result = quote_to_pdf(session_id=session_id, part_name=part_name)
+    return _ok(result)
+
+
+def _quote_send(
+    session_id: str,
+    to: str,
+    subject: str = "",
+    body: str = "",
+    pdf_path: str = "",
+    **_: Any,
+) -> dict[str, Any]:
+    from ..quote import queue_quote_send
+
+    if not pdf_path:
+        pdf_id = ""
+        for mem in db.list_memories(session_id):
+            if mem.get("key") == "last_quote_pdf":
+                pdf_id = str(mem.get("value") or "")
+        art = db.get_artifact(pdf_id) if pdf_id else None
+        if art:
+            pdf_path = art.get("path") or ""
+    subj = subject or "Quotation"
+    body_text = body or "Please find the quotation attached."
+    result = queue_quote_send(
+        session_id=session_id,
+        to=to,
+        subject=subj,
+        body=body_text,
+        pdf_path=pdf_path,
+    )
+    pending = result.get("pending")
+    scene = {
+        "title": "Quote ready to send",
+        "subtitle": subj,
+        "widgets": [{"type": "markdown", "text": f"To **{to}**\n\n{body_text}"}],
+    }
+    return _ok(result, scene=scene, pending=pending, speak="Authorize to send the quote PDF.")
+
+
+def _office_refresh_tasks(session_id: str, **_: Any) -> dict[str, Any]:
+    from ..office_day import refresh_suggested_tasks
+
+    result = refresh_suggested_tasks(session_id)
+    return _ok(result)
+
+
+def _office_list_tasks(session_id: str, **_: Any) -> dict[str, Any]:
+    from ..office_day import list_tasks
+
+    return _ok({"tasks": list_tasks()})
+
+
+def _get_weather(session_id: str, city: str = "Pune", **_: Any) -> dict[str, Any]:
+    from ..office_day import fetch_weather
+
+    weather = fetch_weather(city=city)
+    return _ok(weather, speak=weather.get("speak") or "")
+
+
+def _browser_record_evidence(
+    session_id: str,
+    url: str,
+    title: str = "",
+    notes: str = "",
+    screenshot_b64: str = "",
+    **_: Any,
+) -> dict[str, Any]:
+    from ..browser_evidence import record_evidence
+
+    result = record_evidence(
+        session_id=session_id,
+        url=url,
+        title=title,
+        notes=notes,
+        screenshot_b64=screenshot_b64,
+    )
+    return _ok(result)
+
+
+def _browser_queue_action(
+    session_id: str,
+    title: str,
+    summary: str,
+    url: str,
+    evidence_id: str = "",
+    **_: Any,
+) -> dict[str, Any]:
+    from ..browser_evidence import queue_browser_action
+
+    result = queue_browser_action(
+        session_id=session_id,
+        title=title,
+        summary=summary,
+        url=url,
+        evidence_id=evidence_id,
+    )
+    return _ok(result, pending=result.get("pending"))
+
+
 HANDLERS.update(
     {
         "get_briefing": _get_briefing,
@@ -908,6 +1177,11 @@ HANDLERS.update(
         "task_for_gemini": _task_for_gemini,
         "open_artifact": _open_artifact,
         "remember": _remember,
+        "memory_search": _memory_search,
+        "memory_upsert": _memory_upsert,
+        "memory_forget": _memory_forget,
+        "memory_summary": _memory_summary,
+        "memory_reindex_mail": _memory_reindex_mail,
         "update_preferences": _update_preferences,
         "reason_rfq": _reason_rfq,
         "cnc_suggest": _cnc_suggest,
@@ -915,6 +1189,15 @@ HANDLERS.update(
         "ensure_shop_sheet": _ensure_shop_sheet,
         "read_shop_sheet": _read_shop_sheet,
         "update_shop_sheet": _update_shop_sheet,
+        "quote_analyze_drawing": _quote_analyze_drawing,
+        "quote_build": _quote_build,
+        "quote_pdf": _quote_pdf,
+        "quote_send": _quote_send,
+        "office_refresh_tasks": _office_refresh_tasks,
+        "office_list_tasks": _office_list_tasks,
+        "get_weather": _get_weather,
+        "browser_record_evidence": _browser_record_evidence,
+        "browser_queue_action": _browser_queue_action,
     }
 )
 
@@ -1220,6 +1503,73 @@ TOOL_SCHEMAS = [
                     "value": {"type": "string"},
                 },
                 "required": ["key", "value"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "memory_search",
+            "description": "Search local dual-write memory / RAG corpus.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string"},
+                    "namespace": {"type": "string"},
+                    "limit": {"type": "integer"},
+                },
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "memory_upsert",
+            "description": "Upsert a durable local memory document.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "text": {"type": "string"},
+                    "namespace": {"type": "string"},
+                    "key": {"type": "string"},
+                },
+                "required": ["text"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "memory_forget",
+            "description": "Forget a local memory doc. Broad namespace wipe queues HITL.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "namespace": {"type": "string"},
+                    "key": {"type": "string"},
+                    "doc_id": {"type": "string"},
+                    "wipe_namespace": {"type": "boolean"},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "memory_summary",
+            "description": "Summarize what Jarvis knows in the local memory store.",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "memory_reindex_mail",
+            "description": "Reindex recent mail into the local RAG corpus.",
+            "parameters": {
+                "type": "object",
+                "properties": {"limit": {"type": "integer"}},
             },
         },
     },

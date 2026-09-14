@@ -47,7 +47,7 @@ class Settings(BaseSettings):
     google_account: str = "pgeneration.mech@gmail.com"
     gemini_task_to: str = "pgeneration.mech@gmail.com"
     hud_url: str = "http://localhost:3000"
-    hermes_enabled: bool = False
+    hermes_enabled: bool = True
     hermes_bin: str = "hermes"
     hermes_home: str = ""
     hermes_timeout_sec: float = 30.0
