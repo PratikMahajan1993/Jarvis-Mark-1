@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import re
 import threading
+import time
 from datetime import datetime, timezone
 from typing import Any
 
 from . import db
 
-STALE_SECONDS = 180
+# Auto-refresh local mailbox / calendar corpus about every 15 minutes.
+STALE_SECONDS = 900
+REFRESH_INTERVAL_SECONDS = 900
 SNAPSHOT_KINDS = frozenset({"briefing", "mail_search", "mail_read", "calendar_list"})
 SKIP_MODEL = SNAPSHOT_KINDS | {
     "calendar_create",
@@ -24,13 +27,14 @@ SKIP_MODEL = SNAPSHOT_KINDS | {
 _FRESH = re.compile(
     r"\b("
     r"anything new|what's new|whats new|any new(?: mail| emails?)?"
-    r"|refresh|check again|update me"
+    r"|refresh|check again|update me|sync(?:\s+mail)?|download(?:\s+mail)?"
     r")\b",
     re.I,
 )
 
 _lock = threading.Lock()
 _thread: threading.Thread | None = None
+_loop_thread: threading.Thread | None = None
 
 
 def wants_fresh(message: str) -> bool:
@@ -102,19 +106,24 @@ def refresh(force: bool = False) -> dict[str, Any]:
             mail_count=mail_count,
             status="ok" if mail_at else current.get("status") or "ok",
         )
+        _index_mail_corpus()
         return status()
 
 
 def kick() -> None:
-    global _thread
+    """Kick an immediate sync if stale, and ensure the 15-minute loop is running."""
+    global _thread, _loop_thread
     current = status()
-    if current["ready"] and not current["stale"]:
-        return
+    if not (current["ready"] and not current["stale"]):
+        with _lock:
+            if not (_thread and _thread.is_alive()):
+                _thread = threading.Thread(target=_kick_run, daemon=True, name="jarvis-snapshot")
+                _thread.start()
     with _lock:
-        if _thread and _thread.is_alive():
+        if _loop_thread and _loop_thread.is_alive():
             return
-        _thread = threading.Thread(target=_kick_run, daemon=True, name="jarvis-snapshot")
-        _thread.start()
+        _loop_thread = threading.Thread(target=_refresh_loop, daemon=True, name="jarvis-mail-loop")
+        _loop_thread.start()
 
 
 def _kick_run() -> None:
@@ -122,6 +131,28 @@ def _kick_run() -> None:
         refresh(force=False)
     except Exception:
         db.set_work_snapshot(status="error")
+
+
+def _refresh_loop() -> None:
+    """Keep the local mailbox + RAG corpus warm every ~15 minutes."""
+    while True:
+        time.sleep(REFRESH_INTERVAL_SECONDS)
+        try:
+            refresh(force=True)
+        except Exception:
+            try:
+                db.set_work_snapshot(status="error")
+            except Exception:
+                pass
+
+
+def _index_mail_corpus() -> None:
+    try:
+        from .memory.ingest import reindex_recent_mail
+
+        reindex_recent_mail(limit=40)
+    except Exception:
+        pass
 
 
 def _age_seconds(stamp: str) -> float | None:

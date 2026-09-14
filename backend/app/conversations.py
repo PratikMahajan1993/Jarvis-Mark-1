@@ -15,6 +15,34 @@ from .ollama_client import OllamaError
 from .schemas import ChatResponse, Scene
 
 COMMAND_SESSION = "default"
+AMBIENT_SESSION = "default"
+
+# Desk model categories (human: everyday desk / named talks / jobs)
+KIND_DISCUSSION = "discussion"
+KIND_WORKFLOW = "workflow"
+KIND_DRAWING = "drawing"  # engineering drawing job (existing)
+DESK_KINDS = frozenset({KIND_DISCUSSION, KIND_WORKFLOW, KIND_DRAWING})
+
+
+def ambient_session() -> str:
+    return AMBIENT_SESSION
+
+
+def is_desk_kind(category: str) -> bool:
+    return (category or "").strip().lower() in DESK_KINDS
+
+
+def kind_label(category: str) -> str:
+    cat = (category or "").strip().lower()
+    if cat == KIND_WORKFLOW:
+        return "Job"
+    if cat == KIND_DRAWING:
+        return "Drawing"
+    if cat == KIND_DISCUSSION:
+        return "Discussion"
+    return "Note"
+
+
 _BRAIN = threading.Lock()
 
 _DRAWING_SYSTEM = (
@@ -41,10 +69,13 @@ def public_row(row: dict[str, Any]) -> dict[str, Any]:
     pending = db.list_focused_pending(session_id) if session_id else []
     turns = db.recent_messages(session_id, 12) if session_id else []
     scene = hud.get("scene") or {}
+    category = row.get("category") or "files"
     return {
         "id": row.get("id"),
         "session_id": session_id,
-        "category": row.get("category") or "files",
+        "category": category,
+        "kind": category if is_desk_kind(str(category)) else "discussion",
+        "kind_label": kind_label(str(category)),
         "title": row.get("title") or "Conversation",
         "focus": row.get("focus") or {},
         "minimized": bool(row.get("minimized")),
@@ -62,6 +93,76 @@ def public_row(row: dict[str, Any]) -> dict[str, Any]:
 
 def list_public() -> list[dict[str, Any]]:
     return [public_row(row) for row in db.list_conversations()]
+
+
+def list_desk() -> list[dict[str, Any]]:
+    """Open discussions + jobs for the desk tray (excludes archived)."""
+    items: list[dict[str, Any]] = []
+    for row in list_public():
+        if row.get("status") == "archived":
+            continue
+        if is_desk_kind(str(row.get("category") or "")):
+            items.append(row)
+    return items
+
+
+def start_discussion(title: str = "", focus: dict[str, Any] | None = None) -> dict[str, Any]:
+    stamp = db.utc_now()[11:16]
+    label = (title or "").strip() or f"Discussion {stamp}"
+    created = create(KIND_DISCUSSION, label, focus or {}, status="ready")
+    opening = "I'm with you on this discussion. Leave anytime — we can pick it up again from your open notes."
+    db.add_message(created["session_id"], "assistant", opening)
+    remember_hud(
+        created["session_id"],
+        {
+            "speak": "Discussion started. What shall we dig into?",
+            "reply": "Discussion started. What shall we dig into?",
+            "scene": {"title": label, "widgets": []},
+            "pending": [],
+        },
+    )
+    return public_row(db.get_conversation(created["id"]) or created)
+
+
+def start_or_resume_workflow(
+    *,
+    title: str,
+    focus: dict[str, Any] | None = None,
+    resume_key: str = "",
+) -> dict[str, Any]:
+    """Open a job conversation, or resume one that shares the same resume_key."""
+    payload = dict(focus or {})
+    key = (resume_key or str(payload.get("resume_key") or "")).strip()
+    if key:
+        payload["resume_key"] = key
+        for row in db.list_conversations():
+            if row.get("status") == "archived":
+                continue
+            if row.get("category") not in {KIND_WORKFLOW, KIND_DRAWING}:
+                continue
+            focus_row = row.get("focus") if isinstance(row.get("focus"), dict) else {}
+            if str(focus_row.get("resume_key") or "") == key:
+                merged = {**focus_row, **payload}
+                db.update_conversation(row["id"], minimized=False, status="ready", focus=merged)
+                db.touch_conversation(row["id"])
+                return public_row(db.get_conversation(row["id"]) or row)
+
+    label = (title or "Job").strip()[:80] or "Job"
+    created = create(KIND_WORKFLOW, label, payload, status="ready")
+    opening = (
+        f"Job open: {label}. We'll keep drawings, quotes, and decisions here so you can leave and come back."
+    )
+    db.add_message(created["session_id"], "assistant", opening)
+    remember_hud(
+        created["session_id"],
+        {
+            "speak": opening,
+            "reply": opening,
+            "scene": {"title": label, "widgets": []},
+            "pending": [],
+        },
+    )
+    return public_row(db.get_conversation(created["id"]) or created)
 
 
 def latest_drawing() -> dict[str, Any] | None:

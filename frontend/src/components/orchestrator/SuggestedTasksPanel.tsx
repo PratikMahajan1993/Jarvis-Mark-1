@@ -1,5 +1,10 @@
 "use client";
 
+import { useState } from "react";
+import GlareHover from "@/components/react-bits/GlareHover";
+import GradientText from "@/components/react-bits/GradientText";
+import SpotlightCard from "@/components/react-bits/SpotlightCard";
+
 export type SuggestedTask = {
   id: string;
   kind: string;
@@ -11,63 +16,123 @@ export type SuggestedTask = {
   meta?: Record<string, unknown>;
 };
 
-export function SuggestedTasksPanel({
-  tasks,
-  weather,
+function TaskCard({
+  task,
   onAction,
   onDismiss,
 }: {
-  tasks: SuggestedTask[];
-  weather?: string;
+  task: SuggestedTask;
   onAction: (task: SuggestedTask, actionId: string) => void;
   onDismiss: (taskId: string) => void;
 }) {
-  if (!tasks.length && !weather) return null;
+  const [expanded, setExpanded] = useState(false);
+  const open = () => setExpanded(true);
+  const close = () => setExpanded(false);
+
   return (
-    <aside className="pointer-events-auto absolute right-4 top-24 z-10 flex w-[min(360px,92vw)] flex-col gap-3">
-      {weather ? (
-        <div className="rounded-lg border border-[color:var(--border)] bg-black/40 px-4 py-3 text-sm text-[color:var(--muted)] backdrop-blur-md">
-          <div className="mb-1 font-mono text-[0.65rem] uppercase tracking-[0.12em] text-[color:var(--accent)]">
-            Weather
-          </div>
-          {weather}
-        </div>
-      ) : null}
-      {tasks.map((task) => (
+    <GlareHover
+      className="rounded-lg"
+      glareColor="#7dffe0"
+      glareOpacity={0.22}
+      glareSize={180}
+      transitionDuration={520}
+    >
+      <SpotlightCard
+        className="rounded-lg border border-[color:var(--border)] bg-black/50 shadow-[0_16px_32px_rgba(0,0,0,0.4)] backdrop-blur-md transition-[box-shadow] duration-300 hover:border-[color:var(--accent)]/35"
+        bodyClassName="px-4 py-3"
+      >
         <div
-          key={task.id}
-          className="rounded-lg border border-[color:var(--border)] bg-black/50 px-4 py-4 shadow-[0_20px_40px_rgba(0,0,0,0.45)] backdrop-blur-md"
+          className="group"
+          onMouseEnter={open}
+          onMouseLeave={close}
+          onFocusCapture={open}
+          onBlurCapture={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget as Node | null)) close();
+          }}
         >
-          <div className="mb-2 flex items-start justify-between gap-2">
+          <div
+            className={[
+              "flex items-start justify-between gap-2 overflow-hidden transition-all duration-200",
+              expanded ? "mb-2 max-h-8 opacity-100" : "mb-0 max-h-0 opacity-0",
+            ].join(" ")}
+          >
             <div className="font-mono text-[0.65rem] uppercase tracking-[0.12em] text-[color:var(--accent)]">
               {task.kind}
             </div>
             <button
               type="button"
+              tabIndex={expanded ? 0 : -1}
               className="text-[0.7rem] text-white/35 hover:text-white/70"
               onClick={() => onDismiss(task.id)}
             >
               Dismiss
             </button>
           </div>
-          <h3 className="mb-2 font-display text-lg leading-snug text-[color:var(--fg)]">{task.title}</h3>
-          <p className="mb-4 text-[0.8rem] leading-relaxed text-[color:var(--muted)] line-clamp-4">
+
+          <h3 className="font-display text-base leading-snug text-[color:var(--fg)] sm:text-lg">
+            {task.title}
+          </h3>
+          <p className="mt-1.5 text-[0.8rem] leading-relaxed text-[color:var(--muted)] line-clamp-3">
             {task.detail}
           </p>
-          <div className="flex flex-col gap-2">
-            {(task.actions || []).map((action) => (
-              <button
-                key={action.id}
-                type="button"
-                className="rounded-md border border-[color:var(--border)] px-3 py-2 text-left text-[0.8rem] text-[color:var(--fg)] transition hover:border-[color:var(--accent)] hover:bg-white/5"
-                onClick={() => onAction(task, action.id)}
-              >
-                {action.label}
-              </button>
-            ))}
+
+          <div
+            className={[
+              "grid transition-[grid-template-rows,opacity,margin] duration-200 ease-out",
+              expanded ? "mt-3 grid-rows-[1fr] opacity-100" : "mt-0 grid-rows-[0fr] opacity-0",
+            ].join(" ")}
+          >
+            <div className="min-h-0 overflow-hidden">
+              <div className="flex flex-col gap-2 pt-0.5">
+                {(task.actions || []).map((action) => (
+                  <button
+                    key={action.id}
+                    type="button"
+                    tabIndex={expanded ? 0 : -1}
+                    className="rounded-md border border-[color:var(--border)] px-3 py-2 text-left text-[0.8rem] text-[color:var(--fg)] transition hover:border-[color:var(--accent)] hover:bg-white/5"
+                    onClick={() => onAction(task, action.id)}
+                  >
+                    {action.label}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
-      ))}
-    </aside>
+      </SpotlightCard>
+    </GlareHover>
+  );
+}
+
+export function SuggestedTasksPanel({
+  tasks,
+  onAction,
+  onDismiss,
+}: {
+  tasks: SuggestedTask[];
+  onAction: (task: SuggestedTask, actionId: string) => void;
+  onDismiss: (taskId: string) => void;
+}) {
+  if (!tasks.length) return null;
+
+  return (
+    <section
+      className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden"
+      aria-label="Suggested tasks"
+    >
+      <div className="shrink-0 px-0.5">
+        <GradientText
+          className="font-mono text-[0.65rem] uppercase tracking-[0.16em]"
+          animationSpeed={10}
+        >
+          Suggested
+        </GradientText>
+      </div>
+      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overflow-x-hidden pr-1 [scrollbar-width:thin] [scrollbar-color:rgba(125,255,224,0.25)_transparent]">
+        {tasks.map((task) => (
+          <TaskCard key={task.id} task={task} onAction={onAction} onDismiss={onDismiss} />
+        ))}
+      </div>
+    </section>
   );
 }

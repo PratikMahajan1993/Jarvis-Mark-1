@@ -440,7 +440,8 @@ Talk to Jarvis as a person; see status without a cluttered “AI dashboard.”
 > **Input:** Voice-first, keyboard-equal.  
 > **HUD:** Evolve current orchestrator toward office-day task modals + activity; not a dense AI dashboard.  
 > **Presence:** Gateway always on; proactive workers for brief/prep; tray app optional later.  
-> **Interrupts:** HUD progress + optional voice; remote channels when away from desk.
+> **Interrupts:** HUD progress + optional voice; remote channels when away from desk.  
+> **Conversations (desk model):** Three kinds — (1) **Everyday desk** ambient for quick asks (no need to resume), (2) **Named discussions** you leave and reopen from Open notes, (3) **Job/workflow** threads bound to RFQs/drawings/quotes. Center HUD is always “who you’re talking to now”; draft email / HITL is an overlay interrupt, not a new conversation. Shared long-term memory across threads; session chatter stays per thread.
 
 ---
 
@@ -618,7 +619,7 @@ Because Jarvis will autonomously coordinate multi-step background jobs across mu
 | 2026-09-14 | 10 — Computer use    | Accepted | Hermes browser first; controlled profile; keychain secrets; evidence + HITL; retry then ask.                    |
 | 2026-09-14 | 11 — OSS             | Accepted | Hermes plugins first; AGPL OK personally; prefer MIT/Apache when equal.                                         |
 | 2026-09-14 | 4 — Stack            | Accepted | Latest stable; Windows now; keep Next+FastAPI; dual-write memory.                                               |
-| 2026-09-14 | 12 — UX              | Accepted | Voice-first keyboard-equal; office-day HUD; gateway always on; light interrupts.                                |
+| 2026-09-14 | 12 — UX              | Accepted | Voice-first keyboard-equal; office-day HUD; gateway always on; light interrupts; **desk model** (ambient / discussion / job). |
 | 2026-09-14 | 13 — Privacy         | Accepted | Local-first single-user; export/wipe; short voice transcript retention.                                         |
 | 2026-09-14 | 14 — Metrics         | Accepted | Latency + HITL=0 + office-day RFQ/quote loop; stretch RAG + browser task.                                       |
 | 2026-09-14 | Foundation plan      | Accepted | Phased build in `FOUNDATION_BUILD_PLAN.md`; gates P0→P4; parking lot #4/#7 thin only.                           |

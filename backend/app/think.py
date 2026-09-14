@@ -546,11 +546,21 @@ def refine_mail(prefs: dict[str, Any], asked: str, tool_name: str, result: dict[
             f"{(row.get('sender') or '').split('<')[0].strip()} — {row.get('subject') or ''}"
             for row in data[:4]
         )
-    elif tool_name == "read_email" and isinstance(data, dict) and data.get("body"):
+    elif tool_name == "read_email" and isinstance(data, dict) and not data.get("empty"):
         fallback = _read_speak(data, data.get("vision_notes") or [])
         if not speak or not _grounded(speak, notes):
             speak = fallback
-        briefing = briefing or reply_only(data.get("body") or "")[:1800]
+        body_text = reply_only(data.get("body") or "")[:1800]
+        if body_text:
+            briefing = briefing or body_text
+        elif data.get("attachments"):
+            names = ", ".join(
+                str(item.get("filename") or "attachment")
+                for item in (data.get("attachments") or [])[:3]
+            )
+            briefing = briefing or f"(No text body - attachments: {names})"
+        else:
+            briefing = briefing or "(No text body in this message.)"
     elif tool_name in {"draft_email", "forward_email"}:
         pending = result.get("pending") if isinstance(result.get("pending"), dict) else {}
         payload = pending.get("payload") or {}
@@ -570,18 +580,24 @@ def refine_mail(prefs: dict[str, Any], asked: str, tool_name: str, result: dict[
     if not speak:
         speak = "Mail is on the board."
     result["speak"] = speak
+    result["reply"] = (briefing or speak).strip() or speak
     pending_payload = (result.get("pending") or {}).get("payload") if isinstance(result.get("pending"), dict) else {}
     scene_data = data
     if tool_name in {"draft_email", "forward_email", "send_email", "reply_with_attachments"}:
         scene_data = pending_payload or data
     if tool_name in {"save_mail_attachments", "reply_with_attachments"} and result.get("scene"):
         pass
-    elif tool_name == "read_email" and isinstance(data, dict) and data.get("attachments"):
+    elif tool_name == "read_email" and isinstance(data, dict) and not data.get("empty"):
         from .mail_attachments import build_mail_scene
 
         result["scene"] = build_mail_scene(data, data.get("attachments") or [])
-        result["attachments"] = data.get("attachments")
+        result["attachments"] = data.get("attachments") or []
         result["mail_id"] = data.get("id")
+        # Prefer full board text over a short speak-only scene
+        if briefing and not (data.get("body") or "").strip():
+            widgets = list(result["scene"].get("widgets") or [])
+            widgets.insert(0, {"type": "markdown", "title": "Mail", "text": briefing})
+            result["scene"]["widgets"] = widgets
     else:
         result["scene"] = _mail_scene(tool_name, scene_data if tool_name != "search_emails" else data, speak, briefing)
     if tool_name == "save_mail_attachments" and result.get("attachments") is None:

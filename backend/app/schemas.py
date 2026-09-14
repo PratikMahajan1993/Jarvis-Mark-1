@@ -83,6 +83,12 @@ class ChatRequest(BaseModel):
     session_id: str = "default"
 
 
+class TtsRequest(BaseModel):
+    text: str
+    profile: str | None = None
+    language: str = "en"
+
+
 class MailAttachmentAction(BaseModel):
     session_id: str = "default"
     email_id: str = ""
@@ -127,9 +133,21 @@ class ConversationCreate(BaseModel):
     focus: dict[str, Any] = Field(default_factory=dict)
 
 
+class DiscussionCreate(BaseModel):
+    title: str = ""
+    focus: dict[str, Any] = Field(default_factory=dict)
+
+
+class WorkflowCreate(BaseModel):
+    title: str = "Job"
+    focus: dict[str, Any] = Field(default_factory=dict)
+    resume_key: str = ""
+
+
 class ConversationPatch(BaseModel):
     minimized: bool | None = None
     title: str | None = None
+    status: str | None = None
 
 
 class DrawingSpawn(BaseModel):

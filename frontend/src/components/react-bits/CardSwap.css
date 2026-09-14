@@ -1,0 +1,39 @@
+.card-swap-container {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  left: 0;
+  top: 0;
+  margin: auto;
+  transform: none;
+  transform-origin: center center;
+  perspective: 900px;
+  overflow: visible;
+}
+
+.card-swap-container .card {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--border) 85%, #7dffe0 15%);
+  background: rgba(0, 0, 0, 0.72);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.5);
+  transform-style: preserve-3d;
+  will-change: transform;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  overflow: hidden;
+}
+
+@media (max-width: 768px) {
+  .card-swap-container {
+    transform: scale(0.92);
+  }
+}
+
+@media (max-width: 480px) {
+  .card-swap-container {
+    transform: scale(0.82);
+  }
+}

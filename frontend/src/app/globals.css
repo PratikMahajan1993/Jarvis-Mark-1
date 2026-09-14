@@ -47,36 +47,80 @@ body {
 
 .orch-core {
   border-radius: 9999px;
-  background: radial-gradient(circle, oklch(74% 0.15 160 / 0.15) 0%, transparent 60%);
-  filter: blur(40px);
-  opacity: 0.3;
+  background:
+    radial-gradient(circle at 50% 42%, oklch(78% 0.14 160 / 0.28) 0%, transparent 42%),
+    radial-gradient(circle, oklch(74% 0.15 160 / 0.22) 0%, transparent 62%);
+  filter: blur(36px);
+  opacity: 0.48;
   animation: orch-breathe 8s infinite alternate ease-in-out;
   transition: opacity var(--transition-slow), transform var(--transition-slow);
 }
 
 .orch-core-active {
-  opacity: 0.8;
-  transform: scale(1.1);
+  opacity: 0.88;
+  transform: scale(1.12);
   animation: orch-breathe-fast 4s infinite alternate ease-in-out;
 }
 
 .orch-core-hitl {
-  opacity: 0.15;
-  transform: scale(0.9);
+  opacity: 0.18;
+  transform: scale(0.92);
+  animation: none;
+}
+
+.orch-core-halo {
+  background: radial-gradient(circle, oklch(74% 0.15 160 / 0.12) 0%, transparent 70%);
+  filter: blur(28px);
+  opacity: 0.55;
+  transition: opacity var(--transition-slow), transform var(--transition-slow);
+}
+
+.orch-core-halo-active {
+  opacity: 0.9;
+  transform: scale(1.08);
+}
+
+.orch-core-halo-hitl {
+  opacity: 0.2;
+}
+
+.orch-core-nucleus {
+  background:
+    radial-gradient(circle at 35% 30%, oklch(92% 0.06 160 / 0.55) 0%, transparent 45%),
+    radial-gradient(circle, oklch(74% 0.15 160 / 0.55) 0%, oklch(74% 0.15 160 / 0.08) 55%, transparent 72%);
+  box-shadow:
+    0 0 28px 8px color-mix(in srgb, var(--accent) 35%, transparent),
+    inset 0 0 18px color-mix(in srgb, var(--accent) 40%, transparent);
+  opacity: 0.55;
+  animation: orch-breathe 7s infinite alternate ease-in-out;
+  transition: opacity var(--transition-med), transform var(--transition-med), box-shadow var(--transition-med);
+}
+
+.orch-core-nucleus-active {
+  opacity: 0.95;
+  transform: scale(1.12);
+  box-shadow:
+    0 0 40px 14px color-mix(in srgb, var(--accent) 50%, transparent),
+    inset 0 0 22px color-mix(in srgb, var(--accent) 55%, transparent);
+  animation: orch-breathe-fast 3.2s infinite alternate ease-in-out;
+}
+
+.orch-core-nucleus-hitl {
+  opacity: 0.2;
   animation: none;
 }
 
 .orch-hud {
-  opacity: 0.1;
+  opacity: 0.22;
   transition: opacity var(--transition-slow);
 }
 
 .orch-hud-active {
-  opacity: 0.5;
+  opacity: 0.62;
 }
 
 .orch-hud-hitl {
-  opacity: 0.05;
+  opacity: 0.08;
 }
 
 .orch-ring {
@@ -88,39 +132,158 @@ body {
   transform: translate(-50%, -50%);
 }
 
+.orch-ring-0 {
+  width: 240px;
+  height: 240px;
+  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+  box-shadow: 0 0 24px color-mix(in srgb, var(--accent) 18%, transparent);
+  animation: orch-spin-left 36s linear infinite;
+}
+
 .orch-ring-1 {
-  width: 280px;
-  height: 280px;
+  width: 300px;
+  height: 300px;
   border-width: 1px 0;
+  opacity: 0.85;
   animation: orch-spin-right 12s linear infinite;
 }
 
 .orch-ring-2 {
-  width: 320px;
-  height: 320px;
-  border: 1px dashed var(--muted);
+  width: 340px;
+  height: 340px;
+  border: 1px dashed color-mix(in srgb, var(--muted) 80%, var(--accent) 20%);
   animation: orch-spin-left 24s linear infinite;
 }
 
 .orch-ring-3 {
-  width: 360px;
-  height: 360px;
+  width: 390px;
+  height: 390px;
   border: 2px solid transparent;
   border-top-color: var(--accent);
   border-bottom-color: var(--accent);
-  opacity: 0.5;
+  opacity: 0.65;
   animation: orch-spin-right 8s linear infinite;
 }
 
+.orch-ring-ticks {
+  width: 360px;
+  height: 360px;
+  border: none;
+  background:
+    repeating-conic-gradient(
+      from 0deg,
+      color-mix(in srgb, var(--accent) 45%, transparent) 0deg 1.2deg,
+      transparent 1.2deg 18deg
+    );
+  mask-image: radial-gradient(circle, transparent 47%, black 48%, black 50.5%, transparent 51.5%);
+  -webkit-mask-image: radial-gradient(circle, transparent 47%, black 48%, black 50.5%, transparent 51.5%);
+  opacity: 0.35;
+  animation: orch-spin-right 48s linear infinite;
+}
+
 .orch-activity {
-  mask-image: linear-gradient(to bottom, black 50%, transparent 100%);
-  -webkit-mask-image: linear-gradient(to bottom, black 50%, transparent 100%);
+  pointer-events: auto;
+}
+
+.orch-activity-orb-core {
+  box-shadow: 0 0 10px 2px color-mix(in srgb, var(--accent) 55%, transparent);
+}
+
+.orch-activity-orb-live .orch-activity-orb-core {
+  animation: orch-activity-orb-pulse 2.2s ease-in-out infinite;
+}
+
+.orch-activity-orb-live .orch-activity-orb-ring {
+  animation: orch-activity-orb-ring 2.2s ease-out infinite;
+}
+
+.orch-activity-panel {
+  mask-image: linear-gradient(to bottom, black 70%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, black 70%, transparent 100%);
 }
 
 .orch-activity-item {
   opacity: 0;
   transform: translateY(-10px);
   animation: orch-slide-in var(--transition-med) forwards;
+}
+
+@keyframes orch-activity-orb-pulse {
+  0%,
+  100% {
+    opacity: 0.75;
+    transform: scale(0.92);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.05);
+  }
+}
+
+@keyframes orch-activity-orb-ring {
+  0% {
+    opacity: 0.55;
+    transform: scale(0.85);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.55);
+  }
+}
+
+.orch-rail-orb {
+  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.orch-rail-orb-core {
+  background: color-mix(in srgb, var(--accent) 55%, transparent);
+  box-shadow: 0 0 12px 2px color-mix(in srgb, var(--accent) 35%, transparent);
+  transition: transform 220ms ease, box-shadow 220ms ease, background 220ms ease;
+}
+
+.orch-rail-orb-ring {
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+.orch-rail-orb-ambient .orch-rail-orb-core {
+  background: color-mix(in srgb, var(--fg) 55%, transparent);
+  box-shadow: 0 0 10px 1px color-mix(in srgb, var(--fg) 18%, transparent);
+}
+
+.orch-rail-orb-ambient {
+  border-color: color-mix(in srgb, var(--fg) 22%, transparent);
+  background: color-mix(in srgb, var(--fg) 6%, transparent);
+}
+
+.orch-rail-orb-job .orch-rail-orb-core {
+  background: color-mix(in srgb, var(--accent) 70%, oklch(78% 0.12 95) 30%);
+}
+
+.orch-rail-orb-drawing .orch-rail-orb-core {
+  background: color-mix(in srgb, var(--accent) 45%, oklch(70% 0.08 230) 55%);
+}
+
+.orch-rail-row:hover .orch-rail-orb-core,
+.orch-rail-orb-active .orch-rail-orb-core {
+  transform: scale(1.18);
+  box-shadow: 0 0 18px 4px color-mix(in srgb, var(--accent) 55%, transparent);
+}
+
+.orch-rail-row:hover .orch-rail-orb,
+.orch-rail-orb-active {
+  border-color: color-mix(in srgb, var(--accent) 70%, transparent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.orch-rail-orb-waiting .orch-rail-orb-core {
+  background: oklch(85% 0.15 80);
+  box-shadow: 0 0 14px 3px color-mix(in srgb, oklch(85% 0.15 80) 55%, transparent);
+  animation: orch-pulse-dot 1.5s infinite alternate;
+}
+
+.orch-rail-row-active .orch-rail-orb-ring {
+  opacity: 0.7;
 }
 
 .orch-agent.active .orch-agent-dot {

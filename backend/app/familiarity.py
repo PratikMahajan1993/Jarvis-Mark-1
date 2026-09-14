@@ -423,10 +423,22 @@ def speak_mail(mail: dict[str, Any]) -> str:
     name = first_name(mail.get("sender") or "") or "them"
     facts = facts_from_body(mail.get("body") or "")
     verb = "replied" if str(mail.get("subject") or "").lower().startswith("re:") else "wrote"
+    atts = mail.get("attachments") or []
+    att_names = [
+        str(item.get("filename") or "file")
+        for item in atts
+        if isinstance(item, dict)
+    ][:2]
     if not facts or facts == ["the note is on the board"]:
         subject = (mail.get("subject") or "a note").strip()
-        return f"{name}'s note is on the board — {subject}."
-    return f"{name} {verb}: {join_facts(facts)}."
+        if att_names:
+            files = " and ".join(att_names)
+            return f"{name} sent {subject} with {files}. It's on the board."
+        return f"{name}'s note is on the board - {subject}."
+    spoken = f"{name} {verb}: {join_facts(facts)}."
+    if att_names:
+        spoken = f"{spoken} Attached {', '.join(att_names)}."
+    return spoken
 
 
 def speak_draft(to_addr: str, source: dict[str, Any] | None = None) -> str:

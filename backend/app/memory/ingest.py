@@ -47,10 +47,25 @@ def reindex_recent_mail(limit: int = 20) -> dict[str, Any]:
     count = 0
     for row in rows or []:
         mail_id = str(row.get("id") or "")
-        subject = str(row.get("subject") or "")
-        sender = str(row.get("sender") or "")
-        body = str(row.get("body") or "")[:4000]
-        text = f"Email from {sender}\nSubject: {subject}\n{body}"
+        mail = row
+        # Prefer full local/Gmail body when the list row is a stub.
+        if mail_id and not str(row.get("body") or "").strip():
+            try:
+                full = email_conn.get_email(mail_id)
+                if full:
+                    mail = full
+            except Exception:
+                pass
+        subject = str(mail.get("subject") or "")
+        sender = str(mail.get("sender") or "")
+        body = str(mail.get("body") or "")[:4000]
+        atts = mail.get("attachments") or []
+        att_line = ""
+        if isinstance(atts, list) and atts:
+            names = ", ".join(str(a.get("filename") or "file") for a in atts[:5] if isinstance(a, dict))
+            if names:
+                att_line = f"\nAttachments: {names}"
+        text = f"Email from {sender}\nSubject: {subject}\n{body}{att_line}".strip()
         ingest_text(
             text,
             namespace="corpus",

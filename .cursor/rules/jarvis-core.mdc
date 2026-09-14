@@ -1,0 +1,43 @@
+---
+description: Jarvis core architecture, stack, and hard product constraints
+alwaysApply: true
+---
+
+# Jarvis core
+
+Local work HUD. Prefer existing modules; do not invent a parallel stack.
+
+## Stack (locked)
+
+| Layer | Tech | Ports / paths |
+| ----- | ---- | ------------- |
+| HUD | Next.js + Tailwind (`frontend/`) | `:3000` |
+| API | FastAPI (`backend/app/`) | `127.0.0.1:8000` preferred |
+| DB | SQLite `backend/data/jarvis.db` | — |
+| Memory/RAG | SQLite + LanceDB under `backend/data/memory/` | — |
+| Brain | Hermes gateway `:8642` first; Gemini/Ollama fallback | — |
+| TTS | Voicebox `:17493` via `POST /generate` (not `/speak`) | browser plays once |
+| React Bits | Vendored in `frontend/src/components/react-bits/` | accents only |
+
+## Non-negotiables
+
+- Tools own mail/calendar/files/Drive. Brain never invents prices, mail, or calendar facts.
+- HITL (**Authorize / Shall I**) before send mail, Task for Gemini, calendar writes, quote send, broad memory wipe.
+- Files only under `backend/exports`.
+- Max **3** expanded Open notes (`MAX_EXPANDED = 3`).
+- Prefer `127.0.0.1:8000` (avoid ghost `0.0.0.0:8000` listeners).
+- Never commit `.env`, `google_token.json`, `jarvis.db`, or secrets.
+
+## HUD shape
+
+- Shell: `OrchestratorShell` (not HudShell for primary desk).
+- Right column: `WeatherCard` (shrink-0) + scrollable `SuggestedTasksPanel`.
+- Mail board: `SpotlightCard` with scroll on `bodyClassName`, not the outer card.
+- Voice: `frontend/src/lib/voice.ts` — bridge browser TTS; Voicebox cutover ≤~1.4s; late clips must not replay.
+
+## Docs of record
+
+- Vision: `work/VISION_WORKBOOK.md`
+- Tests: `work/CAPABILITY_TEST_MATRIX.md`
+- As-built: `docs/CURRENT.md`
+- Agent map: `AGENTS.md`

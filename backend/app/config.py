@@ -57,6 +57,12 @@ class Settings(BaseSettings):
     hermes_api_key: str = ""
     hermes_prefer_gateway: bool = True
 
+    # Local Voicebox TTS (https://voicebox.sh/) — desktop app on :17493
+    voicebox_enabled: bool = True
+    voicebox_url: str = "http://127.0.0.1:17493"
+    voicebox_profile: str = "Mark"
+    voicebox_timeout_sec: float = 45.0
+
     @property
     def origin_list(self) -> list[str]:
         return [item.strip() for item in self.cors_origins.split(",") if item.strip()]

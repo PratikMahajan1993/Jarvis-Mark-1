@@ -21,9 +21,12 @@ from app.conversations import (
     _media_variants,
     create,
     expand,
+    list_desk,
     list_public,
     minimize,
     public_row,
+    start_discussion,
+    start_or_resume_workflow,
 )
 
 
@@ -31,13 +34,16 @@ def test_create_and_expand_cap():
     db.init_db()
     first = create("drawing", "Piston", {"filename": "piston.pdf"})
     second = create("drawing", "Housing", {"filename": "housing.pdf"})
-    third = create("mail", "Neha", {"filename": ""})
+    third = create("discussion", "Soft jaws", {})
+    fourth = create("workflow", "RFQ Bracket", {"resume_key": "t1"})
     assert first["session_id"].startswith("conv-")
     items = {row["id"]: row for row in list_public()}
     expanded = [row for row in items.values() if not row["minimized"] and row["status"] != "archived"]
-    assert len(expanded) <= 2, [row["title"] for row in expanded]
+    assert len(expanded) <= 3, [row["title"] for row in expanded]
+    assert items[fourth["id"]]["minimized"] is False
+    assert items[first["id"]]["minimized"] is True
+    assert items[second["id"]]["minimized"] is False
     assert items[third["id"]]["minimized"] is False
-    assert items[first["id"]]["minimized"] is True or items[second["id"]]["minimized"] is True
 
 
 def test_minimize_then_expand():
@@ -81,6 +87,36 @@ def test_public_row_has_session():
     packed = public_row(db.get_conversation(row["id"]))
     assert packed["session_id"] == row["session_id"]
     assert packed["category"] == "drawing"
+    assert packed["kind_label"] == "Drawing"
+
+
+def test_desk_discussion_and_workflow_resume():
+    db.init_db()
+    talk = start_discussion("Machining strategies")
+    assert talk["category"] == "discussion"
+    assert talk["session_id"].startswith("conv-")
+    assert talk["kind_label"] == "Discussion"
+
+    job = start_or_resume_workflow(
+        title="RFQ · Bracket",
+        focus={"task_id": "t1"},
+        resume_key="task:t1",
+    )
+    assert job["category"] == "workflow"
+    again = start_or_resume_workflow(
+        title="RFQ · Bracket v2",
+        focus={"task_id": "t1", "extra": 1},
+        resume_key="task:t1",
+    )
+    assert again["id"] == job["id"]
+    assert again["focus"].get("extra") == 1
+
+    create("mail", "Should hide", {})
+    desk = list_desk()
+    ids = {row["id"] for row in desk}
+    assert talk["id"] in ids
+    assert job["id"] in ids
+    assert all(row["category"] in {"discussion", "workflow", "drawing"} for row in desk)
 
 
 if __name__ == "__main__":
@@ -90,6 +126,7 @@ if __name__ == "__main__":
         test_window_voice,
         test_media_reject_and_raster_preference,
         test_public_row_has_session,
+        test_desk_discussion_and_workflow_resume,
     ]
     for test in tests:
         test()

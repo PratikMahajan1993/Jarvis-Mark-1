@@ -83,4 +83,4 @@ If the model is offline, work tools still run. Ordinary chat will not improvise.
 - **Drive / Gemini:** need Connect Gmail. A file ask finds the Drive copy or uploads the local one, then Shall I sends **Task for Gemini**. Gemini tasks email `GEMINI_TASK_TO` (defaults to same account).
 - `TAVILY_API_KEY` or `BRAVE_API_KEY` for cloud research; otherwise DuckDuckGo.
 
-See [docs/AS_BUILT.md](docs/AS_BUILT.md) for what is real versus demo.
+See [docs/CURRENT.md](docs/CURRENT.md) for what works today. Capability tests: [work/CAPABILITY_TEST_MATRIX.md](work/CAPABILITY_TEST_MATRIX.md). Cursor agents/skills/rules: [AGENTS.md](AGENTS.md).

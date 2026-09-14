@@ -839,6 +839,7 @@ def _thought_from_result(result: dict[str, Any], tool_name: str = "") -> dict[st
     model = _scene_from_dict(scene)
     return {
         "speak": result.get("speak") or _speak_from_scene(model, True),
+        "reply": result.get("reply") or result.get("speak") or _speak_from_scene(model, True),
         "scene": scene,
         "pending_id": pending.get("id") if pending else None,
         "artifact_id": _artifact_from_tool(result),
@@ -859,11 +860,12 @@ def _artifacts_for(artifact_id: str | None) -> list[Artifact]:
 def _response_from_thought(session_id: str, thought: dict[str, Any], offline: bool) -> ChatResponse:
     scene = _scene_from_dict(thought.get("scene")) or Scene(title="", widgets=[])
     speak = str(thought.get("speak") or _speak_from_scene(scene, True))
+    reply = str(thought.get("reply") or speak)
     db.set_focus_pending(session_id, thought.get("pending_id") or "")
     return _chat_response(
         session_id,
         speak=speak,
-        reply=speak,
+        reply=reply,
         scene=scene,
         artifacts=_artifacts_for(thought.get("artifact_id")),
         attachments=thought.get("attachments"),
@@ -1018,8 +1020,29 @@ def _run_agent(message: str, session_id: str = "default") -> ChatResponse:
         db.add_message(session_id, "assistant", result.speak or "")
         return result
 
-    # Prefer Hermes for all turns (including casual). On timeout/error → Gemini legacy.
-    # mail_draft / drawing / pending authorize already returned above.
+    # Local mail/calendar/briefing: skip Hermes (avoids 30s gateway timeouts) and
+    # read from the local mailbox / snapshot first. Refresh when asked.
+    from .snapshot import wants_fresh, refresh as snapshot_refresh
+
+    local_fast = intent.kind in {
+        "mail_read",
+        "mail_search",
+        "mail_save",
+        "mail_reply_attach",
+        "calendar_list",
+        "briefing",
+    }
+    mail_pref_ok = (not intent.kind.startswith("mail_")) or prefs.get("email_enabled", True)
+    if local_fast and mail_pref_ok:
+        if wants_fresh(message):
+            try:
+                snapshot_refresh(force=True)
+            except Exception:
+                pass
+        return _run_agent_legacy(message, session_id, prefs=prefs, intent=intent, heard=heard)
+
+    # Prefer Hermes for other turns. On timeout/error → Gemini legacy.
+    # mail_draft / drawing / pending authorize / local mail already returned above.
     use_hermes = app_settings.hermes_enabled and hermes_available()
     if use_hermes:
         try:

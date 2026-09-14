@@ -78,6 +78,8 @@ export type Conversation = {
   id: string;
   session_id: string;
   category: string;
+  kind?: string;
+  kind_label?: string;
   title: string;
   focus: Record<string, unknown>;
   minimized: boolean;

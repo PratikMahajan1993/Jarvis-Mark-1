@@ -1,0 +1,32 @@
+---
+description: React Bits accents for Jarvis Orchestrator HUD — copy patterns, not demos
+globs: frontend/**/*.{tsx,ts,css}
+alwaysApply: false
+---
+
+# React Bits on the HUD
+
+- Source: `frontend/src/components/react-bits/` (vendored). Do not npm-install a full React Bits theme.
+- Accents only — never replace OrchestratorShell with a demo layout.
+- All bits need `"use client"`.
+
+## Placement map
+
+| Component | Use for | Avoid |
+| --------- | ------- | ----- |
+| SpotlightCard | Boards, weather, task cards | Putting `overflow-y-auto` on the outer card |
+| GlareHover | Task card hover sheen | Nesting heavy WebGL inside |
+| GradientText | Tiny HUD labels (Suggested, footer) | Long body copy |
+| BlurText | Center voice line | Dense tables |
+| ClickSpark | Desk-wide click feedback | Extra wrappers that break layout |
+| ElectricBorder | HITL modal only | Every card |
+| Particles / LightRays | JarvisCore orb only (`ssr: false`) | Full-page backgrounds |
+| Magnet | Rare micro-attract | CommandBaton / centering parents |
+
+## Hard layout rules
+
+- Scrollable SpotlightCard: max-height + `overflow-y-auto` on **`bodyClassName`**; outer stays viewport-locked for the glow.
+- Flex columns with scrollable children: pin chips (`WeatherCard`) with **`shrink-0`**.
+- Idle suggested tasks: title + description only; expand actions on hover/focus.
+
+When adding a bit, read skill `jarvis-react-bits` and match existing props/colors (`#7dffe0` accent).

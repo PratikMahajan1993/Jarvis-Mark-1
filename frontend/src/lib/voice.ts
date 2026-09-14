@@ -499,6 +499,32 @@ const spokenGlanceKeys = new Set<string>();
 let glanceStoreLoaded = false;
 let cachedVoice: SpeechSynthesisVoice | null = null;
 let activeSpeech: SpeechSynthesisUtterance | null = null;
+let activeAudio: HTMLAudioElement | null = null;
+let speakSeq = 0;
+let speakAbort: AbortController | null = null;
+
+function apiRoot(): string {
+  return (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").replace(/\/$/, "");
+}
+
+function stopAudio() {
+  speakAbort?.abort();
+  speakAbort = null;
+  if (activeAudio) {
+    try {
+      activeAudio.onended = null;
+      activeAudio.onerror = null;
+      activeAudio.pause();
+      const src = activeAudio.src;
+      activeAudio.removeAttribute("src");
+      activeAudio.load();
+      if (src.startsWith("blob:")) URL.revokeObjectURL(src);
+    } catch {
+      /* ignore */
+    }
+    activeAudio = null;
+  }
+}
 
 function loadGlanceStore() {
   if (glanceStoreLoaded || typeof window === "undefined") return;
@@ -526,39 +552,11 @@ export function claimGlanceSpeech(key: string): boolean {
   return true;
 }
 
-function pickVoice(): SpeechSynthesisVoice | undefined {
-  if (cachedVoice) return cachedVoice;
-  if (typeof window === "undefined" || !window.speechSynthesis) return undefined;
-  const voices = window.speechSynthesis.getVoices();
-  cachedVoice =
-    voices.find((voice) => /en-GB|Daniel|Google UK/i.test(`${voice.name} ${voice.lang}`)) ||
-    voices.find((voice) => voice.lang.startsWith("en")) ||
-    voices[0] ||
-    null;
-  return cachedVoice || undefined;
-}
-
-export function isSpeaking(): boolean {
-  return Boolean(activeSpeech) || Date.now() < deafUntil;
-}
-
-let lastSpokenText = "";
-let lastSpokenAt = 0;
-
-export function speak(text: string, enabled = true, onEnd?: () => void) {
-  if (!enabled || !text || typeof window === "undefined" || !window.speechSynthesis) {
+function speakBrowser(text: string, onEnd?: () => void) {
+  if (typeof window === "undefined" || !window.speechSynthesis) {
     onEnd?.();
     return;
   }
-  if (activeSpeech?.text === text) return;
-  if (text === lastSpokenText && Date.now() - lastSpokenAt < 90000) {
-    onEnd?.();
-    return;
-  }
-  lastSpokenText = text;
-  lastSpokenAt = Date.now();
-  const words = text.split(/\s+/).filter(Boolean).length;
-  deafUntil = Date.now() + Math.min(8000, 700 + words * 280);
   window.speechSynthesis.cancel();
   const utterance = new SpeechSynthesisUtterance(text);
   const voice = pickVoice();
@@ -582,9 +580,147 @@ export function speak(text: string, enabled = true, onEnd?: () => void) {
   }, 40);
 }
 
+/** Fetch Voicebox WAV only — caller decides whether to play (avoids late double-speak). */
+async function fetchVoicebox(text: string, seq: number): Promise<Blob | null> {
+  if (typeof window === "undefined") return null;
+  const controller = new AbortController();
+  speakAbort = controller;
+  try {
+    const response = await fetch(`${apiRoot()}/api/tts`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text }),
+      signal: controller.signal,
+    });
+    if (!response.ok) return null;
+    const blob = await response.blob();
+    if (seq !== speakSeq) return null;
+    return blob;
+  } catch (err) {
+    if ((err as { name?: string })?.name === "AbortError") return null;
+    return null;
+  } finally {
+    if (speakAbort === controller) speakAbort = null;
+  }
+}
+
+function playVoiceboxBlob(blob: Blob, onEnd?: () => void) {
+  const url = URL.createObjectURL(blob);
+  const audio = new Audio(url);
+  activeAudio = audio;
+  let finished = false;
+  const done = () => {
+    if (finished) return;
+    finished = true;
+    if (activeAudio === audio) activeAudio = null;
+    URL.revokeObjectURL(url);
+    deafUntil = Date.now() + 500;
+    onEnd?.();
+  };
+  audio.onended = done;
+  audio.onerror = done;
+  void audio.play().catch(() => done());
+}
+
+function handOffToBrowserEnd(onEnd?: () => void) {
+  if (!activeSpeech) {
+    onEnd?.();
+    return;
+  }
+  const utterance = activeSpeech;
+  const prev = utterance.onend;
+  utterance.onend = (event) => {
+    if (typeof prev === "function") prev.call(utterance, event);
+    onEnd?.();
+  };
+}
+
+function pickVoice(): SpeechSynthesisVoice | undefined {
+  if (cachedVoice) return cachedVoice;
+  if (typeof window === "undefined" || !window.speechSynthesis) return undefined;
+  const voices = window.speechSynthesis.getVoices();
+  cachedVoice =
+    voices.find((voice) => /en-GB|Daniel|Google UK/i.test(`${voice.name} ${voice.lang}`)) ||
+    voices.find((voice) => voice.lang.startsWith("en")) ||
+    voices[0] ||
+    null;
+  return cachedVoice || undefined;
+}
+
+export function isSpeaking(): boolean {
+  return Boolean(activeSpeech || activeAudio) || Date.now() < deafUntil;
+}
+
+let lastSpokenText = "";
+let lastSpokenAt = 0;
+
+export function speak(text: string, enabled = true, onEnd?: () => void) {
+  if (!enabled || !text || typeof window === "undefined") {
+    onEnd?.();
+    return;
+  }
+  // Single-flight: same line or overlapping speak → keep the in-flight audio.
+  if (activeSpeech?.text === text) return;
+  if (activeAudio && text === lastSpokenText && Date.now() - lastSpokenAt < 2500) {
+    onEnd?.();
+    return;
+  }
+  if (text === lastSpokenText && Date.now() - lastSpokenAt < 90000) {
+    onEnd?.();
+    return;
+  }
+  lastSpokenText = text;
+  lastSpokenAt = Date.now();
+  const words = text.split(/\s+/).filter(Boolean).length;
+  deafUntil = Date.now() + Math.min(12000, 900 + words * 320);
+  speakSeq += 1;
+  const seq = speakSeq;
+  stopAudio();
+  if (window.speechSynthesis) window.speechSynthesis.cancel();
+  activeSpeech = null;
+
+  // Bridge: if Voicebox is cold, start browser speech quickly; cut over to Mark
+  // only if Voicebox arrives within ~1.4s of the bridge. Late arrivals must not
+  // play — otherwise the user hears the full line again ~10–20s later.
+  const BRIDGE_CUTOVER_MS = 1400;
+  let bridgeStartedAt = 0;
+  const bridgeTimer = window.setTimeout(() => {
+    if (seq !== speakSeq || activeAudio) return;
+    bridgeStartedAt = Date.now();
+    speakBrowser(text);
+  }, 160);
+
+  void (async () => {
+    const blob = await fetchVoicebox(text, seq);
+    window.clearTimeout(bridgeTimer);
+    if (seq !== speakSeq) return;
+
+    if (blob) {
+      const bridgeLate =
+        bridgeStartedAt > 0 && Date.now() - bridgeStartedAt >= BRIDGE_CUTOVER_MS;
+      if (bridgeLate) {
+        // Browser already carried (or finished) the line; keep cache warm, no replay.
+        handOffToBrowserEnd(onEnd);
+        return;
+      }
+      if (activeSpeech) {
+        if (window.speechSynthesis) window.speechSynthesis.cancel();
+        activeSpeech = null;
+      }
+      playVoiceboxBlob(blob, onEnd);
+      return;
+    }
+
+    if (!activeSpeech) speakBrowser(text, onEnd);
+    else handOffToBrowserEnd(onEnd);
+  })();
+}
+
 export function silence() {
+  speakSeq += 1;
   activeSpeech = null;
   deafUntil = Date.now() + 450;
+  stopAudio();
   if (typeof window !== "undefined" && window.speechSynthesis) {
     window.speechSynthesis.cancel();
   }

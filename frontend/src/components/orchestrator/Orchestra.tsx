@@ -1,3 +1,6 @@
+"use client";
+
+import Magnet from "@/components/react-bits/Magnet";
 import type { AgentNode } from "@/lib/orchestrator";
 
 export function Orchestra({
@@ -17,12 +20,20 @@ export function Orchestra({
         .join(" ")}
     >
       {agents.map((agent) => (
-        <div key={agent.id} className={`orch-agent flex flex-col items-center gap-3 ${agent.state}`.trim()}>
-          <div className="orch-agent-dot h-1.5 w-1.5 rounded-full bg-[color:var(--muted)]" />
-          <div className="orch-agent-name font-mono text-[0.65rem] uppercase tracking-[0.1em] text-[color:var(--muted)]">
-            [{agent.code}]
+        <Magnet
+          key={agent.id}
+          padding={40}
+          magnetStrength={6}
+          disabled={dimmed}
+          wrapperClassName="inline-flex"
+        >
+          <div className={`orch-agent flex flex-col items-center gap-3 ${agent.state}`.trim()}>
+            <div className="orch-agent-dot h-1.5 w-1.5 rounded-full bg-[color:var(--muted)]" />
+            <div className="orch-agent-name font-mono text-[0.65rem] uppercase tracking-[0.1em] text-[color:var(--muted)]">
+              [{agent.code}]
+            </div>
           </div>
-        </div>
+        </Magnet>
       ))}
     </div>
   );

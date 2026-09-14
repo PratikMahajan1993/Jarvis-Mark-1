@@ -1,0 +1,19 @@
+---
+description: Capability-test run protocol — observe, dispatch, log, continue
+alwaysApply: true
+---
+
+# Capability test run
+
+When the user is running `work/CAPABILITY_TEST_MATRIX.md` cases or reports live observations:
+
+1. **Stay with the user** on the current test ID. Do not block the chat on long fixes.
+2. **Read** `work/LAST_TURNS.md` (last 20 chat/confirm turns) for speak/board/pending context.
+3. **Log** the observation (ID, pass/fail/flaky, latency, notes) into the matrix or a short reply.
+4. **Dispatch** specialized background subagents via the Task tool (`run_in_background: true`) using the roster in `AGENTS.md` / skill `jarvis-observation-dispatch`.
+5. Prefer **one specialist per concern** (UI → `jarvis-uiux`, voice → `jarvis-voice`, mail/HITL/RFQ → `jarvis-workflows`, generic impl → `jarvis-builder`).
+6. Give each subagent a **closed task**: repro, files, acceptance check, “do not expand scope.”
+7. Continue the next matrix step with the user while agents work.
+8. When a background agent finishes, summarize in 2–3 lines and only re-test if the user wants.
+
+Do not invent new architecture during a test run. Fix within the locked stack.

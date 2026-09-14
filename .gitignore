@@ -12,6 +12,7 @@ backend/data/
 backend/exports/
 /data/
 /exports/
+work/LAST_TURNS.md
 *.db
 *.log
 .DS_Store

@@ -7,7 +7,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse, RedirectResponse, Response
 from pydantic import BaseModel
 
 from . import db
@@ -28,7 +28,9 @@ from .schemas import (
     ComposeUpdateRequest,
     ConversationCreate,
     ConversationPatch,
+    DiscussionCreate,
     DrawingSpawn,
+    WorkflowCreate,
     MailAttachmentAction,
     MailReplyAttachmentAction,
     MarkedDrawingSave,
@@ -36,6 +38,7 @@ from .schemas import (
     ConfirmRequest,
     Preferences,
     PreferencesUpdate,
+    TtsRequest,
 )
 from .tools.documents import read_export_text
 from .hud_state import load_hud, remember_hud
@@ -84,6 +87,12 @@ def startup() -> None:
                 pass
 
         threading.Thread(target=_mcp_bg, name="jarvis-mcp-register", daemon=True).start()
+    try:
+        from .voicebox import warm_voicebox
+
+        warm_voicebox()
+    except Exception:
+        pass
 
 
 @app.get("/api/agents")
@@ -114,7 +123,35 @@ def api_health() -> dict:
         }
     except Exception:
         status["hermes"] = {"enabled": bool(settings.hermes_enabled), "available": False}
+    try:
+        from . import voicebox as vb
+
+        status["voicebox"] = vb.status_payload()
+    except Exception:
+        status["voicebox"] = {"enabled": bool(settings.voicebox_enabled), "available": False}
     return status
+
+
+@app.get("/api/voicebox/status")
+def api_voicebox_status() -> dict:
+    from . import voicebox as vb
+
+    return vb.status_payload()
+
+
+@app.post("/api/tts")
+def api_tts(payload: TtsRequest) -> Response:
+    """Proxy local Voicebox TTS so the browser avoids CORS to :17493."""
+    from . import voicebox as vb
+
+    text = (payload.text or "").strip()
+    if not text:
+        raise HTTPException(400, "Empty text")
+    try:
+        wav = vb.synthesize(text, profile=payload.profile or None, language=payload.language or "en")
+    except Exception as exc:
+        raise HTTPException(502, str(exc)[:400]) from exc
+    return Response(content=wav, media_type="audio/wav")
 
 
 @app.get("/api/metrics")
@@ -127,6 +164,14 @@ def api_metrics() -> dict:
 @app.get("/api/missions")
 def api_missions(limit: int = 40, mission_id: str | None = None, session_id: str | None = None) -> dict:
     return {"items": db.list_mission_steps(limit=limit, mission_id=mission_id, session_id=session_id)}
+
+
+@app.get("/api/turns/recent")
+def api_turns_recent(limit: int = 20) -> dict:
+    """Last N chat/confirm turns for capability-test review (also mirrored to work/LAST_TURNS.md)."""
+    from .turn_log import log_paths, recent_turns
+
+    return {"items": recent_turns(limit=limit), "paths": log_paths()}
 
 
 @app.get("/api/google/status")
@@ -184,9 +229,24 @@ def api_mail_attachments_reply(payload: MailReplyAttachmentAction) -> dict:
 
 @app.post("/api/chat")
 def api_chat(payload: ChatRequest) -> dict:
-    result = run_agent(payload.message.strip(), payload.session_id)
+    message = payload.message.strip()
+    result = run_agent(message, payload.session_id)
     data = result.model_dump()
     remember_hud(payload.session_id, data)
+    try:
+        from .turn_log import record_turn
+
+        record_turn(session_id=payload.session_id, user=message, response=data, source="chat")
+    except Exception:
+        pass
+    speak = str(data.get("speak") or "").strip()
+    if speak:
+        try:
+            from .voicebox import prefetch_tts
+
+            prefetch_tts(speak)
+        except Exception:
+            pass
     return data
 
 
@@ -195,6 +255,26 @@ def api_confirm(payload: ConfirmRequest) -> dict:
     result = resolve_pending(payload.action_id, payload.approved, payload.session_id)
     data = result.model_dump()
     remember_hud(payload.session_id, data)
+    try:
+        from .turn_log import record_turn
+
+        decision = "Authorize" if payload.approved else "Reject"
+        record_turn(
+            session_id=payload.session_id,
+            user=f"[{decision}] action_id={payload.action_id}",
+            response=data,
+            source="confirm",
+        )
+    except Exception:
+        pass
+    speak = str(data.get("speak") or "").strip()
+    if speak:
+        try:
+            from .voicebox import prefetch_tts
+
+            prefetch_tts(speak)
+        except Exception:
+            pass
     return data
 
 
@@ -387,10 +467,11 @@ def api_thought(session_id: str = "default") -> dict:
 
 
 @app.get("/api/conversations")
-def api_conversations() -> dict:
+def api_conversations(desk: bool = False) -> dict:
     from . import conversations as convs
 
-    return {"items": convs.list_public()}
+    items = convs.list_desk() if desk else convs.list_public()
+    return {"items": items, "ambient_session": convs.ambient_session()}
 
 
 @app.post("/api/conversations")
@@ -398,6 +479,24 @@ def api_conversation_create(payload: ConversationCreate) -> dict:
     from . import conversations as convs
 
     return convs.create(payload.category, payload.title, payload.focus)
+
+
+@app.post("/api/conversations/discussion")
+def api_conversation_discussion(payload: DiscussionCreate) -> dict:
+    from . import conversations as convs
+
+    return convs.start_discussion(payload.title, payload.focus)
+
+
+@app.post("/api/conversations/workflow")
+def api_conversation_workflow(payload: WorkflowCreate) -> dict:
+    from . import conversations as convs
+
+    return convs.start_or_resume_workflow(
+        title=payload.title,
+        focus=payload.focus,
+        resume_key=payload.resume_key,
+    )
 
 
 @app.patch("/api/conversations/{conversation_id}")

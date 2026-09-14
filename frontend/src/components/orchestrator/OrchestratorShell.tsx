@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
-import type { ChatResponse, Conversation, PendingAction, Preferences } from "@/lib/types";
+import type { ChatResponse, Conversation, PendingAction, Preferences, Scene } from "@/lib/types";
 import {
   DEFAULT_AGENTS,
   agentCode,
@@ -22,6 +22,11 @@ import {
   startListening,
   stopListening,
 } from "@/lib/voice";
+import { SceneBoard } from "../SceneBoard";
+import BlurText from "@/components/react-bits/BlurText";
+import ClickSpark from "@/components/react-bits/ClickSpark";
+import GradientText from "@/components/react-bits/GradientText";
+import SpotlightCard from "@/components/react-bits/SpotlightCard";
 import { ActivityStream } from "./ActivityStream";
 import { CommandBaton } from "./CommandBaton";
 import { ConversationRail, type RailConversation } from "./ConversationRail";
@@ -30,13 +35,40 @@ import { HitlModal } from "./HitlModal";
 import { JarvisCore } from "./JarvisCore";
 import { Orchestra } from "./Orchestra";
 import { SuggestedTasksPanel, type SuggestedTask } from "./SuggestedTasksPanel";
+import { WeatherCard } from "./WeatherCard";
 
-const SESSION = "default";
+const AMBIENT_SESSION = "default";
+const FOCUS_STORAGE_KEY = "jarvis.activeConversationId";
 const IDLE_VOICE = "Awaiting instruction.";
+const EMPTY_SCENE: Scene = { title: "", widgets: [] };
+const MAX_OPEN_CONVERSATIONS = 3;
+
+function mapDeskItems(
+  rows: Conversation[],
+  activeConversationId: string | null,
+): RailConversation[] {
+  return rows
+    .filter((row) => !row.minimized)
+    .slice(0, MAX_OPEN_CONVERSATIONS)
+    .map((row) => ({
+    id: row.id,
+    sessionId: row.session_id,
+    title: row.title || row.category || "Conversation",
+    kindLabel: row.kind_label || (row.category === "workflow" ? "Job" : row.category === "drawing" ? "Drawing" : "Discussion"),
+    time: row.updated_at
+      ? new Date(row.updated_at).toLocaleTimeString("en-US", {
+          hour: "numeric",
+          minute: "2-digit",
+        })
+      : undefined,
+    preview: row.speak || row.turns?.slice(-1)[0]?.content || "",
+    active: activeConversationId === row.id,
+    waiting: Boolean(row.waiting || (row.pending && row.pending.length)),
+  }));
+}
 
 function VoiceLine({ text, dimmed }: { text: string; dimmed?: boolean }) {
   const compact = text.length > 220 || text.split("\n").length > 4;
-  const parts = text.split(/(authorization required|authorize to send|authorize|shall i)/gi);
   return (
     <h1
       className={[
@@ -47,14 +79,16 @@ function VoiceLine({ text, dimmed }: { text: string; dimmed?: boolean }) {
         .filter(Boolean)
         .join(" ")}
     >
-      {parts.map((part, index) =>
-        /^(authorization required|authorize to send|authorize|shall i)$/i.test(part) ? (
-          <span key={index} className="text-[color:var(--accent)]">
-            {part}
-          </span>
-        ) : (
-          <span key={index}>{part}</span>
-        ),
+      {dimmed ? (
+        text
+      ) : (
+        <BlurText
+          key={text}
+          text={text}
+          delay={compact ? 40 : 70}
+          stepDuration={0.24}
+          className="inline"
+        />
       )}
     </h1>
   );
@@ -63,6 +97,7 @@ function VoiceLine({ text, dimmed }: { text: string; dimmed?: boolean }) {
 export function OrchestratorShell() {
   const [voice, setVoice] = useState(IDLE_VOICE);
   const [voiceVisible, setVoiceVisible] = useState(false);
+  const [scene, setScene] = useState<Scene>(EMPTY_SCENE);
   const [compose, setCompose] = useState("");
   const [busy, setBusy] = useState(false);
   const [listening, setListening] = useState(false);
@@ -70,7 +105,10 @@ export function OrchestratorShell() {
   const [agents, setAgents] = useState<AgentNode[]>(DEFAULT_AGENTS);
   const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [pending, setPending] = useState<PendingAction[]>([]);
-  const [rail, setRail] = useState<RailConversation[]>([]);
+  const [desk, setDesk] = useState<RailConversation[]>([]);
+  const [activeSession, setActiveSession] = useState(AMBIENT_SESSION);
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
+  const [focusTitle, setFocusTitle] = useState("Everyday desk");
   const [prefs, setPrefs] = useState<Preferences | null>(null);
   const [error, setError] = useState("");
   const [sending, setSending] = useState(false);
@@ -79,6 +117,7 @@ export function OrchestratorShell() {
 
   const busyRef = useRef(false);
   const pendingIdRef = useRef("");
+  const sessionRef = useRef(AMBIENT_SESSION);
   const voiceEnabledRef = useRef(true);
   const speakToken = useRef(0);
   const composeFieldsRef = useRef({ to: "", subject: "", body: "" });
@@ -134,6 +173,75 @@ export function OrchestratorShell() {
     }, 180);
   }, []);
 
+  const refreshDesk = useCallback(async (focusId: string | null = activeConversationId) => {
+    const payload = await api.conversations(true).catch(() => ({ items: [] as Conversation[] }));
+    setDesk(mapDeskItems(payload.items || [], focusId));
+    return payload.items || [];
+  }, [activeConversationId]);
+
+  const loadSessionSurface = useCallback(
+    async (sessionId: string, opts?: { announce?: boolean }) => {
+      const [waiting, session] = await Promise.all([
+        api.pending(sessionId).catch(() => ({ items: [] as PendingAction[] })),
+        api.session(sessionId).catch(() => null),
+      ]);
+      const items = waiting.items || [];
+      setPending(items);
+      pendingIdRef.current = items[0]?.id || "";
+      if (opts?.announce !== false && session?.speak) {
+        showVoice(session.speak);
+      } else if (opts?.announce !== false && !items[0]) {
+        showVoice(IDLE_VOICE);
+      }
+      if (items[0]) {
+        const agentId = agentForPending(items[0]);
+        setAgentStates([agentId], "waiting");
+        pushLog(agentCode(agentId), "Pending authorization restored.");
+      } else {
+        clearAgents();
+      }
+    },
+    [clearAgents, pushLog, setAgentStates, showVoice],
+  );
+
+  const focusAmbient = useCallback(async () => {
+    sessionRef.current = AMBIENT_SESSION;
+    setActiveSession(AMBIENT_SESSION);
+    setActiveConversationId(null);
+    setFocusTitle("Everyday desk");
+    try {
+      localStorage.removeItem(FOCUS_STORAGE_KEY);
+    } catch {
+      /* ignore */
+    }
+    await refreshDesk(null);
+    await loadSessionSurface(AMBIENT_SESSION, { announce: true });
+    showVoice("Back on the everyday desk.");
+  }, [loadSessionSurface, refreshDesk, showVoice]);
+
+  const focusConversation = useCallback(
+    async (row: Conversation, opts?: { announce?: boolean }) => {
+      const sessionId = row.session_id || AMBIENT_SESSION;
+      sessionRef.current = sessionId;
+      setActiveSession(sessionId);
+      setActiveConversationId(row.id);
+      setFocusTitle(row.title || row.kind_label || "Conversation");
+      try {
+        localStorage.setItem(FOCUS_STORAGE_KEY, row.id);
+      } catch {
+        /* ignore */
+      }
+      void api.patchConversation(row.id, { minimized: false }).catch(() => null);
+      await refreshDesk(row.id);
+      await loadSessionSurface(sessionId, { announce: false });
+      if (opts?.announce !== false) {
+        if (row.speak) showVoice(row.speak);
+        else showVoice(IDLE_VOICE);
+      }
+    },
+    [loadSessionSurface, refreshDesk, showVoice],
+  );
+
   const applyResponse = useCallback(
     (result: ChatResponse, opts?: { fromConfirm?: boolean; approved?: boolean }) => {
       const waiting = result.pending || [];
@@ -144,6 +252,7 @@ export function OrchestratorShell() {
       const display = (result.reply || result.speak || "").trim() || IDLE_VOICE;
       const tts = (result.speak || result.reply || "").trim();
       showVoice(display);
+      setScene(result.scene?.title || (result.scene?.widgets || []).length ? result.scene : EMPTY_SCENE);
 
       if (result.activity?.length) {
         setActivity((prev) => {
@@ -257,20 +366,21 @@ export function OrchestratorShell() {
       }
       try {
         if (approved && syncFields && (focusedKind === "email_compose" || composeDraft?.id === id)) {
-          await api.updatePending(id, syncFields, SESSION);
+          await api.updatePending(id, syncFields, sessionRef.current);
         }
-        const result = await api.confirm(id, approved, SESSION);
+        const result = await api.confirm(id, approved, sessionRef.current);
         setSending(false);
         if (approved) {
           setPending([]);
           pendingIdRef.current = "";
         }
         applyResponse(result, { fromConfirm: true, approved });
+        void refreshDesk(activeConversationId);
       } catch (err) {
         setSending(false);
         // Restore pending from server so HUD doesn't strand without Authorize
         try {
-          const waiting = await api.pending(SESSION);
+          const waiting = await api.pending(sessionRef.current);
           const items = waiting.items || [];
           setPending(items);
           pendingIdRef.current = items[0]?.id || "";
@@ -285,7 +395,7 @@ export function OrchestratorShell() {
         setBusy(false);
       }
     },
-    [applyResponse, composeDraft?.id, pending, pushLog, setAgentStates, showVoice],
+    [activeConversationId, applyResponse, composeDraft?.id, pending, pushLog, refreshDesk, setAgentStates, showVoice],
   );
 
   useEffect(() => {
@@ -322,8 +432,9 @@ export function OrchestratorShell() {
       showVoice("Orchestrating…");
 
       try {
-        const result = await api.chat(text, SESSION);
+        const result = await api.chat(text, sessionRef.current);
         applyResponse(result);
+        void refreshDesk(activeConversationId);
       } catch (err) {
         clearAgents();
         const msg = err instanceof Error ? err.message : "Request failed";
@@ -335,7 +446,7 @@ export function OrchestratorShell() {
         setBusy(false);
       }
     },
-    [applyResponse, clearAgents, decide, pushLog, setAgentStates, showVoice],
+    [activeConversationId, applyResponse, clearAgents, decide, pushLog, refreshDesk, setAgentStates, showVoice],
   );
 
   useEffect(() => {
@@ -371,22 +482,40 @@ export function OrchestratorShell() {
     let cancelled = false;
     (async () => {
       try {
-        const [preferences, waiting, session, conversations, tasks] = await Promise.all([
+        let storedId: string | null = null;
+        try {
+          storedId = localStorage.getItem(FOCUS_STORAGE_KEY);
+        } catch {
+          storedId = null;
+        }
+        const [preferences, deskRows, tasks] = await Promise.all([
           api.preferences().catch(() => null),
-          api.pending(SESSION).catch(() => ({ items: [] as PendingAction[] })),
-          api.session(SESSION).catch(() => null),
-          api.conversations().catch(() => ({ items: [] as Conversation[] })),
-          // Fast path: do not block HUD on Gmail/weather refresh
-          api.suggestedTasks(false, SESSION).catch(() => ({ items: [], weather: undefined })),
+          api.conversations(true).catch(() => ({ items: [] as Conversation[] })),
+          api.suggestedTasks(false, AMBIENT_SESSION).catch(() => ({ items: [], weather: undefined })),
         ]);
         if (cancelled) return;
         if (preferences) {
           setPrefs(preferences);
           voiceEnabledRef.current = preferences.voice_enabled !== false;
         }
-        const items = waiting.items || [];
-        setPending(items);
-        pendingIdRef.current = items[0]?.id || "";
+        const rows = deskRows.items || [];
+        const restored = storedId ? rows.find((row) => row.id === storedId) : null;
+        const focusId = restored?.id || null;
+        setDesk(mapDeskItems(rows, focusId));
+        if (restored) {
+          sessionRef.current = restored.session_id || AMBIENT_SESSION;
+          setActiveSession(sessionRef.current);
+          setActiveConversationId(restored.id);
+          setFocusTitle(restored.title || "Conversation");
+          void api.patchConversation(restored.id, { minimized: false }).catch(() => null);
+          await loadSessionSurface(sessionRef.current, { announce: true });
+        } else {
+          sessionRef.current = AMBIENT_SESSION;
+          setActiveSession(AMBIENT_SESSION);
+          setActiveConversationId(null);
+          setFocusTitle("Everyday desk");
+          await loadSessionSurface(AMBIENT_SESSION, { announce: true });
+        }
         const taskItems = (tasks.items || [])
           .map((raw) => {
             const t = raw as SuggestedTask;
@@ -403,9 +532,8 @@ export function OrchestratorShell() {
         setSuggested(taskItems);
         const speakWeather = (tasks.weather as { speak?: string } | undefined)?.speak || "";
         setWeatherLine(speakWeather);
-        // Background refresh — never blocks first paint
         void api
-          .officeRefresh(SESSION)
+          .officeRefresh(AMBIENT_SESSION)
           .then((payload) => {
             if (cancelled) return;
             const refreshed = ((payload.tasks as SuggestedTask[]) || []).map((t) => ({
@@ -417,26 +545,6 @@ export function OrchestratorShell() {
             if (w) setWeatherLine(w);
           })
           .catch(() => null);
-        if (session?.speak) showVoice(session.speak);
-        if (items[0]) {
-          const agentId = agentForPending(items[0]);
-          setAgentStates([agentId], "waiting");
-          pushLog(agentCode(agentId), "Pending authorization restored.");
-        }
-        setRail(
-          (conversations.items || []).slice(0, 3).map((row) => ({
-            id: row.id,
-            title: row.title || row.category || "Conversation",
-            time: row.updated_at
-              ? new Date(row.updated_at).toLocaleTimeString("en-US", {
-                  hour: "numeric",
-                  minute: "2-digit",
-                })
-              : undefined,
-            preview: row.speak || row.turns?.slice(-1)[0]?.content || "",
-            minimized: true,
-          })),
-        );
       } catch {
         /* offline bootstrap is fine for UI shell */
       }
@@ -446,7 +554,7 @@ export function OrchestratorShell() {
       stopListening();
       silence();
     };
-  }, [pushLog, setAgentStates, showVoice]);
+  }, [loadSessionSurface]);
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -478,21 +586,75 @@ export function OrchestratorShell() {
     return () => window.removeEventListener("keydown", onKey);
   }, [composeNeedsInput, decide, hitl, startMic]);
 
+  const startNewDiscussion = useCallback(async () => {
+    if (busyRef.current) return;
+    try {
+      if (desk.length >= MAX_OPEN_CONVERSATIONS) {
+        pushLog("SYS", `Max ${MAX_OPEN_CONVERSATIONS} open notes — oldest will be parked.`);
+      }
+      const row = await api.startDiscussion("");
+      await focusConversation(row, { announce: true });
+      pushLog("SYS", `Opened discussion: ${row.title}`);
+      void refreshDesk(row.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not open discussion");
+    }
+  }, [desk.length, focusConversation, pushLog, refreshDesk]);
+
+  const openWorkflowFromTask = useCallback(
+    async (task: SuggestedTask) => {
+      if (busyRef.current) return;
+      try {
+        const resumeKey = `task:${task.id}`;
+        const title =
+          task.kind === "rfq"
+            ? `RFQ · ${task.title}`.slice(0, 80)
+            : task.title.slice(0, 80) || "Job";
+        const row = await api.startOrResumeWorkflow(
+          title,
+          {
+            task_id: task.id,
+            source_id: task.source_id || "",
+            kind: task.kind,
+            resume_key: resumeKey,
+            meta: task.meta || {},
+          },
+          resumeKey,
+        );
+        await focusConversation(row, { announce: true });
+        pushLog("SYS", `Job focus: ${row.title}`);
+        void send(
+          `Continue the engineering review and quote for this job. Task: ${task.title}. Detail: ${task.detail || "none"}`,
+        );
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Could not open job");
+      }
+    },
+    [focusConversation, pushLog, send],
+  );
+
   return (
-    <div className="orch-root relative flex h-screen flex-col overflow-hidden">
+    <ClickSpark className="orch-root relative flex h-screen flex-col overflow-hidden" sparkColor="#7dffe0">
       <div className="orch-vignette" />
       <JarvisCore mode={mode} />
 
       <ActivityStream items={activity} />
 
       <ConversationRail
-        items={rail}
+        items={desk}
+        openCount={desk.length}
+        maxOpen={MAX_OPEN_CONVERSATIONS}
+        ambientActive={activeSession === AMBIENT_SESSION && !activeConversationId}
         dimmed={hitl}
-        onToggle={(id) =>
-          setRail((prev) =>
-            prev.map((row) => (row.id === id ? { ...row, minimized: !row.minimized } : row)),
-          )
-        }
+        onSelectAmbient={() => void focusAmbient()}
+        onSelect={(id) => {
+          void (async () => {
+            const rows = await refreshDesk(activeConversationId);
+            const row = rows.find((item) => item.id === id);
+            if (row) await focusConversation(row, { announce: true });
+          })();
+        }}
+        onNewDiscussion={() => void startNewDiscussion()}
       />
 
       <main className="relative z-[1] flex flex-1 flex-col items-center justify-center px-16">
@@ -504,6 +666,14 @@ export function OrchestratorShell() {
         >
           <VoiceLine text={voice} dimmed={Boolean(hitlAction)} />
         </div>
+        {scene.title || (scene.widgets || []).length ? (
+          <SpotlightCard
+            className="orch-board mt-8 w-full max-w-[min(720px,92vw)] rounded-2xl border border-[color:var(--border)] bg-black/35 backdrop-blur-md"
+            bodyClassName="max-h-[38vh] overflow-y-auto p-4"
+          >
+            <SceneBoard scene={scene} compact />
+          </SpotlightCard>
+        ) : null}
         {sending ? (
           <div className="orch-sending mt-10 flex flex-col items-center gap-3" aria-live="polite">
             <div className="orch-sending-ring" />
@@ -515,35 +685,43 @@ export function OrchestratorShell() {
         {error ? (
           <p className="mt-4 max-w-lg text-center font-mono text-xs text-red-300/80">{error}</p>
         ) : null}
-        {prefs?.assistant_name ? (
-          <p className="mt-6 font-mono text-[10px] uppercase tracking-[0.2em] text-[color:var(--muted)]/50">
-            {prefs.assistant_name}
-          </p>
-        ) : null}
+        <p className="mt-6 font-mono text-[10px] uppercase tracking-[0.2em] text-[color:var(--muted)]/55">
+          <GradientText className="font-mono text-[10px] uppercase tracking-[0.2em]" animationSpeed={9}>
+            {prefs?.assistant_name || "Jarvis"}
+          </GradientText>
+          <span className="mx-2 text-[color:var(--muted)]/40">·</span>
+          {focusTitle}
+        </p>
       </main>
 
       <Orchestra agents={agents} dimmed={hitl} />
 
-      {!hitl ? (
-        <SuggestedTasksPanel
-          tasks={suggested}
-          weather={weatherLine}
-          onDismiss={(id) => {
-            void api.setSuggestedTaskStatus(id, "dismissed").catch(() => null);
-            setSuggested((prev) => prev.filter((t) => t.id !== id));
-          }}
-          onAction={(task, actionId) => {
-            if (task.kind === "rfq" && actionId === "engineering") {
-              void send(`Start engineering review and quote for task ${task.id}`);
-            } else if (actionId === "calendar" || actionId === "meeting") {
-              void send(`Create a calendar event for: ${task.title}`);
-            } else if (actionId === "chat" || actionId === "review") {
-              void send(`Let's discuss: ${task.title}`);
-            } else {
-              void send(`${actionId} for suggested task: ${task.title}`);
-            }
-          }}
-        />
+      {!hitl && (weatherLine || suggested.length) ? (
+        <aside className="pointer-events-auto absolute right-4 top-24 z-10 flex max-h-[calc(100vh-11rem)] w-[min(360px,92vw)] flex-col gap-3">
+          <WeatherCard line={weatherLine} />
+          <SuggestedTasksPanel
+            tasks={suggested}
+            onDismiss={(id) => {
+              void api.setSuggestedTaskStatus(id, "dismissed").catch(() => null);
+              setSuggested((prev) => prev.filter((t) => t.id !== id));
+            }}
+            onAction={(task, actionId) => {
+              if (task.kind === "rfq" && actionId === "engineering") {
+                void openWorkflowFromTask(task);
+              } else if (actionId === "calendar" || actionId === "meeting") {
+                void send(`Create a calendar event for: ${task.title}`);
+              } else if (actionId === "chat" || actionId === "review") {
+                void (async () => {
+                  const row = await api.startDiscussion(task.title.slice(0, 80));
+                  await focusConversation(row, { announce: true });
+                  void send(`Let's discuss: ${task.title}. ${task.detail || ""}`);
+                })();
+              } else {
+                void send(`${actionId} for suggested task: ${task.title}`);
+              }
+            }}
+          />
+        </aside>
       ) : null}
 
       <CommandBaton
@@ -574,6 +752,6 @@ export function OrchestratorShell() {
         }}
         onDecide={(id, approved, fields) => void decide(id, approved, fields)}
       />
-    </div>
+    </ClickSpark>
   );
 }

@@ -120,13 +120,30 @@ export const api = {
     ),
   ackWatch: (sessionId = "default") =>
     json<{ ok: boolean; acked: boolean }>(`/api/watch/ack?session_id=${sessionId}`, { method: "POST" }),
-  conversations: () => json<{ items: Conversation[] }>("/api/conversations"),
+  conversations: (desk = false) =>
+    json<{ items: Conversation[]; ambient_session?: string }>(
+      `/api/conversations${desk ? "?desk=true" : ""}`,
+    ),
   createConversation: (category: string, title: string, focus: Record<string, unknown> = {}) =>
     json<Conversation>("/api/conversations", {
       method: "POST",
       body: JSON.stringify({ category, title, focus }),
     }),
-  patchConversation: (id: string, patch: { minimized?: boolean; title?: string }) =>
+  startDiscussion: (title = "", focus: Record<string, unknown> = {}) =>
+    json<Conversation>("/api/conversations/discussion", {
+      method: "POST",
+      body: JSON.stringify({ title, focus }),
+    }),
+  startOrResumeWorkflow: (
+    title: string,
+    focus: Record<string, unknown> = {},
+    resumeKey = "",
+  ) =>
+    json<Conversation>("/api/conversations/workflow", {
+      method: "POST",
+      body: JSON.stringify({ title, focus, resume_key: resumeKey }),
+    }),
+  patchConversation: (id: string, patch: { minimized?: boolean; title?: string; status?: string }) =>
     json<Conversation>(`/api/conversations/${id}`, {
       method: "PATCH",
       body: JSON.stringify(patch),

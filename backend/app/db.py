@@ -1121,7 +1121,8 @@ def get_canvas_file(file_id: str) -> dict[str, Any] | None:
 
 
 MAX_CONVERSATIONS = 12
-MAX_EXPANDED = 2
+# Concurrent "running" desk conversations (discussions / jobs / drawings).
+MAX_EXPANDED = 3
 
 
 def _conversation_row(row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
