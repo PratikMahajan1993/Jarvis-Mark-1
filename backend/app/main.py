@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import binascii
 import uuid
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
@@ -45,7 +46,13 @@ from .hud_state import load_hud, remember_hud
 from .snapshot import kick as kick_snapshot
 from .watch import ack_watch, resume_watches, watch_payload
 
-app = FastAPI(title="Jarvis Command Center", version="0.1.0")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    startup()
+    yield
+
+
+app = FastAPI(title="Jarvis Command Center", version="0.1.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.origin_list or ["http://localhost:3000"],
@@ -56,7 +63,6 @@ app.add_middleware(
 )
 
 
-@app.on_event("startup")
 def startup() -> None:
     db.init_db()
     if not gmail_live():
@@ -186,7 +192,7 @@ def api_google_status() -> dict:
 
 
 @app.get("/api/google/auth")
-def api_google_auth():
+def api_google_auth() -> RedirectResponse:
     try:
         return RedirectResponse(google_auth.auth_url())
     except Exception as exc:
@@ -194,7 +200,7 @@ def api_google_auth():
 
 
 @app.get("/api/google/callback")
-def api_google_callback(code: str = "", state: str = ""):
+def api_google_callback(code: str = "", state: str = "") -> RedirectResponse:
     try:
         google_auth.finish_auth(code, state)
     except Exception as exc:
@@ -364,7 +370,7 @@ def api_artifacts() -> dict:
 
 
 @app.get("/api/artifacts/{artifact_id}")
-def api_artifact_download(artifact_id: str):
+def api_artifact_download(artifact_id: str) -> FileResponse:
     item = db.get_artifact(artifact_id)
     if not item:
         raise HTTPException(404, "Artifact not found")
@@ -377,7 +383,7 @@ def api_artifact_download(artifact_id: str):
 
 
 @app.get("/api/drawings/{filename}")
-def api_drawing_download(filename: str):
+def api_drawing_download(filename: str) -> FileResponse:
     try:
         path = safe_drawing_path(filename)
     except ValueError as exc:
@@ -626,7 +632,7 @@ async def api_canvas_upload(file: UploadFile = File(...)) -> dict:
 
 
 @app.get("/api/canvas/files/{file_id}")
-def api_canvas_file(file_id: str):
+def api_canvas_file(file_id: str) -> FileResponse:
     record = db.get_canvas_file(file_id)
     if not record:
         raise HTTPException(404, "Canvas file not found")
