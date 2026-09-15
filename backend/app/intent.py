@@ -94,17 +94,19 @@ _COMPOSE_START = re.compile(
     r"draft\s+an?\s+(?:e-?mails?|mails?)|draft\s+(?:e-?mails?|mails?)|"
     r"send\s+an?\s+(?:e-?mails?|mails?)|send\s+(?:e-?mails?|mails?)|"
     r"compose\s+an?\s+(?:e-?mails?|mails?)|compose\s+a\s+mails?|"
-    r"write\s+an?\s+(?:e-?mails?|mails?)"
+    r"write\s+an?\s+(?:e-?mails?|mails?)|"
+    r"shoot\s+an?\s+(?:e-?mails?|mails?)|"
+    r"start\s+an?\s+(?:e-?mails?|mails?)"
     r")\b[\s,]*(.*)$",
-    re.I | re.S,
+    re.IGNORECASE | re.DOTALL,
 )
-_FORWARD = re.compile(r"\bforward\b", re.I)
+_FORWARD = re.compile(r"\b(forward|pass this along|send this over)\b", re.IGNORECASE)
 _SAVE = re.compile(
-    r"\b(save|download)\b.*\b(pdf|drawing|drawings|attachment|attachments|file|files|dpis|rfnw)\b"
-    r"|\b(save|download)\b.*\b(?:DPIS[0-9A-Z_-]+|RFNW[-_]?[0-9]+)\b",
+    r"\b(save|download|store|keep)\b.*\b(pdf|drawing|drawings|attachment|attachments|file|files|dpis|rfnw)\b"
+    r"|\b(save|download|store|keep)\b.*\b(?:DPIS[0-9A-Z_-]+|RFNW[-_]?[0-9]+)\b",
     re.I,
 )
-_REPLY_ATTACH = re.compile(r"\b(attach|with)\b.*\b(reply|draft)\b|\breply\b.*\b(with|attach)\b", re.I)
+_REPLY_ATTACH = re.compile(r"\b(attach|with)\b.*\b(reply|draft)\b|\breply\b.*\b(with|attach)\b", re.IGNORECASE)
 _READ = re.compile(
     r"\b(open|read|show|summarise|summarize|what's in|whats in|what is in|what did)\b"
     r".*\b(mail|email|e-mail|gmail|message|note|letter|enquiry|inquiry|said|say|wrote)\b"
@@ -119,13 +121,13 @@ _SEARCH = re.compile(
     r"|\bcheck\b.+\b(mail|email|emails|inbox|gmail)\b",
     re.I,
 )
-_NEGATE = re.compile(r"\b(don't|dont|do not|never)\b", re.I)
-_LAST = re.compile(r"\b(last|latest|newest|most recent)\b", re.I)
+_NEGATE = re.compile(r"\b(don't|dont|do not|never)\b", re.IGNORECASE)
+_LAST = re.compile(r"\b(last|latest|newest|most recent)\b", re.IGNORECASE)
 _CAL_CREATE = re.compile(
-    r"\b(add|put|book|create|make|set|block|hold|reserve|fix)\b.+\b"
+    r"\b(add|put|book|create|make|set|block|hold|reserve|fix|schedule)\b.+\b"
     r"(calendar|event|meeting|call|lunch|dinner|sync|appointment|slot)\b"
     r"|\bschedule (a|an|me)\b"
-    r"|\b(meeting|call)\s+with\b",
+    r"|\b(meeting|call|sync)\s+with\b",
     re.I,
 )
 _CAL_LIST = re.compile(
@@ -135,7 +137,8 @@ _CAL_LIST = re.compile(
     r"|\bmeetings?\s+(today|tomorrow)\b"
     r"|\bwhat(?:'s|s| is)\s+tomorrow\b"
     r"|\bwhat do i have\s+tomorrow\b"
-    r"|\bwhen is (?:my )?next (meeting|call|event|appointment)\b",
+    r"|\bwhen is (?:my )?next (meeting|call|event|appointment)\b"
+    r"|\bwhat(?:\'s|s| is) on my (?:plate|schedule|agenda)\b",
     re.I,
 )
 _RESEARCH = (
@@ -329,9 +332,9 @@ def prepare(message: str) -> str:
     text = (message or "").replace("\u2019", "'").replace("\u2018", "'")
     text = text.replace("\u201c", '"').replace("\u201d", '"')
     text = re.sub(r"\s+", " ", text).strip()
-    text = re.sub(r"^(?:hey\s+|ok\s+|okay\s+)?jarvis[,.]?\s+", "", text, flags=re.I)
-    text = re.sub(r"[,.]?\s+jarvis[.!?]*$", "", text, flags=re.I)
-    text = re.sub(r"^(please|pls|plz|can you|could you|would you)\s+", "", text, flags=re.I)
+    text = re.sub(r"^(?:hey\s+|ok\s+|okay\s+)?jarvis[,.]?\s+", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"[,.]?\s+jarvis[.!?]*$", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"^(please|pls|plz|can you|could you|would you)\s+", "", text, flags=re.IGNORECASE)
     return text
 
 
@@ -406,7 +409,7 @@ def match_mail_trigger(message: str) -> dict[str, str | bool] | None:
         r"^(reply\s+to\s+that|reply\s+to\s+this|reply\s+to\s+the\s+last\s+(?:e-?mail|mails?)|"
         r"draft\s+a\s+reply|write\s+a\s+reply)\b[\s,]*(.*)$",
         text,
-        re.I | re.S,
+        re.IGNORECASE | re.DOTALL,
     )
     if fixed:
         starter = fixed.group(1).lower()
@@ -416,7 +419,7 @@ def match_mail_trigger(message: str) -> dict[str, str | bool] | None:
             "person": "",
             "last": "last" in starter,
         }
-    named = re.match(r"^reply\s+to\s+([A-Za-z][A-Za-z'-]+)\b[\s,]*(.*)$", text, re.I | re.S)
+    named = re.match(r"^reply\s+to\s+([A-Za-z][A-Za-z'-]+)\b[\s,]*(.*)$", text, re.IGNORECASE | re.DOTALL)
     if named:
         return {
             "mode": "reply",

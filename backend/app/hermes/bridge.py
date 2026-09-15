@@ -35,7 +35,7 @@ def hermes_gateway_url() -> str:
     return (settings.hermes_gateway_url or "").rstrip("/")
 
 
-def hermes_gateway_reachable(timeout: float = 1.5) -> bool:
+def hermes_gateway_reachable(timeout: float = 3.0) -> bool:
     """True when the warm API server answers /health."""
     base = hermes_gateway_url()
     if not base or not settings.hermes_api_key:
@@ -439,7 +439,7 @@ def _run_via_gateway(message: str, session_id: str, casual: bool) -> tuple[str, 
     # Casual: skip /v1/responses (hangs). Prefer chat/completions only.
     timeout = float(settings.hermes_timeout_sec)
     if casual:
-        timeout = min(timeout, 35.0)
+        timeout = min(timeout, 45.0)
         return _gateway_chat(
             base=base,
             headers=headers,
