@@ -49,17 +49,6 @@ export function agentCode(id: AgentId): string {
   return DEFAULT_AGENTS.find((a) => a.id === id)?.code || "SYS";
 }
 
-export function inferBusyAgents(message: string, toolHint = ""): AgentId[] {
-  const text = `${message} ${toolHint}`.toLowerCase();
-  const ids: AgentId[] = [];
-  if (/\b(research|brief|search web|look up)\b/.test(text)) ids.push("research");
-  if (/\b(email|inbox|mail|gmail|forward|reply)\b/.test(text)) ids.push("sec");
-  if (/\b(sheet|shop|oee|spreadsheet|excel|document|pdf|rfq|cnc)\b/.test(text)) ids.push("data");
-  if (/\b(send|deploy|create event|calendar|schedule|write|update)\b/.test(text)) ids.push("ops");
-  if (!ids.length) ids.push("research");
-  return ids;
-}
-
 export function shallICopy(action: PendingAction): {
   title: string;
   summary: string;

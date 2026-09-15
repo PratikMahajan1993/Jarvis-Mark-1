@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import type { ChatResponse, Conversation, PendingAction, Preferences, Scene } from "@/lib/types";
 import {
@@ -8,12 +8,19 @@ import {
   agentCode,
   agentForPending,
   formatClock,
-  inferBusyAgents,
   type ActivityItem,
   type AgentId,
   type AgentNode,
   type OrchestratorMode,
 } from "@/lib/orchestrator";
+import {
+  INITIAL_JARVIS_STATE,
+  isBusy,
+  jarvisReducer,
+  listenAllowed,
+  type JarvisEvent,
+  type JarvisState,
+} from "@/lib/orchestratorFsm";
 import {
   canListen,
   classifyDecision,
@@ -113,48 +120,76 @@ function VoiceLine({ text, dimmed }: { text: string; dimmed?: boolean }) {
   );
 }
 
+/** Maps the FSM's macro-state onto the visual mode JarvisCore/Orchestra already render.
+ * SPEAKING maps to "busy" — same visual treatment as THINKING/EXECUTING, just correctly
+ * covering the TTS-playback window that the old flag-based code left unaccounted for. */
+function modeToOrchestratorMode(state: JarvisState): OrchestratorMode {
+  switch (state.mode) {
+    case "LISTENING":
+      return "listening";
+    case "AWAITING_HITL":
+      return "hitl";
+    case "THINKING":
+    case "SPEAKING":
+    case "EXECUTING":
+      return "busy";
+    default:
+      return "idle";
+  }
+}
+
 export function OrchestratorShell() {
   const [voice, setVoice] = useState(IDLE_VOICE);
   const [voiceVisible, setVoiceVisible] = useState(false);
   const [scene, setScene] = useState<Scene>(EMPTY_SCENE);
   const [compose, setCompose] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [listening, setListening] = useState(false);
-  const [confirmListening, setConfirmListening] = useState(false);
+  const [state, dispatch] = useReducer(jarvisReducer, INITIAL_JARVIS_STATE);
   const [agents, setAgents] = useState<AgentNode[]>(DEFAULT_AGENTS);
   const [activity, setActivity] = useState<ActivityItem[]>([]);
-  const [pending, setPending] = useState<PendingAction[]>([]);
   const [desk, setDesk] = useState<RailConversation[]>([]);
   const [activeSession, setActiveSession] = useState(AMBIENT_SESSION);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [focusTitle, setFocusTitle] = useState("Everyday desk");
   const [prefs, setPrefs] = useState<Preferences | null>(null);
   const [error, setError] = useState("");
-  const [sending, setSending] = useState(false);
   const [suggested, setSuggested] = useState<SuggestedTask[]>([]);
   const [weatherLine, setWeatherLine] = useState("");
 
-  const busyRef = useRef(false);
-  const pendingIdRef = useRef("");
+  // Mirrors `state` synchronously (a render behind `state` itself) so
+  // imperative callbacks can guard re-entrancy (e.g. a second send() firing
+  // before React has committed the first transition) without waiting on a
+  // render. `applyEvent` keeps both in lockstep on every dispatch.
+  const stateRef = useRef<JarvisState>(state);
+  const speakGenRef = useRef(0);
   const sessionRef = useRef(AMBIENT_SESSION);
   const voiceEnabledRef = useRef(true);
-  const speakToken = useRef(0);
   const composeFieldsRef = useRef({ to: "", subject: "", body: "" });
   const decideRef = useRef<(id: string, approved: boolean, fields?: { to: string; subject: string; body: string }) => Promise<void>>(
     async () => undefined,
   );
-  const listenConfirmRef = useRef<(actionId: string, fillCompose?: boolean) => Promise<void>>(async () => undefined);
+  const confirmListenRef = useRef<(action: PendingAction) => void>(() => undefined);
   const sendRef = useRef<(message: string) => Promise<void>>(async () => undefined);
 
-  const focused = pending[0] || null;
-  const composeDraft = !sending && focused?.kind === "email_compose" ? focused : null;
-  const composeMissing = Array.isArray(composeDraft?.payload?.missing)
-    ? (composeDraft!.payload.missing as string[])
-    : [];
-  const composeNeedsInput = Boolean(composeDraft && composeMissing.length > 0);
-  const hitlAction = composeDraft || sending ? null : focused;
-  const hitl = Boolean(focused) && !sending;
-  const mode: OrchestratorMode = sending ? "busy" : hitl ? "hitl" : busy ? "busy" : listening ? "listening" : "idle";
+  /** Applies a transition. Returns the new state if it took effect, or null
+   * if the event was refused (no-op) — e.g. LISTEN_START while SPEAKING. */
+  const applyEvent = useCallback((event: JarvisEvent) => {
+    const next = jarvisReducer(stateRef.current, event);
+    if (next === stateRef.current) return null;
+    stateRef.current = next;
+    dispatch(event);
+    return next;
+  }, []);
+
+  const hitlAction: PendingAction | null =
+    state.mode === "AWAITING_HITL" && state.action.kind !== "email_compose" ? state.action : null;
+  const composeDraft: PendingAction | null =
+    state.mode === "AWAITING_HITL" && state.action.kind === "email_compose" ? state.action : null;
+  const hitl = state.mode === "AWAITING_HITL";
+  const confirmListening = state.mode === "AWAITING_HITL" && state.listening;
+  const sending = state.mode === "EXECUTING";
+  const listening = state.mode === "LISTENING";
+  const busy = isBusy(state);
+  const mode: OrchestratorMode = modeToOrchestratorMode(state);
   /** Mail board / compose modal owns the center — hide VoiceLine so text is not duplicated. */
   const boardOwnsCenter = sceneHasBoardContent(scene) || Boolean(composeDraft);
   const showCenterVoice = voiceVisible && !boardOwnsCenter;
@@ -214,25 +249,28 @@ export function OrchestratorShell() {
         api.session(sessionId).catch(() => null),
       ]);
       const items = waiting.items || [];
-      setPending(items);
-      pendingIdRef.current = items[0]?.id || "";
-      const composeOpen = items[0]?.kind === "email_compose";
+      const first = items[0] || null;
+      // Restoring/switching sessions never auto-opens the confirm mic — only
+      // a fresh reply (send/decide) does that. This is a plain state
+      // snapshot, not an "awaiting a spoken answer" moment.
+      applyEvent(first ? { type: "AWAIT_HITL", action: first } : { type: "RESET" });
+      const composeOpen = first?.kind === "email_compose";
       if (composeOpen) {
         clearVoice();
       } else if (opts?.announce !== false && session?.speak) {
         showVoice(session.speak);
-      } else if (opts?.announce !== false && !items[0]) {
+      } else if (opts?.announce !== false && !first) {
         showVoice(IDLE_VOICE);
       }
-      if (items[0]) {
-        const agentId = agentForPending(items[0]);
+      if (first) {
+        const agentId = agentForPending(first);
         setAgentStates([agentId], "waiting");
         pushLog(agentCode(agentId), "Pending authorization restored.");
       } else {
         clearAgents();
       }
     },
-    [clearAgents, clearVoice, pushLog, setAgentStates, showVoice],
+    [applyEvent, clearAgents, clearVoice, pushLog, setAgentStates, showVoice],
   );
 
   const focusAmbient = useCallback(async () => {
@@ -276,8 +314,7 @@ export function OrchestratorShell() {
   const applyResponse = useCallback(
     (result: ChatResponse, opts?: { fromConfirm?: boolean; approved?: boolean }) => {
       const waiting = result.pending || [];
-      setPending(waiting);
-      pendingIdRef.current = waiting[0]?.id || "";
+      const nextAction = waiting[0] || null;
 
       // Prefer reply for on-screen HUD text; speak stays short for TTS.
       // When a board/modal owns the content (mail read, compose draft, etc.), clear
@@ -286,7 +323,7 @@ export function OrchestratorShell() {
       const tts = (result.speak || result.reply || "").trim();
       const nextScene = sceneHasBoardContent(result.scene) ? result.scene! : EMPTY_SCENE;
       const boardOwnsHud =
-        sceneHasBoardContent(nextScene) || waiting[0]?.kind === "email_compose";
+        sceneHasBoardContent(nextScene) || nextAction?.kind === "email_compose";
       if (boardOwnsHud) clearVoice();
       else showVoice(display);
       setScene(nextScene);
@@ -310,8 +347,8 @@ export function OrchestratorShell() {
             return match ? { ...agent, state: (match.state as AgentNode["state"]) || "" } : agent;
           }),
         );
-      } else if (waiting[0]) {
-        const agentId = agentForPending(waiting[0]);
+      } else if (nextAction) {
+        const agentId = agentForPending(nextAction);
         clearAgents();
         setAgentStates([agentId], "waiting");
         pushLog(agentCode(agentId), "Awaiting human clearance…");
@@ -324,115 +361,113 @@ export function OrchestratorShell() {
           clearAgents();
           pushLog("SYS", "Operator rejected sequence.");
         }
-      } else if (!result.agents?.length) {
-        clearAgents();
       }
 
       if (sceneHasBoardContent(result.scene) && result.scene?.title) {
         pushLog("SYS", result.scene.title);
       }
 
-      speakToken.current += 1;
-      const token = speakToken.current;
-      const missing = waiting[0]?.payload?.missing;
-      const needsFill =
-        waiting[0]?.kind === "email_compose" && Array.isArray(missing) && missing.length > 0;
+      speakGenRef.current += 1;
+      const gen = speakGenRef.current;
+
       if (voiceEnabledRef.current && tts) {
+        applyEvent({ type: "SPEAK_START", text: tts });
         speak(tts, true, () => {
-          if (token !== speakToken.current) return;
-          if (pendingIdRef.current) {
-            void listenConfirmRef.current(pendingIdRef.current, needsFill);
+          // A late-arriving clip's onEnd must not resurrect SPEAKING or
+          // start a confirm-listen for a turn that's no longer current.
+          if (gen !== speakGenRef.current) return;
+          // If some other event already moved the mode on (e.g. a new
+          // send() interrupted this speech), SPEAK_END is refused and
+          // `nextAction` — already superseded — must not be re-presented.
+          const settled = applyEvent({ type: "SPEAK_END" });
+          if (settled === null) return;
+          if (nextAction) {
+            applyEvent({ type: "AWAIT_HITL", action: nextAction });
+            confirmListenRef.current(nextAction);
           }
         });
-      } else if (waiting[0]) {
-        void listenConfirmRef.current(waiting[0].id, needsFill);
+      } else if (nextAction) {
+        const settled = applyEvent({ type: "AWAIT_HITL", action: nextAction });
+        if (settled) confirmListenRef.current(nextAction);
+      } else {
+        applyEvent({ type: "RESET" });
       }
     },
-    [clearAgents, clearVoice, pushLog, setAgentStates, showVoice],
+    [applyEvent, clearAgents, clearVoice, pushLog, setAgentStates, showVoice],
   );
 
-  const listenForConfirm = useCallback(async (actionId: string, fillCompose = false) => {
-    if (!canListen() || !actionId) return;
+  /** Auto-opens the confirm mic right after a HITL panel is freshly presented
+   * (mirrors the old listenForConfirm, now keyed off the FSM instead of a ref). */
+  const startConfirmListen = useCallback((action: PendingAction) => {
+    if (!canListen()) return;
+    const missing = action.payload?.missing;
+    const needsFill = action.kind === "email_compose" && Array.isArray(missing) && missing.length > 0;
     stopListening();
-    setConfirmListening(true);
-    try {
-      await startListening({
-        onFinal: (text) => {
-          if (pendingIdRef.current !== actionId) return;
-          const decision = classifyDecision(text);
-          const words = text.trim().split(/\s+/).filter(Boolean).length;
-          // Short authorize/reject phrases always win; otherwise body dictation goes to chat.
-          if (decision && words <= 5) {
-            setConfirmListening(false);
-            void decideRef.current(actionId, decision === "yes");
-            return;
-          }
-          if (fillCompose) {
-            setConfirmListening(false);
-            void sendRef.current(text);
-            return;
-          }
-        },
-        onEnd: () => setConfirmListening(false),
-        onError: () => setConfirmListening(false),
-      });
-    } catch {
-      setConfirmListening(false);
-    }
-  }, []);
+    const started = applyEvent({ type: "HITL_LISTEN_START" });
+    if (!started) return;
+    void startListening({
+      onFinal: (text) => {
+        if (stateRef.current.mode !== "AWAITING_HITL" || stateRef.current.action.id !== action.id) return;
+        const decision = classifyDecision(text);
+        const words = text.trim().split(/\s+/).filter(Boolean).length;
+        // Short authorize/reject phrases always win; otherwise body dictation goes to chat.
+        if (decision && words <= 5) {
+          applyEvent({ type: "HITL_LISTEN_STOP" });
+          void decideRef.current(action.id, decision === "yes");
+          return;
+        }
+        if (needsFill) {
+          applyEvent({ type: "HITL_LISTEN_STOP" });
+          void sendRef.current(text);
+        }
+      },
+      onEnd: () => applyEvent({ type: "HITL_LISTEN_STOP" }),
+      onError: () => applyEvent({ type: "HITL_LISTEN_STOP" }),
+    });
+  }, [applyEvent]);
 
   const decide = useCallback(
     async (id: string, approved: boolean, fields?: { to: string; subject: string; body: string }) => {
-      if (busyRef.current) return;
-      busyRef.current = true;
-      setBusy(true);
-      setConfirmListening(false);
+      const current = stateRef.current;
+      if (current.mode !== "AWAITING_HITL" || current.action.id !== id || current.resolving) return;
+      const action = current.action;
+
       stopListening();
       silence();
-      const focusedKind = pending.find((p) => p.id === id)?.kind || "";
-      const syncFields =
-        fields ||
-        (focusedKind === "email_compose" || composeDraft?.id === id
-          ? composeFieldsRef.current
-          : undefined);
+
+      const next = applyEvent(
+        approved ? { type: "DECIDE_APPROVE", actionId: id } : { type: "DECIDE_REJECT", actionId: id },
+      );
+      if (!next) return;
+
+      const syncFields = fields || (action.kind === "email_compose" ? composeFieldsRef.current : undefined);
       if (approved) {
-        setSending(true);
-        showVoice(focusedKind === "email_compose" || focusedKind === "email_send" || focusedKind === "quote_send" ? "Sending…" : "Working…");
+        showVoice(action.kind === "email_compose" || action.kind === "email_send" || action.kind === "quote_send" ? "Sending…" : "Working…");
         setAgentStates(["ops"], "active");
         pushLog("OPS.04", "Executing authorized action…");
       }
       try {
-        if (approved && syncFields && (focusedKind === "email_compose" || composeDraft?.id === id)) {
+        if (approved && syncFields && action.kind === "email_compose") {
           await api.updatePending(id, syncFields, sessionRef.current);
         }
         const result = await api.confirm(id, approved, sessionRef.current);
-        setSending(false);
-        if (approved) {
-          setPending([]);
-          pendingIdRef.current = "";
-        }
         applyResponse(result, { fromConfirm: true, approved });
         void refreshDesk(activeConversationId);
       } catch (err) {
-        setSending(false);
         // Restore pending from server so HUD doesn't strand without Authorize
         try {
           const waiting = await api.pending(sessionRef.current);
-          const items = waiting.items || [];
-          setPending(items);
-          pendingIdRef.current = items[0]?.id || "";
+          const restored = waiting.items?.[0] || null;
+          applyEvent(restored ? { type: "AWAIT_HITL", action: restored } : { type: "RESET" });
         } catch {
-          /* ignore */
+          applyEvent({ type: "RESET" });
         }
         setError(err instanceof Error ? err.message : "Confirm failed");
         pushLog("SYS", "Confirm failed.");
         showVoice("That did not go through. Awaiting instruction.");
-      } finally {
-        busyRef.current = false;
-        setBusy(false);
       }
     },
-    [activeConversationId, applyResponse, composeDraft?.id, pending, pushLog, refreshDesk, setAgentStates, showVoice],
+    [activeConversationId, applyEvent, applyResponse, pushLog, refreshDesk, setAgentStates, showVoice],
   );
 
   useEffect(() => {
@@ -440,31 +475,31 @@ export function OrchestratorShell() {
   }, [decide]);
 
   useEffect(() => {
-    listenConfirmRef.current = listenForConfirm;
-  }, [listenForConfirm]);
+    confirmListenRef.current = startConfirmListen;
+  }, [startConfirmListen]);
 
   const send = useCallback(
     async (message: string) => {
       const text = message.trim();
-      if (!text || busyRef.current) return;
+      if (!text) return;
+      const current = stateRef.current;
 
-      const decision = pendingIdRef.current ? classifyDecision(text) : null;
+      // A short "yes"/"no" while a HITL panel is open resolves it instead of chatting.
+      const decision = current.mode === "AWAITING_HITL" ? classifyDecision(text) : null;
       const words = text.trim().split(/\s+/).filter(Boolean).length;
-      if (decision && pendingIdRef.current && words <= 5) {
-        await decide(pendingIdRef.current, decision === "yes");
+      if (decision && current.mode === "AWAITING_HITL" && words <= 5) {
+        await decide(current.action.id, decision === "yes");
         setCompose("");
         return;
       }
 
-      busyRef.current = true;
-      setBusy(true);
+      const next = applyEvent({ type: "SEND", text });
+      if (!next) return;
+
       setCompose("");
       setError("");
       stopListening();
-      setListening(false);
 
-      const busyIds = inferBusyAgents(text);
-      setAgentStates(busyIds, "active");
       pushLog("SYS", text.length > 72 ? `${text.slice(0, 72)}…` : text);
       showVoice("Orchestrating…");
 
@@ -478,12 +513,10 @@ export function OrchestratorShell() {
         setError(msg);
         showVoice("Connection fault. Awaiting instruction.");
         pushLog("SYS", "Request failed.");
-      } finally {
-        busyRef.current = false;
-        setBusy(false);
+        applyEvent({ type: "RESET" });
       }
     },
-    [activeConversationId, applyResponse, clearAgents, decide, pushLog, refreshDesk, setAgentStates, showVoice],
+    [activeConversationId, applyEvent, applyResponse, clearAgents, decide, pushLog, refreshDesk, showVoice],
   );
 
   useEffect(() => {
@@ -491,28 +524,39 @@ export function OrchestratorShell() {
   }, [send]);
 
   const startMic = useCallback(async () => {
-    if (busyRef.current || (hitl && !composeNeedsInput) || !canListen()) return;
+    if (!canListen()) return;
+    const current = stateRef.current;
+
+    if (current.mode === "AWAITING_HITL") {
+      // Compose fill-in: reuse the same confirm-mic instead of opening a
+      // second, independent recognizer session over it.
+      if (!listenAllowed(current)) return;
+      confirmListenRef.current(current.action);
+      return;
+    }
+
+    const next = applyEvent({ type: "LISTEN_START" });
+    if (!next) return;
     stopListening();
-    setListening(true);
     try {
       await startListening({
         onPartial: (text) => setCompose(text),
         onFinal: (text) => {
-          setListening(false);
+          applyEvent({ type: "LISTEN_STOP" });
           setCompose("");
           void send(text);
         },
-        onEnd: () => setListening(false),
+        onEnd: () => applyEvent({ type: "LISTEN_STOP" }),
         onError: (message) => {
-          setListening(false);
+          applyEvent({ type: "LISTEN_STOP" });
           setError(message);
         },
       });
     } catch (err) {
-      setListening(false);
+      applyEvent({ type: "LISTEN_STOP" });
       setError(err instanceof Error ? err.message : "Microphone unavailable");
     }
-  }, [composeNeedsInput, hitl, send]);
+  }, [applyEvent, send]);
 
   useEffect(() => {
     setVoiceVisible(true);
@@ -597,34 +641,37 @@ export function OrchestratorShell() {
     function onKey(event: KeyboardEvent) {
       const typing =
         event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement;
-      if (pendingIdRef.current && !typing && !busyRef.current) {
+      const current = stateRef.current;
+      if (current.mode === "AWAITING_HITL" && !current.resolving && !typing) {
         if (event.key === "y" || event.key === "Y") {
           event.preventDefault();
-          void decide(pendingIdRef.current, true);
+          void decide(current.action.id, true);
           return;
         }
         if (event.key === "n" || event.key === "N") {
           event.preventDefault();
-          void decide(pendingIdRef.current, false);
+          void decide(current.action.id, false);
           return;
         }
       }
-      if (event.code === "Space" && !typing && !(hitl && !composeNeedsInput) && !busyRef.current) {
+      if (event.code === "Space" && !typing && listenAllowed(current)) {
         event.preventDefault();
         void startMic();
       }
       if (event.key === "Escape") {
         stopListening();
-        setListening(false);
-        setConfirmListening(false);
+        if (current.mode === "LISTENING") applyEvent({ type: "RESET" });
+        else if (current.mode === "AWAITING_HITL" && current.listening) {
+          applyEvent({ type: "HITL_LISTEN_STOP" });
+        }
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [composeNeedsInput, decide, hitl, startMic]);
+  }, [applyEvent, decide, startMic]);
 
   const startNewDiscussion = useCallback(async () => {
-    if (busyRef.current) return;
+    if (isBusy(stateRef.current)) return;
     try {
       if (desk.length >= MAX_OPEN_CONVERSATIONS) {
         pushLog("SYS", `Max ${MAX_OPEN_CONVERSATIONS} open notes — oldest will be parked.`);
@@ -640,7 +687,7 @@ export function OrchestratorShell() {
 
   const openWorkflowFromTask = useCallback(
     async (task: SuggestedTask) => {
-      if (busyRef.current) return;
+      if (isBusy(stateRef.current)) return;
       try {
         const resumeKey = `task:${task.id}`;
         const title =
