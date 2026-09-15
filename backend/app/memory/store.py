@@ -77,8 +77,10 @@ def _lance_upsert(doc_id: str, namespace: str, key: str, text: str, vector: list
     try:
         try:
             names = set(ldb.list_tables())
+        except AttributeError:
+            names = set(ldb.table_names())  # Fallback for very old LanceDB
         except Exception:
-            names = set(ldb.table_names())
+            names = set()
         if table_name not in names:
             ldb.create_table(table_name, [row], mode="overwrite")
         else:
