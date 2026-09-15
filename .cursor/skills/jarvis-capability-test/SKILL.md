@@ -12,6 +12,11 @@ description: >
 
 `work/CAPABILITY_TEST_MATRIX.md`
 
+## Where this runs
+
+The matrix is driven by the user on the desk machine, with the coordinator alongside.
+It is not delegated to an isolated worker — the pass bar is live HUD behaviour.
+
 ## Method
 
 1. Confirm servers: HUD `:3000`, API `127.0.0.1:8000`, Hermes/Voicebox if the case needs them.
@@ -29,7 +34,7 @@ Fix (if any):
 Retest:
 ```
 
-6. On fail/flaky observation → skill **`jarvis-observation-dispatch`** (background specialist).
+6. On fail/flaky observation → skill **`jarvis-observation-dispatch`** (background worker; place it per that skill).
 7. Do not skip HITL cases or mark pass if Authorize was bypassed.
 8. Latency targets: casual ≤~5s warm; simple tools ≤~15s; HUD idle &lt;~2s.
 

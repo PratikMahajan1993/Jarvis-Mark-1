@@ -10,10 +10,11 @@ When the user is running `work/CAPABILITY_TEST_MATRIX.md` cases or reports live 
 1. **Stay with the user** on the current test ID. Do not block the chat on long fixes.
 2. **Read** `work/LAST_TURNS.md` (last 20 chat/confirm turns) for speak/board/pending context.
 3. **Log** the observation (ID, pass/fail/flaky, latency, notes) into the matrix or a short reply.
-4. **Dispatch** specialized background subagents via the Task tool (`run_in_background: true`) using the roster in `AGENTS.md` / skill `jarvis-observation-dispatch`.
+4. **Delegate** the fix to a background worker using the roster in `AGENTS.md` / skill `jarvis-observation-dispatch`.
 5. Prefer **one specialist per concern** (UI → `jarvis-uiux`, voice → `jarvis-voice`, mail/HITL/RFQ → `jarvis-workflows`, generic impl → `jarvis-builder`).
-6. Give each subagent a **closed task**: repro, files, acceptance check, “do not expand scope.”
-7. Continue the next matrix step with the user while agents work.
-8. When a background agent finishes, summarize in 2–3 lines and only re-test if the user wants.
+6. **Place** it: on the desk machine when the check needs the HUD, Voicebox, Hermes, or live Gmail; anywhere else when the check is "the code is correct".
+7. Give each worker a **self-contained, closed** kickoff — it sees the repo but nothing of this chat: goal, repro, files in scope, acceptance check, "do not expand scope."
+8. Continue the next matrix step with the user while workers run.
+9. When a worker reports, summarize in 2–3 lines and only re-test if the user wants.
 
 Do not invent new architecture during a test run. Fix within the locked stack.

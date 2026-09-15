@@ -22,16 +22,20 @@ Persistent guidance for Cursor agents working in this repo during capability tes
 
 ## Specialized subagents (`.cursor/agents/`)
 
-Launch with Task `subagent_type` = name below, **`run_in_background: true`** during capability runs.
+Delegate to the worker named below, in the background during capability runs. Where the Task tool is available, the name is the `subagent_type`. Placement matters more than the spawn mechanism — see the right-hand column.
 
-| Agent | Owns |
-| ----- | ---- |
-| `jarvis-uiux` | Layout, React Bits, weather/tasks panels, visual polish |
-| `jarvis-voice` | Voicebox, `/api/tts`, speak bridge, double-play, latency |
-| `jarvis-workflows` | Mail, HITL, RFQ/quote, calendar, Hermes/snapshot tools |
-| `jarvis-builder` | General agreed implementation / restarts / verify |
+| Agent | Owns | Needs the desk machine? |
+| ----- | ---- | ---- |
+| `jarvis-uiux` | Layout, React Bits, weather/tasks panels, visual polish | Yes whenever the check is visual |
+| `jarvis-voice` | Voicebox, `/api/tts`, speak bridge, double-play, latency | Yes — Voicebox lives on `:17493` |
+| `jarvis-workflows` | Mail, HITL, RFQ/quote, calendar, Hermes/snapshot tools | Yes for live mail/Hermes; no for logic + `backend/tests` |
+| `jarvis-builder` | General agreed implementation / restarts / verify | Only for restarts and live verification |
 
 **UI/UX rule:** always reuse `jarvis-uiux` for visual work — do not invent ad-hoc UI agents.
+
+**Placement policy:** cloud workers run on isolated VMs and cannot reach Hermes (`:8642`), Voicebox (`:17493`), Google credentials, or a browser. Work whose acceptance is "it looked or sounded right" must run on the user's own machine; work whose acceptance is "the code is correct" can run in the cloud.
+
+**Kickoff rule:** a worker gets the repo, `AGENTS.md`, and `.cursor/rules/` automatically — and nothing from the coordinator's chat. Every kickoff carries goal, files in scope, acceptance check, and "do not expand scope". A worker with an isolated branch commits and pushes it; a worker sharing the desk checkout does not commit unless told.
 
 ## Capability tests
 
