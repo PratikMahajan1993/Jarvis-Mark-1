@@ -30,7 +30,10 @@ def _live() -> bool:
         return False
 
 
-pytestmark = pytest.mark.skipif(not _live(), reason="Jarvis API not running on :8000")
+pytestmark = [
+    pytest.mark.live_service,
+    pytest.mark.skipif(not _live(), reason="Jarvis API not running on :8000"),
+]
 
 
 @pytest.fixture(scope="module")

@@ -39,4 +39,4 @@ See skill `jarvis-react-bits` / `catalog.md`.
 
 ## Capability tests
 
-`work/CAPABILITY_TEST_MATRIX.md` — run order and log template. Parent chat dispatches specialists on observations.
+`work/CAPABILITY_TEST_MATRIX.md` — run order and log template. The coordinator delegates specialists on observations.

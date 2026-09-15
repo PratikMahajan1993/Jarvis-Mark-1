@@ -8,12 +8,14 @@ alwaysApply: true
 When the user reports a HUD/API observation, bug, or polish request during testing:
 
 1. Read skill **`jarvis-observation-dispatch`** (roster + prompt template).
-2. Launch the matching agent from `.cursor/agents/` via Task:
+2. Delegate to the matching agent from `.cursor/agents/`:
    - UI/UX, layout, React Bits, cards, scroll, weather → **`jarvis-uiux`**
    - Speak, TTS, Voicebox, double-play, latency → **`jarvis-voice`**
    - Mail, HITL, RFQ, calendar, tools, Hermes routing → **`jarvis-workflows`**
    - Agreed implementation / restarts / verify → **`jarvis-builder`**
-3. Set `run_in_background: true` unless the user asks to wait.
-4. Use `subagent_type` matching the agent file name (`jarvis-uiux`, etc.).
+3. Run it in the background unless the user asks to wait.
+4. Select it by the agent file name (`jarvis-uiux`, etc.) — that name is the `subagent_type` wherever the Task tool is available.
 5. Never invent a one-off agent when a roster specialist exists.
-6. Parent chat stays on capability testing; agents report DONE/FILES/TRY/GAPS.
+6. The coordinator stays on capability testing; workers report DONE/FILES/TRY/GAPS.
+7. Workers inherit nothing from the coordinator's chat. Put the repro, the files, and the acceptance check in the kickoff itself.
+8. A worker that cannot reach the HUD, Voicebox, Hermes, or Gmail must not guess — it reports GAPS and the live check goes to a desk-machine worker.

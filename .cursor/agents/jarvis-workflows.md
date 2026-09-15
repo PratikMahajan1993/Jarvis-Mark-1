@@ -4,7 +4,7 @@ description: >
   Jarvis workflow specialist for mail, HITL, RFQ/quote, calendar, briefing,
   Hermes routing, snapshot fast-path, compose, and tool registry behavior.
   Use when capability tests fail on C/D/G/B IDs or the user reports tool/workflow
-  bugs. Run in background while the parent continues testing.
+  bugs. Runs in background; needs the desk machine for live mail, Hermes, or HITL.
 model: inherit
 readonly: false
 is_background: true
@@ -29,10 +29,12 @@ You are the Jarvis **workflows** specialist (mail / HITL / office-day spine).
 
 # Method
 
-1. Reproduce via API curl and/or HUD steps from the prompt.
+1. Reproduce via API curl and/or HUD steps from the kickoff. With no API running,
+   fall back to `backend/tests` and say in GAPS that the live path is unverified.
 2. Minimal fix in the owning module.
 3. Note latency if relevant.
-4. Do not commit unless asked.
+4. Sharing the desk checkout: do not commit unless asked. On your own branch or
+   worktree: commit and push it.
 
 # Reply format
 

@@ -34,7 +34,7 @@ Secrets stay in `.env`. Never commit it.
 1. In Google Cloud, create OAuth credentials for `pgeneration.mech@gmail.com` (or your account). Enable **Gmail**, **Drive**, and **Google Calendar** APIs. Scopes: `gmail.send`, `gmail.readonly`, `drive.file`, `calendar.events`, `calendar.readonly`.
 2. Register redirect URI: `http://127.0.0.1:8000/api/google/callback`
 3. Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in `.env` (or `GOOGLE_CLIENT_JSON`).
-4. Run API + HUD. Open preferences → **Connect Gmail** (links to `GET /api/google/auth`). After consent, callback lands at `/?gmail=1`. Token: `backend/data/google_token.json`.
+4. Run API + HUD. Open preferences → **Connect Gmail** (links to `GET /api/google/auth`). After consent, callback lands at `/?gmail=1`. Token: `data/google_token.json` (repo root — `DATA_DIR` resolves against the repo, not `backend/`).
 5. If Gmail was connected before Calendar existed, open preferences → **Add Calendar** and consent again. Until then, briefing will not mix in the demo standup.
 
 Without OAuth, mail and calendar stay on the local demo store.
@@ -77,7 +77,7 @@ If the model is offline, work tools still run. Ordinary chat will not improvise.
 ## Safety and connectors
 
 - Drafts are free. **Send**, **Task for Gemini**, and **calendar writes** need Shall I (Yes/No).
-- Files write only under `backend/exports`.
+- Files write only under `exports/` (repo root — `EXPORTS_DIR` resolves against the repo, not `backend/`).
 - **Mail:** local demo by default. Live Gmail when OAuth connected (send as `GOOGLE_ACCOUNT`). Failed live send speaks “Gmail did not take it.” Optional IMAP read if `EMAIL_BACKEND=imap` and `IMAP_*` set (read only, no SMTP).
 - **Calendar:** local demo when Google is not connected. Live primary calendar when the grant includes `calendar.events` (prefs → **Add Calendar** if Gmail is already connected). Create event still needs Shall I. Failed write speaks “Calendar did not take it.”
 - **Drive / Gemini:** need Connect Gmail. A file ask finds the Drive copy or uploads the local one, then Shall I sends **Task for Gemini**. Gemini tasks email `GEMINI_TASK_TO` (defaults to same account).
