@@ -79,7 +79,9 @@ def auth_url() -> str:
     flow = Flow.from_client_config(_client_config(), scopes=list(SCOPES), redirect_uri=settings.google_redirect_uri)
     url, state = flow.authorization_url(
         access_type="offline",
-        include_granted_scopes="true",
+        # Do not merge scopes from other apps sharing this OAuth client (e.g. YouTube
+        # uploader + drive.file triggers Google "invalid_request" 400).
+        include_granted_scopes="false",
         prompt="consent",
         login_hint=settings.google_account or None,
     )

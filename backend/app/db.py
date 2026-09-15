@@ -189,6 +189,17 @@ def init_db() -> None:
                 mail_count INTEGER NOT NULL DEFAULT 0,
                 status TEXT NOT NULL DEFAULT ''
             );
+            CREATE TABLE IF NOT EXISTS mail_sync_state (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                status TEXT NOT NULL DEFAULT 'idle',
+                days INTEGER NOT NULL DEFAULT 0,
+                synced_count INTEGER NOT NULL DEFAULT 0,
+                skipped_count INTEGER NOT NULL DEFAULT 0,
+                page_token TEXT NOT NULL DEFAULT '',
+                started_at TEXT NOT NULL DEFAULT '',
+                finished_at TEXT NOT NULL DEFAULT '',
+                error TEXT NOT NULL DEFAULT ''
+            );
             CREATE TABLE IF NOT EXISTS jobs (
                 id TEXT PRIMARY KEY,
                 customer TEXT NOT NULL,
@@ -791,6 +802,86 @@ def get_work_snapshot() -> dict[str, Any]:
             "status": "",
         }
     return dict(row)
+
+
+def get_mail_sync_state() -> dict[str, Any]:
+    with connect() as conn:
+        row = conn.execute("SELECT * FROM mail_sync_state WHERE id = 1").fetchone()
+    if not row:
+        return {
+            "status": "idle",
+            "days": 0,
+            "synced_count": 0,
+            "skipped_count": 0,
+            "page_token": "",
+            "started_at": "",
+            "finished_at": "",
+            "error": "",
+        }
+    return dict(row)
+
+
+def set_mail_sync_state(
+    *,
+    status: str | None = None,
+    days: int | None = None,
+    synced_count: int | None = None,
+    skipped_count: int | None = None,
+    page_token: str | None = None,
+    started_at: str | None = None,
+    finished_at: str | None = None,
+    error: str | None = None,
+) -> dict[str, Any]:
+    current = get_mail_sync_state()
+    row = {
+        "status": status if status is not None else current.get("status") or "idle",
+        "days": int(days if days is not None else current.get("days") or 0),
+        "synced_count": int(synced_count if synced_count is not None else current.get("synced_count") or 0),
+        "skipped_count": int(skipped_count if skipped_count is not None else current.get("skipped_count") or 0),
+        "page_token": page_token if page_token is not None else current.get("page_token") or "",
+        "started_at": started_at if started_at is not None else current.get("started_at") or "",
+        "finished_at": finished_at if finished_at is not None else current.get("finished_at") or "",
+        "error": error if error is not None else current.get("error") or "",
+    }
+    with connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO mail_sync_state (id, status, days, synced_count, skipped_count, page_token, started_at, finished_at, error)
+            VALUES (1, :status, :days, :synced_count, :skipped_count, :page_token, :started_at, :finished_at, :error)
+            ON CONFLICT(id) DO UPDATE SET
+                status = excluded.status,
+                days = excluded.days,
+                synced_count = excluded.synced_count,
+                skipped_count = excluded.skipped_count,
+                page_token = excluded.page_token,
+                started_at = excluded.started_at,
+                finished_at = excluded.finished_at,
+                error = excluded.error
+            """,
+            row,
+        )
+    return row
+
+
+def count_gmail_emails_local() -> int:
+    with connect() as conn:
+        return int(
+            conn.execute("SELECT COUNT(*) AS n FROM emails WHERE id LIKE 'gmail-%'").fetchone()["n"]
+        )
+
+
+def list_gmail_emails_local(*, limit: int = 50, offset: int = 0) -> list[dict[str, Any]]:
+    with connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT * FROM emails
+            WHERE id LIKE 'gmail-%'
+            ORDER BY created_at DESC
+            LIMIT ? OFFSET ?
+            """,
+            (max(1, limit), max(0, offset)),
+        ).fetchall()
+    return [hydrate_email(dict(row)) for row in rows]
 
 
 def set_work_snapshot(

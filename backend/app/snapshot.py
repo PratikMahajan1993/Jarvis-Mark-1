@@ -148,9 +148,13 @@ def _refresh_loop() -> None:
 
 def _index_mail_corpus() -> None:
     try:
-        from .memory.ingest import reindex_recent_mail
+        from .memory.ingest import reindex_all_mail_in_db, reindex_recent_mail
 
-        reindex_recent_mail(limit=40)
+        bulk = db.count_gmail_emails_local()
+        if bulk > 40:
+            reindex_all_mail_in_db(batch_size=50)
+        else:
+            reindex_recent_mail(limit=40)
     except Exception:
         pass
 
@@ -175,20 +179,22 @@ def _pull_mail() -> int:
         return db.unread_count_local()
     seen: set[str] = set()
     rows: list[dict[str, Any]] = []
-    for query, unread_only, limit in (
-        ("", True, 20),
-        ("in:inbox newer_than:2d", False, 20),
-    ):
-        try:
-            fetched = gmail_conn.list_messages(query=query, unread_only=unread_only, limit=limit)
-        except Exception:
-            continue
-        for row in fetched:
-            ident = str(row.get("id") or "")
-            if not ident or ident in seen:
-                continue
-            seen.add(ident)
-            rows.append(_merge_gmail_fields(row))
+    query = "in:inbox newer_than:2d"
+    try:
+        for ids, _next in gmail_conn.iter_message_id_pages(query=query, unread_only=False, page_size=50):
+            for gmail_id in ids:
+                if gmail_id in seen:
+                    continue
+                try:
+                    row = gmail_conn.get_message(gmail_id)
+                except Exception:
+                    continue
+                if not row:
+                    continue
+                seen.add(gmail_id)
+                rows.append(_merge_gmail_fields(row))
+    except Exception:
+        pass
     try:
         from .rfq import detect_inbound_drawings
 

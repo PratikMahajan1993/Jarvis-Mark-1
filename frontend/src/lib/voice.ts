@@ -654,18 +654,24 @@ export function isSpeaking(): boolean {
 let lastSpokenText = "";
 let lastSpokenAt = 0;
 
-export function speak(text: string, enabled = true, onEnd?: () => void) {
+export function speak(
+  text: string,
+  enabled = true,
+  onEnd?: () => void,
+  options?: { force?: boolean },
+) {
   if (!enabled || !text || typeof window === "undefined") {
     onEnd?.();
     return;
   }
+  const force = Boolean(options?.force);
   // Single-flight: same line or overlapping speak → keep the in-flight audio.
-  if (activeSpeech?.text === text) return;
-  if (activeAudio && text === lastSpokenText && Date.now() - lastSpokenAt < 2500) {
+  if (!force && activeSpeech?.text === text) return;
+  if (!force && activeAudio && text === lastSpokenText && Date.now() - lastSpokenAt < 2500) {
     onEnd?.();
     return;
   }
-  if (text === lastSpokenText && Date.now() - lastSpokenAt < 90000) {
+  if (!force && text === lastSpokenText && Date.now() - lastSpokenAt < 90000) {
     onEnd?.();
     return;
   }

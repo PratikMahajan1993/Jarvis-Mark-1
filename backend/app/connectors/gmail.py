@@ -147,6 +147,7 @@ def _normalize(message: dict[str, Any]) -> dict[str, Any]:
         "subject": _header(headers, "Subject"),
         "body": _body_from_payload(payload)[:_BODY_CAP],
         "attachments": _attachments_from_payload(payload),
+        "labels": list(labels),
         "unread": 1 if "UNREAD" in labels else 0,
         "created_at": _created_at(message, headers),
         "folder": folder,
@@ -177,17 +178,50 @@ def unread_estimate() -> int:
     return int(listed.get("resultSizeEstimate") or 0)
 
 
-def list_messages(query: str = "", unread_only: bool = False, limit: int = 8) -> list[dict[str, Any]]:
-    service = _service()
-    q_parts = []
+def _list_query(query: str = "", unread_only: bool = False) -> str:
+    q_parts: list[str] = []
     if unread_only:
         q_parts.append("is:unread")
     if query:
         q_parts.append(query)
+    return " ".join(q_parts)
+
+
+def iter_message_id_pages(
+    query: str = "",
+    *,
+    unread_only: bool = False,
+    page_size: int = 50,
+    max_pages: int | None = None,
+):
+    """Yield (gmail_ids, next_page_token) for paginated bulk sync."""
+    service = _service()
+    q = _list_query(query, unread_only)
+    page_token: str | None = None
+    pages = 0
+    while True:
+        kwargs: dict[str, Any] = {"userId": "me", "maxResults": max(1, min(page_size, 500))}
+        if q:
+            kwargs["q"] = q
+        if page_token:
+            kwargs["pageToken"] = page_token
+        listed = service.users().messages().list(**kwargs).execute()
+        ids = [str(item["id"]) for item in listed.get("messages") or [] if item.get("id")]
+        next_token = listed.get("nextPageToken") or ""
+        yield ids, next_token
+        page_token = next_token or None
+        pages += 1
+        if not page_token or (max_pages is not None and pages >= max_pages):
+            break
+
+
+def list_messages(query: str = "", unread_only: bool = False, limit: int = 8) -> list[dict[str, Any]]:
+    service = _service()
+    q = _list_query(query, unread_only)
     listed = (
         service.users()
         .messages()
-        .list(userId="me", q=" ".join(q_parts), maxResults=limit)
+        .list(userId="me", q=q or None, maxResults=limit)
         .execute()
     )
     rows = []

@@ -43,6 +43,13 @@ import { HitlModal } from "./HitlModal";
 import { JarvisCore } from "./JarvisCore";
 import { Orchestra } from "./Orchestra";
 import { SuggestedTasksPanel, type SuggestedTask } from "./SuggestedTasksPanel";
+import {
+  ConnectGoogleModal,
+  googleConnectSpeakLine,
+  googleServicesIncomplete,
+  type GoogleConnectStatus,
+} from "./ConnectGoogleModal";
+import { PreferencesPanel } from "./PreferencesPanel";
 import { WeatherCard } from "./WeatherCard";
 
 const AMBIENT_SESSION = "default";
@@ -156,6 +163,9 @@ export function OrchestratorShell() {
   const [suggested, setSuggested] = useState<SuggestedTask[]>([]);
   const [weatherLine, setWeatherLine] = useState("");
   const [dockHidden, setDockHidden] = useState(false);
+  const [prefsOpen, setPrefsOpen] = useState(false);
+  const [googleStatus, setGoogleStatus] = useState<GoogleConnectStatus | null>(null);
+  const [googleConnectOpen, setGoogleConnectOpen] = useState(false);
 
   // Mirrors `state` synchronously (a render behind `state` itself) so
   // imperative callbacks can guard re-entrancy (e.g. a second send() firing
@@ -171,6 +181,7 @@ export function OrchestratorShell() {
   );
   const confirmListenRef = useRef<(action: PendingAction) => void>(() => undefined);
   const sendRef = useRef<(message: string) => Promise<void>>(async () => undefined);
+  const googlePromptSpokenRef = useRef(false);
 
   /** Applies a transition. Returns the new state if it took effect, or null
    * if the event was refused (no-op) — e.g. LISTEN_START while SPEAKING. */
@@ -237,6 +248,28 @@ export function OrchestratorShell() {
     setVoiceVisible(false);
     setVoice("");
   }, []);
+
+  const announceGoogleConnect = useCallback(
+    (status: GoogleConnectStatus, opts?: { force?: boolean }) => {
+      const line = googleConnectSpeakLine(status);
+      if (!line) return;
+      showVoice(line);
+      speakGenRef.current += 1;
+      const gen = speakGenRef.current;
+      const started = applyEvent({ type: "SPEAK_START", text: line });
+      if (!started) return;
+      speak(
+        line,
+        voiceEnabledRef.current !== false,
+        () => {
+          if (gen !== speakGenRef.current) return;
+          applyEvent({ type: "SPEAK_END" });
+        },
+        { force: opts?.force ?? true },
+      );
+    },
+    [applyEvent, showVoice],
+  );
 
   const refreshDesk = useCallback(async (focusId: string | null = activeConversationId) => {
     const payload = await api.conversations(true).catch(() => ({ items: [] as Conversation[] }));
@@ -602,6 +635,28 @@ export function OrchestratorShell() {
   }, [applyEvent, send]);
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("gmail") === "1") {
+      setPrefsOpen(true);
+      params.delete("gmail");
+      const next = `${window.location.pathname}${params.toString() ? `?${params}` : ""}`;
+      window.history.replaceState({}, "", next);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!googleConnectOpen || !googleStatus || !googleServicesIncomplete(googleStatus)) return;
+    // Defer past bootstrap silence()/session restore so the line is not swallowed.
+    const timer = window.setTimeout(() => {
+      if (googlePromptSpokenRef.current) return;
+      googlePromptSpokenRef.current = true;
+      announceGoogleConnect(googleStatus);
+    }, 450);
+    return () => window.clearTimeout(timer);
+  }, [announceGoogleConnect, googleConnectOpen, googleStatus]);
+
+  useEffect(() => {
     setVoiceVisible(true);
     let cancelled = false;
     (async () => {
@@ -612,16 +667,25 @@ export function OrchestratorShell() {
         } catch {
           storedId = null;
         }
-        const [preferences, deskRows, tasks] = await Promise.all([
+        const [preferences, deskRows, tasks, google] = await Promise.all([
           api.preferences().catch(() => null),
           api.conversations(true).catch(() => ({ items: [] as Conversation[] })),
           api.suggestedTasks(false, AMBIENT_SESSION).catch(() => ({ items: [], weather: undefined })),
+          api.googleStatus().catch(() => null),
         ]);
         if (cancelled) return;
         if (preferences) {
           setPrefs(preferences);
           voiceEnabledRef.current = preferences.voice_enabled !== false;
         }
+        const oauthReturn = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("gmail") === "1";
+        if (google) {
+          setGoogleStatus(google);
+          if (googleServicesIncomplete(google) && !oauthReturn) {
+            setGoogleConnectOpen(true);
+          }
+        }
+        const skipAmbientAnnounce = Boolean(google && googleServicesIncomplete(google) && !oauthReturn);
         const rows = deskRows.items || [];
         const restored = storedId ? rows.find((row) => row.id === storedId) : null;
         const focusId = restored?.id || null;
@@ -632,13 +696,13 @@ export function OrchestratorShell() {
           setActiveConversationId(restored.id);
           setFocusTitle(restored.title || "Conversation");
           void api.patchConversation(restored.id, { minimized: false }).catch(() => null);
-          await loadSessionSurface(sessionRef.current, { announce: true });
+          await loadSessionSurface(sessionRef.current, { announce: !skipAmbientAnnounce });
         } else {
           sessionRef.current = AMBIENT_SESSION;
           setActiveSession(AMBIENT_SESSION);
           setActiveConversationId(null);
           setFocusTitle("Everyday desk");
-          await loadSessionSurface(AMBIENT_SESSION, { announce: true });
+          await loadSessionSurface(AMBIENT_SESSION, { announce: !skipAmbientAnnounce });
         }
         const taskItems = (tasks.items || [])
           .map((raw) => {
@@ -767,6 +831,15 @@ export function OrchestratorShell() {
 
       <ActivityStream items={activity} />
 
+      <button
+        type="button"
+        onClick={() => setPrefsOpen(true)}
+        className="pointer-events-auto absolute right-4 top-4 z-[12] rounded-full border border-[color:var(--border)] bg-black/40 px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-[color:var(--muted)] backdrop-blur-md transition hover:border-[color:var(--accent)]/40 hover:text-[color:var(--accent)]"
+        title="Preferences — Connect Gmail, voice, and connectors"
+      >
+        Prefs
+      </button>
+
       <ConversationRail
         items={desk}
         openCount={desk.length}
@@ -871,6 +944,30 @@ export function OrchestratorShell() {
         listening={confirmListening}
         busy={busy}
         onDecide={(id, approved) => void decide(id, approved)}
+      />
+
+      <ConnectGoogleModal
+        status={googleStatus}
+        visible={googleConnectOpen}
+        onLater={() => setGoogleConnectOpen(false)}
+        onOpenPreferences={() => {
+          setGoogleConnectOpen(false);
+          setPrefsOpen(true);
+        }}
+        onPromptInteract={() => {
+          if (googleStatus) announceGoogleConnect(googleStatus, { force: true });
+        }}
+      />
+
+      <PreferencesPanel
+        open={prefsOpen}
+        prefs={prefs}
+        onClose={() => setPrefsOpen(false)}
+        onSave={async (next) => {
+          const saved = await api.updatePreferences(next);
+          setPrefs(saved);
+          voiceEnabledRef.current = saved.voice_enabled !== false;
+        }}
       />
 
       <DraftComposeModal

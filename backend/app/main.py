@@ -43,6 +43,7 @@ from .schemas import (
 )
 from .tools.documents import read_export_text
 from .hud_state import load_hud, remember_hud
+from .mail_sync import get_state as mail_sync_state, kick_bulk as kick_mail_bulk, maybe_kick_on_startup
 from .snapshot import kick as kick_snapshot
 from .watch import ack_watch, resume_watches, watch_payload
 
@@ -73,6 +74,7 @@ def startup() -> None:
     settings.exports_dir.mkdir(parents=True, exist_ok=True)
     resume_watches()
     kick_snapshot()
+    maybe_kick_on_startup()
     try:
         from .memory.store import _ensure_schema
 
@@ -216,7 +218,33 @@ def api_google_callback(code: str = "", state: str = "") -> RedirectResponse:
         google_auth.finish_auth(code, state)
     except Exception as exc:
         raise HTTPException(400, str(exc)) from exc
+    try:
+        kick_mail_bulk(days=100, force=True)
+    except Exception:
+        pass
     return RedirectResponse(f"{settings.hud_url}/?gmail=1")
+
+
+class MailSyncRequest(BaseModel):
+    days: int = 100
+    force: bool = False
+    inline: bool = False
+
+
+@app.post("/api/mail/sync")
+def api_mail_sync(payload: MailSyncRequest | None = None) -> dict:
+    """Start background bulk Gmail sync (100d inbox default) or run inline on desk."""
+    body = payload or MailSyncRequest()
+    if body.inline:
+        from .mail_sync import sync_bulk_inline
+
+        return sync_bulk_inline(days=body.days, force=body.force)
+    return kick_mail_bulk(days=body.days, force=body.force)
+
+
+@app.get("/api/mail/sync")
+def api_mail_sync_status() -> dict:
+    return mail_sync_state()
 
 
 @app.get("/api/watch")

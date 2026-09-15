@@ -887,10 +887,21 @@ def _memory_summary(session_id: str, **_: Any) -> dict[str, Any]:
     return _ok(summary, scene=scene)
 
 
-def _memory_reindex_mail(session_id: str, limit: int = 20, **_: Any) -> dict[str, Any]:
-    from ..memory.ingest import reindex_recent_mail
+def _memory_reindex_mail(session_id: str, limit: int = 20, full: bool = False, **_: Any) -> dict[str, Any]:
+    from ..memory.ingest import reindex_all_mail_in_db, reindex_recent_mail
 
+    if full:
+        return _ok(reindex_all_mail_in_db(batch_size=50))
     return _ok(reindex_recent_mail(limit=limit))
+
+
+def _sync_mailbox(session_id: str, days: int = 100, force: bool = False, **_: Any) -> dict[str, Any]:
+    from ..mail_sync import kick_bulk
+
+    result = kick_bulk(days=days, force=force)
+    started = result.get("started")
+    speak = "Mailbox sync is running in the background." if started else "Mailbox sync is already up to date or running."
+    return _ok(result, speak=speak)
 
 
 def _update_preferences(session_id: str, **fields: Any) -> dict[str, Any]:
@@ -1182,6 +1193,7 @@ HANDLERS.update(
         "memory_forget": _memory_forget,
         "memory_summary": _memory_summary,
         "memory_reindex_mail": _memory_reindex_mail,
+        "sync_mailbox": _sync_mailbox,
         "update_preferences": _update_preferences,
         "reason_rfq": _reason_rfq,
         "cnc_suggest": _cnc_suggest,
@@ -1569,7 +1581,24 @@ TOOL_SCHEMAS = [
             "description": "Reindex recent mail into the local RAG corpus.",
             "parameters": {
                 "type": "object",
-                "properties": {"limit": {"type": "integer"}},
+                "properties": {
+                    "limit": {"type": "integer"},
+                    "full": {"type": "boolean", "description": "Reindex all gmail-* rows in SQLite."},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "sync_mailbox",
+            "description": "Background bulk Gmail sync (default last 100 days) into local SQLite with spam filtering.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "days": {"type": "integer"},
+                    "force": {"type": "boolean"},
+                },
             },
         },
     },
