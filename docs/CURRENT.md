@@ -48,4 +48,5 @@ Short as-built snapshot after foundation phases P0–P4 scaffolding + desk/UI ha
 
 - Start Hermes gateway (login item / `hermes gateway`). Voicebox desktop app for Mark TTS.
 - Prefer API on `127.0.0.1:8000` (avoid duplicate `0.0.0.0:8000` listeners). Frontend `:3000`.
+- Data lives at `<repo>/data/` (SQLite `jarvis.db`, `google_token.json`, `tts_cache/`, `memory/`, canvas uploads) and generated files at `<repo>/exports/`. `backend/app/config.py` resolves `DATA_DIR`/`EXPORTS_DIR` against the repo root, not the process CWD, so the location no longer depends on where uvicorn was launched from. Both are gitignored (`/data/`, `/exports/`).
 - Plan: `work/FOUNDATION_BUILD_PLAN.md`. Vision: `work/VISION_WORKBOOK.md`. Agents: `AGENTS.md`.

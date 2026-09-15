@@ -1,8 +1,8 @@
 """Rolling last-N Jarvis turns for capability-test review.
 
 Writes:
-- backend/data/last_turns.json  (durable, gitignored via data/)
-- work/LAST_TURNS.md            (agent-readable; gitignored)
+- <DATA_DIR>/last_turns.json  (durable, gitignored; DATA_DIR resolves to <repo>/data)
+- work/LAST_TURNS.md          (agent-readable; gitignored)
 """
 
 from __future__ import annotations

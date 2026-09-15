@@ -34,7 +34,6 @@ def health() -> dict[str, Any]:
         status = gemini_client.health()
         status["provider"] = "gemini"
         status["ollama"] = False
-        status["ok"] = True
     else:
         status = ollama_client.health()
         status["provider"] = "ollama"

@@ -111,7 +111,6 @@ def api_agents() -> dict:
 @app.get("/api/health")
 def api_health() -> dict:
     status = health()
-    status["ok"] = True
     status["google"] = google_auth.status()
     try:
         from .hermes.bridge import hermes_available, hermes_cli_available, hermes_gateway_reachable
@@ -135,6 +134,18 @@ def api_health() -> dict:
         status["voicebox"] = vb.status_payload()
     except Exception:
         status["voicebox"] = {"enabled": bool(settings.voicebox_enabled), "available": False}
+
+    # `ok` used to be hardcoded True, so a dead Ollama or a missing Gemini key could never
+    # surface as unhealthy. A live chat turn actually succeeds if *either* the brain provider
+    # (Gemini/Ollama) is ready, *or* Hermes is enabled and reachable (agent.py falls back to
+    # the brain whenever Hermes is unavailable, and routes through Hermes directly when it is
+    # up) — so Hermes being down with a healthy brain fallback is a real "ok", not a failure.
+    # Voicebox never gates this: `frontend/src/lib/voice.ts` always has a browser-TTS fallback,
+    # so a Voicebox outage is a documented degraded-speech state, not an outage of the app.
+    brain_ready = bool(status.get("ok")) and bool(status.get("model_ready"))
+    hermes_status = status.get("hermes") or {}
+    hermes_ready = bool(hermes_status.get("enabled")) and bool(hermes_status.get("available"))
+    status["ok"] = brain_ready or hermes_ready
     return status
 
 
