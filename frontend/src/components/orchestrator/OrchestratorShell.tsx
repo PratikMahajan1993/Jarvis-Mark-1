@@ -8,7 +8,6 @@ import {
   agentCode,
   agentForPending,
   formatClock,
-  inferBusyAgents,
   type ActivityItem,
   type AgentId,
   type AgentNode,
@@ -362,8 +361,6 @@ export function OrchestratorShell() {
           clearAgents();
           pushLog("SYS", "Operator rejected sequence.");
         }
-      } else if (!result.agents?.length) {
-        clearAgents();
       }
 
       if (sceneHasBoardContent(result.scene) && result.scene?.title) {
@@ -503,8 +500,6 @@ export function OrchestratorShell() {
       setError("");
       stopListening();
 
-      const busyIds = inferBusyAgents(text);
-      setAgentStates(busyIds, "active");
       pushLog("SYS", text.length > 72 ? `${text.slice(0, 72)}…` : text);
       showVoice("Orchestrating…");
 
@@ -521,7 +516,7 @@ export function OrchestratorShell() {
         applyEvent({ type: "RESET" });
       }
     },
-    [activeConversationId, applyEvent, applyResponse, clearAgents, decide, pushLog, refreshDesk, setAgentStates, showVoice],
+    [activeConversationId, applyEvent, applyResponse, clearAgents, decide, pushLog, refreshDesk, showVoice],
   );
 
   useEffect(() => {
