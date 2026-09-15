@@ -9,15 +9,21 @@
 
 ### Agent-assisted run protocol
 
-While you test in the HUD, tell the parent chat your observations (ID + what you saw). The parent will:
+While you test in the HUD, tell the coordinator your observations (ID + what you saw). The coordinator will:
 
 1. Read **`work/LAST_TURNS.md`** (auto-updated last 20 chat/confirm turns) for what Jarvis said/did.
 2. Log the result (template below).
-3. Dispatch a **background specialist** (`jarvis-uiux` / `jarvis-voice` / `jarvis-workflows` / `jarvis-builder`) so testing can continue.
-4. Summarize the fix when the agent returns; re-test that ID if you want.
+3. Delegate to a **background worker** (`jarvis-uiux` / `jarvis-voice` / `jarvis-workflows` / `jarvis-builder`) so testing can continue — placed on the desk machine or in the cloud per the rule below.
+4. Summarize the fix when the worker reports back; re-test that ID if you want.
+
+Every kickoff to a worker must be self-contained: the worker inherits nothing from this chat, so the goal, repro, files in scope, and acceptance check all have to be spelled out in the kickoff itself.
 
 Skills: `jarvis-capability-test`, `jarvis-observation-dispatch`. Rules: `.cursor/rules/jarvis-capability-run.mdc`.  
 API mirror: `GET /api/turns/recent`.
+
+### Where a fix can run
+
+A cloud worker is an isolated VM: no HUD, no browser, and no reach to Hermes (`:8642`), Voicebox (`:17493`), or Google credentials. Any ID whose target is judged by *looking at* or *listening to* something — HUD rendering/layout, scroll behavior, card animation, weather/task-panel content, or TTS latency/double-play — can only be verified on the desk machine with the live services running. That covers section **E (Office-day HUD)** end to end, the voice-latency half of **A4**, and the visual half of **B1–B2** (blast-radius card, Authorize button). Sections whose target is a data/logic fact (correct numbers, no invented content, HITL gating, API status codes) can be fixed and verified by a cloud worker against `backend/tests` or curl, then handed back for the live re-test.
 
 ---
 
@@ -156,4 +162,4 @@ Retest:
 
 ---
 
-*Next: pick an ID (recommend **A1**) when you’re ready. Parent chat will keep the matrix moving and dispatch specialists on your observations.*
+*Next: pick an ID (recommend **A1**) when you’re ready. The coordinator will keep the matrix moving and delegate to workers on your observations — desk machine for anything visual or audible, cloud otherwise.*
