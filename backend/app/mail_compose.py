@@ -441,10 +441,22 @@ def update_compose_fields(
     pending = db.get_pending(action_id)
     if not pending or pending.get("session_id") != session_id:
         speak = "That draft is gone."
-        return ChatResponse(speak=speak, reply=speak, scene=Scene(title="", widgets=[]), pending=[])
+        return ChatResponse(
+            speak=speak,
+            reply=speak,
+            scene=Scene(title="", widgets=[]),
+            pending=[],
+            agents=[AgentStatus(**row) for row in agent_status_payload({})],
+        )
     if pending.get("kind") != "email_compose" or pending.get("status") != "pending":
         speak = "That draft is no longer open."
-        return ChatResponse(speak=speak, reply=speak, scene=Scene(title="", widgets=[]), pending=[])
+        return ChatResponse(
+            speak=speak,
+            reply=speak,
+            scene=Scene(title="", widgets=[]),
+            pending=[],
+            agents=[AgentStatus(**row) for row in agent_status_payload({})],
+        )
     payload = dict(pending.get("payload") or {})
     if to_addr is not None:
         payload["to"] = to_addr.strip()

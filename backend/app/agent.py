@@ -6,12 +6,13 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from . import db
+from .agents import agent_for_kind, agent_status_payload
 from .briefing import build_briefing
 from .compose import calendar_event_spec, document_spec, gemini_steps, reply_draft, spreadsheet_spec
 from .config import settings
 from .connectors import email as email_conn
 from .brain import OllamaError, chat as ollama_chat, health
-from .schemas import Artifact, ChatResponse, MailAttachment, PendingAction, Scene, Widget
+from .schemas import Artifact, AgentStatus, ChatResponse, MailAttachment, PendingAction, Scene, Widget
 from .tools.registry import TOOL_SCHEMAS, _guess_file_title, execute_tool
 from .familiarity import get_set, remember_person, resolve as resolve_refs, speak_sent, wants_familiarity
 from .think import refine_research, refine_mail, refine_briefing, MAIL_TOOLS
@@ -129,18 +130,20 @@ def _chat_response(
     watching: bool = False,
     critical: dict[str, Any] | None = None,
 ) -> ChatResponse:
+    resolved_pending = pending if pending is not None else _pending_models(session_id)
     return ChatResponse(
         speak=speak,
         reply=reply or speak,
         scene=scene or Scene(title="", widgets=[]),
         artifacts=artifacts if artifacts is not None else _collect_artifacts(),
-        pending=pending if pending is not None else _pending_models(session_id),
+        pending=resolved_pending,
         attachments=_attachment_models(attachments),
         mail_id=mail_id,
         offline=offline,
         more=more,
         watching=watching,
         critical=critical,
+        agents=_agents_payload(resolved_pending),
     )
 
 
@@ -834,6 +837,24 @@ def _pending_models(session_id: str) -> list[PendingAction]:
     return [PendingAction(**item) for item in db.list_focused_pending(session_id)]
 
 
+def _agents_payload(pending: list[PendingAction] | None) -> list[AgentStatus]:
+    """Full orchestra snapshot for this turn, following the Hermes-path convention
+    (`hermes/bridge.py::run_hermes_turn`): every pending action's agent reports
+    "waiting"; every other agent reports "" (idle), never omitted. Returning the
+    full four-agent list (rather than an empty one) on every path lets the HUD
+    reset agents that finished, instead of falling back to client-side guessing.
+    """
+    agent_states: dict[str, str] = {}
+    for item in pending or []:
+        aid = item.agent_id or agent_for_kind(item.kind)
+        agent_states[aid] = "waiting"
+    return [AgentStatus(**row) for row in agent_status_payload(agent_states)]
+
+
+def _current_agents(session_id: str) -> list[AgentStatus]:
+    return _agents_payload(_pending_models(session_id))
+
+
 def _artifact_from_tool(result: dict[str, Any]) -> str | None:
     data = result.get("data")
     if isinstance(data, dict) and data.get("id") and data.get("path"):
@@ -891,7 +912,7 @@ def next_thought(session_id: str = "default") -> ChatResponse:
     thought = db.pop_thought(session_id)
     if not thought:
         db.set_focus_pending(session_id, None)
-        return ChatResponse(speak="", reply="", scene=Scene(title="", widgets=[]), more=0)
+        return ChatResponse(speak="", reply="", scene=Scene(title="", widgets=[]), more=0, agents=_current_agents(session_id))
     return _response_from_thought(session_id, thought, False)
 
 
@@ -969,6 +990,7 @@ def _revise_pending_email(session_id: str, message: str, pending: dict[str, Any]
             widgets=[Widget(type="markdown", text=f"**{new_subject}**\n\n{new_body}")],
         ),
         pending=[action],
+        agents=_agents_payload([action]),
         offline=False,
     )
 
@@ -1292,14 +1314,16 @@ def _run_agent_legacy(
         return response
 
     db.add_message(session_id, "assistant", speak)
+    final_pending = _pending_models(session_id)
     return ChatResponse(
         speak=speak,
         reply=reply or speak,
         scene=scene,
         artifacts=_collect_artifacts(),
-        pending=_pending_models(session_id),
+        pending=final_pending,
         offline=offline,
         more=0,
+        agents=_agents_payload(final_pending),
     )
 
 
@@ -1307,10 +1331,10 @@ def resolve_pending(action_id: str, approved: bool, session_id: str) -> ChatResp
     action = db.get_pending(action_id)
     if not action:
         speak = "That confirmation is no longer pending."
-        return ChatResponse(speak=speak, reply=speak, scene=_fallback_scene(speak))
+        return ChatResponse(speak=speak, reply=speak, scene=_fallback_scene(speak), agents=_current_agents(session_id))
     if action.get("status") != "pending":
         speak = "Already handled."
-        return ChatResponse(speak=speak, reply=speak, scene=_fallback_scene(speak))
+        return ChatResponse(speak=speak, reply=speak, scene=_fallback_scene(speak), agents=_current_agents(session_id))
 
     if not approved:
         db.set_pending_status(action_id, "rejected")
@@ -1340,13 +1364,15 @@ def resolve_pending(action_id: str, approved: bool, session_id: str) -> ChatResp
                 title="Alright" if action["kind"] == "clarify" else "Cancelled",
                 widgets=[Widget(type="quote", text=action["title"])],
             )
+        rejected_pending = _pending_models(session_id)
         return ChatResponse(
             speak=speak,
             reply=speak,
             scene=scene,
             artifacts=_collect_artifacts(),
-            pending=_pending_models(session_id),
+            pending=rejected_pending,
             more=remaining,
+            agents=_agents_payload(rejected_pending),
         )
 
     payload = action["payload"]
@@ -1373,24 +1399,28 @@ def resolve_pending(action_id: str, approved: bool, session_id: str) -> ChatResp
                     need.append("body")
                 speak = f"I still need the {', '.join(need)} before I can send."
                 db.set_focus_pending(session_id, action_id)
+                incomplete_pending = _pending_models(session_id)
                 return ChatResponse(
                     speak=speak,
                     reply=speak,
                     scene=Scene(title="Draft incomplete", widgets=[]),
-                    pending=_pending_models(session_id),
+                    pending=incomplete_pending,
                     watching=False,
+                    agents=_agents_payload(incomplete_pending),
                 )
         elif action["kind"] in {"email_send", "quote_send"}:
             if not to_addr or not body:
                 db.set_pending_status(action_id, "pending")
                 speak = "I still need recipient and body before I can send."
                 db.set_focus_pending(session_id, action_id)
+                send_incomplete_pending = _pending_models(session_id)
                 return ChatResponse(
                     speak=speak,
                     reply=speak,
                     scene=Scene(title="Send incomplete", widgets=[]),
-                    pending=_pending_models(session_id),
+                    pending=send_incomplete_pending,
                     watching=False,
+                    agents=_agents_payload(send_incomplete_pending),
                 )
         try:
             sent = send_email(
@@ -1404,7 +1434,7 @@ def resolve_pending(action_id: str, approved: bool, session_id: str) -> ChatResp
         except Exception:
             db.set_pending_status(action_id, "rejected")
             speak = "Gmail did not take it."
-            return ChatResponse(speak=speak, reply=speak, scene=_fallback_scene(speak), watching=False)
+            return ChatResponse(speak=speak, reply=speak, scene=_fallback_scene(speak), watching=False, agents=_current_agents(session_id))
         remember_person(session_id, to_addr, sent.get("id") or payload.get("source_id"), subject)
         if payload.get("watch") or subject == "Task for Gemini":
             from .watch import start_gemini_watch
@@ -1440,7 +1470,7 @@ def resolve_pending(action_id: str, approved: bool, session_id: str) -> ChatResp
         except Exception:
             db.set_pending_status(action_id, "rejected")
             speak = "Gmail did not take it."
-            return ChatResponse(speak=speak, reply=speak, scene=_fallback_scene(speak), watching=False)
+            return ChatResponse(speak=speak, reply=speak, scene=_fallback_scene(speak), watching=False, agents=_current_agents(session_id))
         remember_person(session_id, payload["to"], sent.get("id") or payload.get("source_id"), payload.get("subject"))
         detail = speak_sent(payload["to"])
         scene = Scene(
@@ -1468,7 +1498,7 @@ def resolve_pending(action_id: str, approved: bool, session_id: str) -> ChatResp
             speak = str(exc).strip() or "Calendar did not take it."
             if "traceback" in speak.lower() or len(speak) > 160:
                 speak = "Calendar did not take it."
-            return ChatResponse(speak=speak, reply=speak, scene=_fallback_scene(speak), watching=False)
+            return ChatResponse(speak=speak, reply=speak, scene=_fallback_scene(speak), watching=False, agents=_current_agents(session_id))
         detail = f"Added {payload['title']}"
         scene = Scene(
             title="On the calendar",
@@ -1515,7 +1545,7 @@ def resolve_pending(action_id: str, approved: bool, session_id: str) -> ChatResp
         except Exception:
             db.set_pending_status(action_id, "rejected")
             speak = "Google Sheets did not take it."
-            return ChatResponse(speak=speak, reply=speak, scene=_fallback_scene(speak), watching=False)
+            return ChatResponse(speak=speak, reply=speak, scene=_fallback_scene(speak), watching=False, agents=_current_agents(session_id))
         cells = ", ".join(str(item) for item in (written.get("updated") or []))
         detail = "Updated the shop log."
         scene = Scene(
@@ -1539,11 +1569,11 @@ def resolve_pending(action_id: str, approved: bool, session_id: str) -> ChatResp
         if not path:
             speak = "I do not have that file anymore."
             db.set_pending_status(action_id, "rejected")
-            return ChatResponse(speak=speak, reply=speak, scene=_fallback_scene(speak))
+            return ChatResponse(speak=speak, reply=speak, scene=_fallback_scene(speak), agents=_current_agents(session_id))
         if not drive_conn.live():
             db.set_pending_status(action_id, "rejected")
             speak = "Drive is not connected."
-            return ChatResponse(speak=speak, reply=speak, scene=_fallback_scene(speak))
+            return ChatResponse(speak=speak, reply=speak, scene=_fallback_scene(speak), agents=_current_agents(session_id))
         try:
             uploaded = drive_conn.upload_file(path, title)
             file_line = uploaded.get("link") or uploaded.get("title") or title
@@ -1552,7 +1582,7 @@ def resolve_pending(action_id: str, approved: bool, session_id: str) -> ChatResp
         except Exception:
             db.set_pending_status(action_id, "rejected")
             speak = "Gmail did not take it."
-            return ChatResponse(speak=speak, reply=speak, scene=_fallback_scene(speak))
+            return ChatResponse(speak=speak, reply=speak, scene=_fallback_scene(speak), agents=_current_agents(session_id))
         if uploaded:
             from .familiarity import remember_drive
 
@@ -1572,7 +1602,7 @@ def resolve_pending(action_id: str, approved: bool, session_id: str) -> ChatResp
         if not ns:
             db.set_pending_status(action_id, "rejected")
             speak = "No memory namespace to wipe."
-            return ChatResponse(speak=speak, reply=speak, scene=_fallback_scene(speak), watching=False)
+            return ChatResponse(speak=speak, reply=speak, scene=_fallback_scene(speak), watching=False, agents=_current_agents(session_id))
         result = forget(namespace=ns, wipe_namespace=True)
         detail = f"Wiped local memory namespace `{ns}` ({result.get('deleted') or 0} docs)."
         scene = Scene(title="Memory wiped", subtitle=ns, widgets=[Widget(type="quote", text=detail)])
@@ -1580,24 +1610,26 @@ def resolve_pending(action_id: str, approved: bool, session_id: str) -> ChatResp
         # Foundation stretch: evidence-only; do not pretend a browser ran.
         db.set_pending_status(action_id, "rejected")
         speak = "Browser actions are not executable yet — evidence can be recorded, but I will not Authorize a live browse until that path is wired."
-        return ChatResponse(speak=speak, reply=speak, scene=_fallback_scene(speak), watching=False)
+        return ChatResponse(speak=speak, reply=speak, scene=_fallback_scene(speak), watching=False, agents=_current_agents(session_id))
     else:
         # Unknown kinds must not look like success
         db.set_pending_status(action_id, "rejected")
         speak = f"I cannot execute `{action['kind']}` yet."
-        return ChatResponse(speak=speak, reply=speak, scene=_fallback_scene(speak), watching=False)
+        return ChatResponse(speak=speak, reply=speak, scene=_fallback_scene(speak), watching=False, agents=_current_agents(session_id))
 
     db.set_pending_status(action_id, "approved")
     db.add_audit(session_id, action["kind"], detail, "approved")
     remaining = db.thought_count(session_id)
     db.set_focus_pending(session_id, "" if remaining else None)
     speak = spoken_line or detail
+    approved_pending = _pending_models(session_id)
     return ChatResponse(
         speak=speak,
         reply=detail,
         watching=watching,
         scene=scene,
         artifacts=_collect_artifacts(),
-        pending=_pending_models(session_id),
+        pending=approved_pending,
         more=remaining,
+        agents=_agents_payload(approved_pending),
     )

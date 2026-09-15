@@ -9,10 +9,11 @@ from pathlib import Path
 from typing import Any
 
 from . import db
+from .agents import agent_status_payload
 from .config import settings
 from .hud_state import load_hud, remember_hud
 from .ollama_client import OllamaError
-from .schemas import ChatResponse, Scene
+from .schemas import AgentStatus, ChatResponse, Scene
 
 COMMAND_SESSION = "default"
 AMBIENT_SESSION = "default"
@@ -289,7 +290,12 @@ def chat_drawing(session_id: str, message: str) -> ChatResponse:
     row = db.get_conversation_by_session(session_id)
     if not row:
         speak = "That conversation is gone."
-        return ChatResponse(speak=speak, reply=speak, scene=Scene(title="", widgets=[]))
+        return ChatResponse(
+            speak=speak,
+            reply=speak,
+            scene=Scene(title="", widgets=[]),
+            agents=[AgentStatus(**item) for item in agent_status_payload({})],
+        )
     history = [item for item in db.recent_messages(session_id, 12) if item.get("content") != message][-8:]
     system = _DRAWING_SYSTEM
     grounding = str((row.get("focus") or {}).get("grounding") or "").strip()
@@ -317,6 +323,7 @@ def chat_drawing(session_id: str, message: str) -> ChatResponse:
         reply=speak,
         scene=Scene.model_validate(scene),
         pending=[],
+        agents=[AgentStatus(**item) for item in agent_status_payload({})],
     )
 
 
