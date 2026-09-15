@@ -23,7 +23,7 @@ API mirror: `GET /api/turns/recent`.
 
 ### Where a fix can run
 
-A cloud worker is an isolated VM: no HUD, no browser, and no reach to Hermes (`:8642`), Voicebox (`:17493`), or Google credentials. Any ID whose target is judged by *looking at* or *listening to* something — HUD rendering/layout, scroll behavior, card animation, weather/task-panel content, or TTS latency/double-play — can only be verified on the desk machine with the live services running. That covers section **E (Office-day HUD)** end to end, the voice-latency half of **A4**, and the visual half of **B1–B2** (blast-radius card, Authorize button). Sections whose target is a data/logic fact (correct numbers, no invented content, HITL gating, API status codes) can be fixed and verified by a cloud worker against `backend/tests` or curl, then handed back for the live re-test.
+A cloud worker is an isolated VM without Hermes (`:8642`), Voicebox (`:17493`), real Google OAuth, GPU-representative Ollama, or physical mic/speaker hardware — checks that genuinely need one of those five stay desk-only. It does have a browser: the HUD builds and serves in the cloud (`next build` / `next dev`), and a headless Chrome — with `--enable-unsafe-swiftshader` so the orb's WebGL particle background renders (see `jarvis-react-bits` skill) — can load, screenshot, and script it. So HUD rendering/layout, scroll behavior, card states, and static content (weather chip text, task-panel copy) are cloud-verifiable. That makes section **E (Office-day HUD)** cloud-verifiable except any sub-check that specifically times live Voicebox speech; the voice-latency half of **A4** and the Voicebox-timing half of **B1–B2** stay desk-only, while the visual/rendering half of those same IDs (card layout, Authorize button state, blast-radius display) is cloud-verifiable. Sections whose target is a data/logic fact (correct numbers, no invented content, HITL gating, API status codes) remain cloud-fixable and testable against `backend/tests` or curl, then handed back for the live re-test only where a genuinely desk-only element (Hermes/Voicebox/Gmail/Ollama-GPU/mic-speaker) is involved.
 
 ---
 
@@ -162,4 +162,4 @@ Retest:
 
 ---
 
-*Next: pick an ID (recommend **A1**) when you’re ready. The coordinator will keep the matrix moving and delegate to workers on your observations — desk machine for anything visual or audible, cloud otherwise.*
+*Next: pick an ID (recommend **A1**) when you’re ready. The coordinator will keep the matrix moving and delegate to workers on your observations — cloud by default, including HUD visuals; desk machine only for Hermes/Voicebox/real-Gmail/GPU-Ollama/mic-speaker checks.*

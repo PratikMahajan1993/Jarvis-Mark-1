@@ -18,4 +18,4 @@ When the user reports a HUD/API observation, bug, or polish request during testi
 5. Never invent a one-off agent when a roster specialist exists.
 6. The coordinator stays on capability testing; workers report DONE/FILES/TRY/GAPS.
 7. Workers inherit nothing from the coordinator's chat. Put the repro, the files, and the acceptance check in the kickoff itself.
-8. A worker that cannot reach the HUD, Voicebox, Hermes, or Gmail must not guess — it reports GAPS and the live check goes to a desk-machine worker.
+8. A worker that cannot reach Hermes, Voicebox, real Google OAuth, GPU-representative Ollama, or physical mic/speaker hardware must not guess — it reports GAPS and that check goes to a desk-machine worker. HUD rendering, layout, scroll, and card-state checks do not need the desk machine: a cloud worker can build/serve the HUD and drive it with a headless browser.
