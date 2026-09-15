@@ -1,11 +1,24 @@
 from pathlib import Path
 
 from dotenv import load_dotenv
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = ROOT.parent  # repo root; README.md and .cursor/environment.json both launch uvicorn from here.
 load_dotenv(ROOT.parent / ".env", override=True)
 load_dotenv(ROOT / ".env", override=False)
+
+
+def _anchor_to_repo_root(path: Path) -> Path:
+    """Resolve a possibly-relative path against REPO_ROOT, never the process CWD.
+
+    `.env` ships DATA_DIR=./data and EXPORTS_DIR=./exports as relative strings. A relative
+    Path resolves against whatever directory the process happens to be launched from, so the
+    same setting silently pointed at `backend/data` or `<repo>/data` depending on the caller's
+    CWD. Anchoring here makes the on-disk location depend only on the repo, not the launch site.
+    """
+    return path if path.is_absolute() else (REPO_ROOT / path).resolve()
 
 
 class Settings(BaseSettings):
@@ -25,9 +38,10 @@ class Settings(BaseSettings):
     jarvis_host: str = "0.0.0.0"
     jarvis_port: int = 8000
     cors_origins: str = "http://localhost:3000"
-    data_dir: Path = ROOT / "data"
-    exports_dir: Path = ROOT / "exports"
-    canvas_dir: Path = ROOT / "data" / "canvas"
+    data_dir: Path = REPO_ROOT / "data"
+    exports_dir: Path = REPO_ROOT / "exports"
+    # Unset by default; resolved to data_dir/canvas below once data_dir is known.
+    canvas_dir: Path | None = None
     google_cse_api_key: str = ""
     google_cse_cx: str = ""
     tavily_api_key: str = ""
@@ -63,6 +77,18 @@ class Settings(BaseSettings):
     voicebox_profile: str = "Mark"
     voicebox_timeout_sec: float = 45.0
 
+    @field_validator("data_dir", "exports_dir", mode="after")
+    @classmethod
+    def _anchor_data_paths(cls, value: Path) -> Path:
+        return _anchor_to_repo_root(value)
+
+    @model_validator(mode="after")
+    def _resolve_canvas_dir(self) -> "Settings":
+        # CANVAS_DIR is rarely set explicitly; default it under data_dir so it moves with
+        # DATA_DIR overrides instead of pointing at a separate, disconnected tree.
+        self.canvas_dir = _anchor_to_repo_root(self.canvas_dir) if self.canvas_dir else self.data_dir / "canvas"
+        return self
+
     @property
     def origin_list(self) -> list[str]:
         return [item.strip() for item in self.cors_origins.split(",") if item.strip()]
@@ -73,6 +99,7 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+assert settings.canvas_dir is not None
 settings.data_dir.mkdir(parents=True, exist_ok=True)
 settings.exports_dir.mkdir(parents=True, exist_ok=True)
 settings.canvas_dir.mkdir(parents=True, exist_ok=True)
