@@ -14,6 +14,7 @@ from app.config import settings
 from app.hermes.bridge import ensure_jarvis_mcp_registered, hermes_available, run_hermes_turn
 
 
+@pytest.mark.live_service
 @pytest.mark.skipif(not hermes_available(), reason="Hermes CLI not on PATH")
 def test_hermes_live_pong():
     # Force enabled for this process
@@ -24,6 +25,7 @@ def test_hermes_live_pong():
     assert "PONG" in result.speak.upper() or result.speak.strip()
 
 
+@pytest.mark.live_service
 @pytest.mark.skipif(not hermes_available(), reason="Hermes CLI not on PATH")
 def test_chat_route_uses_hermes_when_enabled():
     from fastapi.testclient import TestClient
