@@ -49,6 +49,22 @@ export function agentCode(id: AgentId): string {
   return DEFAULT_AGENTS.find((a) => a.id === id)?.code || "SYS";
 }
 
+/** Map backend ``target_agent`` orchestra code → AgentId. */
+export function agentIdFromTarget(code: string | null | undefined): AgentId | null {
+  switch ((code || "").trim().toUpperCase()) {
+    case "RES.01":
+      return "research";
+    case "SEC.02":
+      return "sec";
+    case "DAT.03":
+      return "data";
+    case "OPS.04":
+      return "ops";
+    default:
+      return null;
+  }
+}
+
 export function shallICopy(action: PendingAction): {
   title: string;
   summary: string;

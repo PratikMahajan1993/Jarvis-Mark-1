@@ -125,6 +125,10 @@ class ChatResponse(BaseModel):
     activity: list[ActivityEvent] = Field(default_factory=list)
     agents: list[AgentStatus] = Field(default_factory=list)
     wake_reason: str | None = None
+    # Thin semantic router stamp (orchestra code + coarse intent)
+    target_agent: str | None = None
+    route_intent: str | None = None
+    ui_action: dict[str, Any] | None = None
 
 
 class ConversationCreate(BaseModel):

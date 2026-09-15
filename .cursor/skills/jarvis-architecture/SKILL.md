@@ -16,7 +16,7 @@ description: >
 
 ## Stack
 
-- **HUD:** Next.js App Router, `frontend/src/components/orchestrator/OrchestratorShell.tsx`
+- **HUD:** Next.js App Router, `OrchestratorShell.tsx` + strict FSM in `frontend/src/lib/orchestratorFsm.ts`
 - **API:** FastAPI `backend/app/main.py` → agent/tools/conversations
 - **Brain:** Hermes gateway `http://127.0.0.1:8642` preferred; Gemini/Ollama fallback
 - **TTS:** Voicebox `http://127.0.0.1:17493` — Jarvis calls **`/generate`**, browser plays WAV from `/api/tts`
@@ -27,6 +27,7 @@ description: >
 | Concern | Module |
 | ------- | ------ |
 | Chat / tools | `backend/app/agent.py`, `tools/registry.py` |
+| Semantic router | `semantic_router.py` — Gemini flash intent + `target_agent`; UI commands via `handle_ui_command` |
 | Intent / mail fast path | `intent.py`, `snapshot.py` — local mail/calendar/briefing skip Hermes when snapshot-ready |
 | Conversations desk | `conversations.py`, `db.py` (`MAX_EXPANDED = 3`) |
 | Speak / prefetch | `voicebox.py`, `main.py` `/api/tts`, `frontend/src/lib/voice.ts` |
@@ -46,4 +47,6 @@ description: >
 
 - API health: `GET http://127.0.0.1:8000/api/health`
 - HUD: `http://127.0.0.1:3000`
+- Offline tests: `python -m pytest -m "not live_service"` (see `backend/requirements-dev.txt`)
+- Frontend: `npm run typecheck` and `npm run lint` in `frontend/`
 - Prefer killing duplicate listeners on `:8000` before restart

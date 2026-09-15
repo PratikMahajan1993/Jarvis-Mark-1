@@ -251,10 +251,19 @@ def api_mail_attachments_reply(payload: MailReplyAttachmentAction) -> dict:
 
 
 @app.post("/api/chat")
-def api_chat(payload: ChatRequest) -> dict:
+async def api_chat(payload: ChatRequest) -> dict:
+    from .semantic_router import classify_intent, handle_ui_command, stamp_route
+
     message = payload.message.strip()
-    result = run_agent(message, payload.session_id)
-    data = result.model_dump()
+    classification = await classify_intent(message)
+
+    if classification.intent == "ui_command":
+        result = handle_ui_command(message, payload.session_id, classification)
+    else:
+        result = run_agent(message, payload.session_id, route=classification)
+        result = stamp_route(result, classification)
+
+    data = result.model_dump() if hasattr(result, "model_dump") else dict(result)
     remember_hud(payload.session_id, data)
     try:
         from .turn_log import record_turn

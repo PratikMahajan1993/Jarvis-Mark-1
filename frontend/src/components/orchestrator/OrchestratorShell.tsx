@@ -7,6 +7,7 @@ import {
   DEFAULT_AGENTS,
   agentCode,
   agentForPending,
+  agentIdFromTarget,
   formatClock,
   type ActivityItem,
   type AgentId,
@@ -154,6 +155,7 @@ export function OrchestratorShell() {
   const [error, setError] = useState("");
   const [suggested, setSuggested] = useState<SuggestedTask[]>([]);
   const [weatherLine, setWeatherLine] = useState("");
+  const [dockHidden, setDockHidden] = useState(false);
 
   // Mirrors `state` synchronously (a render behind `state` itself) so
   // imperative callbacks can guard re-entrancy (e.g. a second send() firing
@@ -311,8 +313,42 @@ export function OrchestratorShell() {
     [loadSessionSurface, refreshDesk, showVoice],
   );
 
+  const applyUiAction = useCallback(
+    async (uiAction: Record<string, unknown> | null | undefined) => {
+      const action = String(uiAction?.action || "");
+      if (!action || action === "noop") {
+        if (action === "noop") void refreshDesk(activeConversationId);
+        return;
+      }
+      if (action === "hide_dock") {
+        setDockHidden(true);
+        return;
+      }
+      if (action === "show_dock") {
+        setDockHidden(false);
+        return;
+      }
+      const conversationId = typeof uiAction?.conversation_id === "string" ? uiAction.conversation_id : "";
+      const rows = await refreshDesk(activeConversationId);
+      if (action === "minimize") {
+        if (activeConversationId && activeConversationId === conversationId) {
+          await focusAmbient();
+        }
+        return;
+      }
+      if (action === "expand" && conversationId) {
+        setDockHidden(false);
+        const row = rows.find((item) => item.id === conversationId);
+        if (row) await focusConversation(row, { announce: false });
+      }
+    },
+    [activeConversationId, focusAmbient, focusConversation, refreshDesk],
+  );
+
   const applyResponse = useCallback(
     (result: ChatResponse, opts?: { fromConfirm?: boolean; approved?: boolean }) => {
+      void applyUiAction(result.ui_action);
+
       const waiting = result.pending || [];
       const nextAction = waiting[0] || null;
 
@@ -347,6 +383,13 @@ export function OrchestratorShell() {
             return match ? { ...agent, state: (match.state as AgentNode["state"]) || "" } : agent;
           }),
         );
+      } else if (result.target_agent) {
+        const agentId = agentIdFromTarget(result.target_agent);
+        if (agentId) {
+          clearAgents();
+          setAgentStates([agentId], nextAction ? "waiting" : "active");
+          if (!nextAction) window.setTimeout(() => clearAgents(), 2400);
+        }
       } else if (nextAction) {
         const agentId = agentForPending(nextAction);
         clearAgents();
@@ -393,7 +436,7 @@ export function OrchestratorShell() {
         applyEvent({ type: "RESET" });
       }
     },
-    [applyEvent, clearAgents, clearVoice, pushLog, setAgentStates, showVoice],
+    [applyEvent, applyUiAction, clearAgents, clearVoice, pushLog, setAgentStates, showVoice],
   );
 
   /** Auto-opens the confirm mic right after a HITL panel is freshly presented
@@ -730,6 +773,7 @@ export function OrchestratorShell() {
         maxOpen={MAX_OPEN_CONVERSATIONS}
         ambientActive={activeSession === AMBIENT_SESSION && !activeConversationId}
         dimmed={hitl}
+        hidden={dockHidden}
         onSelectAmbient={() => void focusAmbient()}
         onSelect={(id) => {
           void (async () => {

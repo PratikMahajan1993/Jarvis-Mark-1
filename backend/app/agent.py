@@ -995,14 +995,14 @@ def _revise_pending_email(session_id: str, message: str, pending: dict[str, Any]
     )
 
 
-def run_agent(message: str, session_id: str = "default") -> ChatResponse:
+def run_agent(message: str, session_id: str = "default", route=None) -> ChatResponse:
     from .conversations import brain_lock
 
     with brain_lock():
-        return _run_agent(message, session_id)
+        return _run_agent(message, session_id, route=route)
 
 
-def _run_agent(message: str, session_id: str = "default") -> ChatResponse:
+def _run_agent(message: str, session_id: str = "default", route=None) -> ChatResponse:
     waiting = db.list_pending(session_id)
     decision = classify_decision(message)
     if waiting and decision is not None:
@@ -1011,6 +1011,7 @@ def _run_agent(message: str, session_id: str = "default") -> ChatResponse:
     from .conversations import chat_drawing, is_drawing_session
     from .config import settings as app_settings
     from .hermes.bridge import hermes_available, run_hermes_turn
+    from .intent import Intent
 
     prefs = db.get_preferences()
     db.clear_thoughts(session_id)
@@ -1020,7 +1021,14 @@ def _run_agent(message: str, session_id: str = "default") -> ChatResponse:
     if not message.strip():
         return _chat_response(session_id, speak="Yes?")
 
+    # Thin semantic router: tool_ops → Hermes; vision → drawing/chat; casual → chat brain
+    route_intent = getattr(route, "intent", None) if route is not None else None
+
     intent = classify(message)
+    if route_intent == "casual_chat":
+        intent = Intent("chat")
+    if route_intent == "vision_task" and is_drawing_session(session_id) and intent.kind == "chat":
+        return chat_drawing(session_id, message)
     if is_drawing_session(session_id) and intent.kind == "chat":
         return chat_drawing(session_id, message)
 
@@ -1052,8 +1060,19 @@ def _run_agent(message: str, session_id: str = "default") -> ChatResponse:
         db.add_message(session_id, "assistant", result.speak or "")
         return result
 
-    # Local mail/calendar/briefing: skip Hermes (avoids 30s gateway timeouts) and
-    # read from the local mailbox / snapshot first. Refresh when asked.
+    # Router tool_ops → Hermes first (when warm). Pending/compose already handled above.
+    use_hermes = app_settings.hermes_enabled and hermes_available()
+    if route_intent == "tool_ops" and use_hermes:
+        try:
+            result = run_hermes_turn(message, session_id)
+            db.add_message(session_id, "assistant", result.speak or result.reply or "")
+            db.add_audit(session_id, "hermes", (result.speak or "")[:400], "ok")
+            return result
+        except Exception as exc:
+            db.add_audit(session_id, "hermes", str(exc)[:400], "error")
+            # Fall through to local / legacy
+
+    # Local mail/calendar/briefing: skip Hermes when snapshot-ready (unless already tried above)
     from .snapshot import wants_fresh, refresh as snapshot_refresh
 
     local_fast = intent.kind in {
@@ -1065,6 +1084,15 @@ def _run_agent(message: str, session_id: str = "default") -> ChatResponse:
         "briefing",
     }
     mail_pref_ok = (not intent.kind.startswith("mail_")) or prefs.get("email_enabled", True)
+    if local_fast and mail_pref_ok and route_intent != "tool_ops":
+        if wants_fresh(message):
+            try:
+                snapshot_refresh(force=True)
+            except Exception:
+                pass
+        return _run_agent_legacy(message, session_id, prefs=prefs, intent=intent, heard=heard)
+
+    # After tool_ops Hermes miss, still allow local mail snapshot as soft fallback
     if local_fast and mail_pref_ok:
         if wants_fresh(message):
             try:
@@ -1074,9 +1102,7 @@ def _run_agent(message: str, session_id: str = "default") -> ChatResponse:
         return _run_agent_legacy(message, session_id, prefs=prefs, intent=intent, heard=heard)
 
     # Prefer Hermes for other turns. On timeout/error → Gemini legacy.
-    # mail_draft / drawing / pending authorize / local mail already returned above.
-    use_hermes = app_settings.hermes_enabled and hermes_available()
-    if use_hermes:
+    if use_hermes and route_intent != "tool_ops":
         try:
             result = run_hermes_turn(message, session_id)
             db.add_message(session_id, "assistant", result.speak or result.reply or "")
@@ -1084,7 +1110,6 @@ def _run_agent(message: str, session_id: str = "default") -> ChatResponse:
             return result
         except Exception as exc:
             db.add_audit(session_id, "hermes", str(exc)[:400], "error")
-            # Fall through to Gemini / legacy agent loop
 
     # Soft fallback / Hermes-down: definitional RFQ must be chat, never reason_rfq.
     if is_rfq_definition(message):

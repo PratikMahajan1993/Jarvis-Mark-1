@@ -14,7 +14,7 @@ Local work HUD. Prefer existing modules; do not invent a parallel stack.
 | HUD | Next.js + Tailwind (`frontend/`) | `:3000` |
 | API | FastAPI (`backend/app/`) | `127.0.0.1:8000` preferred |
 | DB | SQLite `<repo>/data/jarvis.db` (`.env` `DATA_DIR=./data`, resolved from repo root) | — |
-| Memory/RAG | SQLite + LanceDB under `backend/data/memory/` | — |
+| Memory/RAG | SQLite + LanceDB under `<repo>/data/memory/` | — |
 | Brain | Hermes gateway `:8642` first; Gemini/Ollama fallback | — |
 | TTS | Voicebox `:17493` via `POST /generate` (not `/speak`) | browser plays once |
 | React Bits | Vendored in `frontend/src/components/react-bits/` | accents only |
@@ -23,14 +23,14 @@ Local work HUD. Prefer existing modules; do not invent a parallel stack.
 
 - Tools own mail/calendar/files/Drive. Brain never invents prices, mail, or calendar facts.
 - HITL (**Authorize / Shall I**) before send mail, Task for Gemini, calendar writes, quote send, broad memory wipe.
-- Files only under `backend/exports`.
+- Files only under `<repo>/exports` (`EXPORTS_DIR=./exports`).
 - Max **3** expanded Open notes (`MAX_EXPANDED = 3`).
 - Prefer `127.0.0.1:8000` (avoid ghost `0.0.0.0:8000` listeners).
 - Never commit `.env`, `google_token.json`, `jarvis.db`, or secrets.
 
 ## HUD shape
 
-- Shell: `OrchestratorShell` (not HudShell for primary desk).
+- Shell: `OrchestratorShell` (not HudShell for primary desk). FSM lives in `frontend/src/lib/orchestratorFsm.ts`.
 - Right column: `WeatherCard` (shrink-0) + scrollable `SuggestedTasksPanel`.
 - Mail board: `SpotlightCard` with scroll on `bodyClassName`, not the outer card.
 - Voice: `frontend/src/lib/voice.ts` — bridge browser TTS; Voicebox cutover ≤~1.4s; late clips must not replay.

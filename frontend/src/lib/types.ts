@@ -162,6 +162,10 @@ export type ChatResponse = {
   activity?: ActivityEvent[];
   agents?: AgentStatus[];
   wake_reason?: string | null;
+  /** Orchestra code from thin semantic router (RES.01 / SEC.02 / DAT.03 / OPS.04 / SYS). */
+  target_agent?: string | null;
+  route_intent?: string | null;
+  ui_action?: Record<string, unknown> | null;
 };
 
 export type Preferences = {

@@ -80,6 +80,7 @@ export function ConversationRail({
   maxOpen = 3,
   ambientActive,
   dimmed = false,
+  hidden = false,
   onSelectAmbient,
   onSelect,
   onNewDiscussion,
@@ -89,10 +90,13 @@ export function ConversationRail({
   maxOpen?: number;
   ambientActive: boolean;
   dimmed?: boolean;
+  hidden?: boolean;
   onSelectAmbient: () => void;
   onSelect: (id: string) => void;
   onNewDiscussion: () => void;
 }) {
+  if (hidden) return null;
+
   return (
     <div
       className={[

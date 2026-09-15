@@ -20,7 +20,16 @@ File: `frontend/src/lib/voice.ts`
 3. If later → **do not play** Voicebox; browser already owns the line (cache still warms).
 4. Never play inside fetch before the late-cutover check (causes ~15s double speak).
 
-Backend: `prefetch_tts` on chat/confirm; disk cache under `backend/data/tts_cache/`.
+Backend: `prefetch_tts` on chat/confirm; disk cache under `<repo>/data/tts_cache/`.
+
+## Semantic router
+
+File: `backend/app/semantic_router.py`
+
+1. `/api/chat` classifies each utterance (`ui_command`, `casual_chat`, `vision_task`, `tool_ops`).
+2. UI commands resolve locally via `handle_ui_command` → `ChatResponse.ui_action` (hide/show dock, minimize/expand notes).
+3. Other intents stamp `target_agent` + orchestra highlight on `ChatResponse.agents`.
+4. `tool_ops` prefers Hermes in `agent.py`; falls back to local snapshot / legacy on error.
 
 ## Mail / snapshot fast path
 
