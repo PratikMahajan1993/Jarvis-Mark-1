@@ -155,6 +155,9 @@ export function OrchestratorShell() {
   const hitlAction = composeDraft || sending ? null : focused;
   const hitl = Boolean(focused) && !sending;
   const mode: OrchestratorMode = sending ? "busy" : hitl ? "hitl" : busy ? "busy" : listening ? "listening" : "idle";
+  /** Mail board / compose modal owns the center — hide VoiceLine so text is not duplicated. */
+  const boardOwnsCenter = sceneHasBoardContent(scene) || Boolean(composeDraft);
+  const showCenterVoice = voiceVisible && !boardOwnsCenter;
 
   const pushLog = useCallback((agent: string, message: string) => {
     setActivity((prev) =>
@@ -192,6 +195,12 @@ export function OrchestratorShell() {
     }, 180);
   }, []);
 
+  /** Compose modal owns the draft — clear center HUD text so it does not compete. */
+  const clearVoice = useCallback(() => {
+    setVoiceVisible(false);
+    setVoice("");
+  }, []);
+
   const refreshDesk = useCallback(async (focusId: string | null = activeConversationId) => {
     const payload = await api.conversations(true).catch(() => ({ items: [] as Conversation[] }));
     setDesk(mapDeskItems(payload.items || [], focusId));
@@ -207,7 +216,10 @@ export function OrchestratorShell() {
       const items = waiting.items || [];
       setPending(items);
       pendingIdRef.current = items[0]?.id || "";
-      if (opts?.announce !== false && session?.speak) {
+      const composeOpen = items[0]?.kind === "email_compose";
+      if (composeOpen) {
+        clearVoice();
+      } else if (opts?.announce !== false && session?.speak) {
         showVoice(session.speak);
       } else if (opts?.announce !== false && !items[0]) {
         showVoice(IDLE_VOICE);
@@ -220,7 +232,7 @@ export function OrchestratorShell() {
         clearAgents();
       }
     },
-    [clearAgents, pushLog, setAgentStates, showVoice],
+    [clearAgents, clearVoice, pushLog, setAgentStates, showVoice],
   );
 
   const focusAmbient = useCallback(async () => {
@@ -267,11 +279,17 @@ export function OrchestratorShell() {
       setPending(waiting);
       pendingIdRef.current = waiting[0]?.id || "";
 
-      // Prefer reply for on-screen HUD text; speak stays short for TTS
+      // Prefer reply for on-screen HUD text; speak stays short for TTS.
+      // When a board/modal owns the content (mail read, compose draft, etc.), clear
+      // center VoiceLine so it does not duplicate the board.
       const display = (result.reply || result.speak || "").trim() || IDLE_VOICE;
       const tts = (result.speak || result.reply || "").trim();
-      showVoice(display);
-      setScene(sceneHasBoardContent(result.scene) ? result.scene! : EMPTY_SCENE);
+      const nextScene = sceneHasBoardContent(result.scene) ? result.scene! : EMPTY_SCENE;
+      const boardOwnsHud =
+        sceneHasBoardContent(nextScene) || waiting[0]?.kind === "email_compose";
+      if (boardOwnsHud) clearVoice();
+      else showVoice(display);
+      setScene(nextScene);
 
       if (result.activity?.length) {
         setActivity((prev) => {
@@ -330,7 +348,7 @@ export function OrchestratorShell() {
         void listenConfirmRef.current(waiting[0].id, needsFill);
       }
     },
-    [clearAgents, pushLog, setAgentStates, showVoice],
+    [clearAgents, clearVoice, pushLog, setAgentStates, showVoice],
   );
 
   const listenForConfirm = useCallback(async (actionId: string, fillCompose = false) => {
@@ -680,8 +698,11 @@ export function OrchestratorShell() {
         <div
           className={[
             "transition-all duration-[600ms]",
-            voiceVisible ? "translate-y-0 opacity-100" : "translate-y-2.5 opacity-0",
+            showCenterVoice
+              ? "translate-y-0 opacity-100"
+              : "pointer-events-none translate-y-2.5 opacity-0",
           ].join(" ")}
+          aria-hidden={!showCenterVoice}
         >
           <VoiceLine text={voice} dimmed={Boolean(hitlAction)} />
         </div>
