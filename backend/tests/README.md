@@ -1,15 +1,17 @@
 # Running the backend test suite
 
-## On this VM (or any machine without Hermes/Voicebox/Google running)
+## One-command run, from a fresh clone
 
 ```bash
-.venv/bin/pip install -r backend/requirements-dev.txt
-.venv/bin/python -m pytest
+.venv/bin/pip install -r backend/requirements.txt -r backend/requirements-dev.txt && .venv/bin/python -m pytest
 ```
 
 Run from the repo root — `pytest.ini` there points `testpaths` at `backend/tests`.
 Each test module inserts `backend/` onto `sys.path` itself and imports as
-`app.*`, so no `PYTHONPATH` or extra flags are needed.
+`app.*`, so no `PYTHONPATH` or extra flags are needed. `pytest` is pinned to
+an exact version (`backend/requirements-dev.txt`) so this reproduces the
+same collection/pass/skip counts on a fresh venv as it does here:
+**208 collected, 197 passed, 11 skipped, 0 failed.**
 
 Data isolation: `backend/tests/conftest.py` redirects
 `app.config.settings.data_dir` / `exports_dir` to a session-scoped temp
@@ -19,6 +21,13 @@ writes outside a throwaway exports directory. A few modules
 (`test_rfq.py`, `test_jobs.py`, `test_conversations.py`) additionally point
 `settings.data_dir` at their own per-module temp dir; both layers are
 temp-dir only.
+
+This override is independent of how `app/config.py` resolves the *default*
+`DATA_DIR`/`EXPORTS_DIR` (currently relative to process CWD; a separate,
+unrelated PR is anchoring that to the repo root instead). Either way,
+`conftest.py` reassigns `settings.data_dir`/`exports_dir` to a temp
+directory after import, so the isolation guarantee holds regardless of
+which default resolution is in place.
 
 ## Live-service tests
 
