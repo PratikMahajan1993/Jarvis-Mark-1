@@ -1,7 +1,12 @@
 """Stability + foundation E2E checks against a live Jarvis API.
 
 Run with API up:
-  .\\.venv\\Scripts\\python.exe -m pytest backend/tests/test_stability_e2e.py -v --tb=short
+  .venv/bin/uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000
+  .venv/bin/python -m pytest backend/tests/test_stability_e2e.py -v --tb=short
+
+The server owns its SQLite state. ``live_api_settings`` points direct test
+setup at that same state so confirmations exercise the running API, rather
+than a separate pytest-only database.
 """
 
 from __future__ import annotations
@@ -32,6 +37,7 @@ def _live() -> bool:
 
 pytestmark = [
     pytest.mark.live_service,
+    pytest.mark.api_service,
     pytest.mark.skipif(not _live(), reason="Jarvis API not running on :8000"),
 ]
 
@@ -42,12 +48,34 @@ def client():
         yield c
 
 
-def test_health_ok(client: httpx.Client):
+@pytest.fixture(scope="module", autouse=True)
+def live_api_settings():
+    """Make direct setup helpers use the live server's data and exports paths."""
+    from app.config import settings
+
+    data_dir = Path(os.environ.get("JARVIS_API_DATA_DIR", ROOT / "data")).resolve()
+    exports_dir = Path(os.environ.get("JARVIS_API_EXPORTS_DIR", ROOT / "exports")).resolve()
+    previous = (settings.data_dir, settings.exports_dir, settings.canvas_dir)
+    settings.data_dir = data_dir
+    settings.exports_dir = exports_dir
+    settings.canvas_dir = data_dir / "canvas"
+    try:
+        yield
+    finally:
+        settings.data_dir, settings.exports_dir, settings.canvas_dir = previous
+
+
+def test_health_reports_status(client: httpx.Client):
     r = client.get("/api/health")
     assert r.status_code == 200
     data = r.json()
-    assert data.get("ok") is True
-    assert "hermes" in data
+    provider = data.get("provider")
+    assert provider in {"gemini", "ollama"}
+    hermes = data.get("hermes")
+    assert isinstance(hermes, dict)
+    brain_ready = bool(data.get(provider)) and bool(data.get("model_ready"))
+    hermes_ready = bool(hermes.get("enabled")) and bool(hermes.get("available"))
+    assert data.get("ok") is (brain_ready or hermes_ready)
 
 
 def test_metrics_and_missions(client: httpx.Client):

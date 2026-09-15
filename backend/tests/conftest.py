@@ -48,5 +48,12 @@ settings.exports_dir.mkdir(parents=True, exist_ok=True)
 settings.canvas_dir.mkdir(parents=True, exist_ok=True)
 
 
+def pytest_configure(config):
+    config.addinivalue_line(
+        "markers",
+        "api_service: requires the Jarvis API on :8000, but not Hermes, Voicebox, or Google OAuth.",
+    )
+
+
 def pytest_sessionfinish(session, exitstatus):  # noqa: ARG001
     shutil.rmtree(_SESSION_TMP, ignore_errors=True)
