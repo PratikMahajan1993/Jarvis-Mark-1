@@ -16,7 +16,7 @@ same collection/pass/skip counts on a fresh venv as it does here:
 Data isolation: `backend/tests/conftest.py` redirects
 `app.config.settings.data_dir` / `exports_dir` to a session-scoped temp
 directory before any test module runs, and removes it when the session ends.
-The suite never opens or writes `<repo>/backend/data/jarvis.db`, and never
+The suite never opens or writes `<repo>/data/jarvis.db`, and never
 writes outside a throwaway exports directory. A few modules
 (`test_rfq.py`, `test_jobs.py`, `test_conversations.py`) additionally point
 `settings.data_dir` at their own per-module temp dir; both layers are
