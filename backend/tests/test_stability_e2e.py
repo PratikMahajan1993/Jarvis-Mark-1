@@ -69,8 +69,13 @@ def test_health_reports_status(client: httpx.Client):
     r = client.get("/api/health")
     assert r.status_code == 200
     data = r.json()
-    assert isinstance(data.get("ok"), bool)
-    assert "hermes" in data
+    provider = data.get("provider")
+    assert provider in {"gemini", "ollama"}
+    hermes = data.get("hermes")
+    assert isinstance(hermes, dict)
+    brain_ready = bool(data.get(provider)) and bool(data.get("model_ready"))
+    hermes_ready = bool(hermes.get("enabled")) and bool(hermes.get("available"))
+    assert data.get("ok") is (brain_ready or hermes_ready)
 
 
 def test_metrics_and_missions(client: httpx.Client):
