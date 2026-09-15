@@ -33,7 +33,10 @@ fix while wanting to continue testing elsewhere.
 
 ```
 Repo: the Jarvis checkout (desk machine D:\Cursor\Jarvis; isolated worker /workspace)
-Placement: desk machine | isolated — desk when the check needs HUD/Voicebox/Hermes/Gmail
+Placement: cloud by default, including HUD/layout/scroll/card-state checks (headless
+  Chrome — see jarvis-react-bits skill for the WebGL flag) — desk machine only when the
+  check needs Hermes, Voicebox, real Google OAuth, GPU-representative Ollama, or
+  physical mic/speaker hardware
 Observation: <user words>
 Capability ID (if any): <e.g. E2>
 Repro: <steps>
@@ -51,6 +54,9 @@ Return format: DONE / FILES / TRY / GAPS
 
 - Always reuse **`jarvis-uiux`** for UI/UX — do not spawn anonymous UI agents.
 - One concern per agent. Split mixed reports into multiple Tasks.
-- Never send an isolated worker a task whose acceptance check is "it looked/sounded
-  right". That check needs the desk machine.
+- Never send an isolated worker a task whose acceptance check needs Hermes, Voicebox,
+  real Google OAuth, GPU-representative Ollama, or physical mic/speaker hardware —
+  those five need the desk machine. HUD rendering/layout/scroll/card-state checks are
+  cloud-verifiable (headless Chrome + screenshot); do not default those to the desk
+  machine.
 - Never commit secrets or expand into unrelated matrix IDs.

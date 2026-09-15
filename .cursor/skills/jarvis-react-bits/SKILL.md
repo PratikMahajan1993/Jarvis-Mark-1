@@ -41,6 +41,7 @@ paths: frontend/**/*.{tsx,ts,css}
 ## WebGL
 
 - `Particles` / `LightRays` only behind the orb in `JarvisCore`, loaded with `dynamic(..., { ssr: false })`.
+- **Headless Chrome needs one extra flag.** Without it, `Particles.tsx` throws `unable to create webgl context` and the HUD shows Next's error overlay instead of the desk — this happens on cloud VMs with no GPU just as easily as anywhere else. Fix: launch with `--enable-unsafe-swiftshader` (e.g. `google-chrome --headless=new --enable-unsafe-swiftshader --window-size=1440,900 --screenshot=out.png http://127.0.0.1:3000`, or pass it in `args` when launching via `puppeteer-core`/`playwright` with `executablePath` pointed at the system Chrome). Confirmed working on a cloud VM with no GPU — this is a one-line launch-flag fix, not evidence the HUD needs the desk machine.
 
 ## Checklist before done
 

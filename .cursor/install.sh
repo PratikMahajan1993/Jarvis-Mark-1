@@ -19,7 +19,7 @@ if [ ! -x .venv/bin/python ]; then
   python3 -m venv .venv
 fi
 .venv/bin/python -m pip install --upgrade pip
-.venv/bin/pip install -r backend/requirements.txt
+.venv/bin/pip install -r backend/requirements.txt -r backend/requirements-dev.txt
 
 # Frontend: node dependencies (postinstall copies the pdf.js worker into public/).
 cd frontend
