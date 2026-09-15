@@ -4,7 +4,9 @@ description: >
   Jarvis workflow specialist for mail, HITL, RFQ/quote, calendar, briefing,
   Hermes routing, snapshot fast-path, compose, and tool registry behavior.
   Use when capability tests fail on C/D/G/B IDs or the user reports tool/workflow
-  bugs. Runs in background; needs the desk machine for live mail, Hermes, or HITL.
+  bugs. Runs in background; needs the desk machine only for live Hermes routing or
+  real (non-demo) Gmail. HITL logic and local-demo mail are cloud-testable via
+  backend/tests or curl.
 model: inherit
 readonly: false
 is_background: true

@@ -42,9 +42,13 @@ if assigned — but prefer the coordinator routing those to specialists next tim
   branch or worktree: commit and push it — that is the only way the work returns.
 - Never touch `.env`, `google_token.json`, `jarvis.db`, or credentials.
 - No drive-by refactors or unsolicited docs.
-- On the desk machine, check terminals/ports before double-binding `:8000`. If the
-  Jarvis services are not running, you are not on the desk machine — do not start
-  them to "verify"; report GAPS instead.
+- Check terminals/ports before double-binding `:8000` — don't start a duplicate
+  listener. A cloud worker can and should start the API/HUD itself to verify
+  (`bash .cursor/install.sh`, then the two `.cursor/environment.json` terminal
+  commands) — both boot and build/serve cleanly with no desk-machine access. Only
+  Hermes (`:8642`), Voicebox (`:17493`), or real Google OAuth being unreachable
+  means that specific check needs the desk machine — report GAPS for those, not
+  for the API/HUD itself.
 
 # When finished
 
