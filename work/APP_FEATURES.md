@@ -66,6 +66,15 @@ Capability tests: [`CAPABILITY_TEST_MATRIX.md`](CAPABILITY_TEST_MATRIX.md).
 
 ## Log
 
+### 2026-09-21 — Remembered drawings and a shop-floor memory (capability)
+
+Owner wants two capabilities:
+
+- **Drawing recall.** The first conversation about a drawing ends with its confirmed information saved. Re-opening that drawing later must talk from what is stored — material, quantity, scope, tolerances, routing, what we quoted and when — without processing the drawing again, and must say plainly what is still unconfirmed.
+- **Shop-floor memory.** Known things about the floor (machine status and load, downtime causes, scrap and OEE trends, stock and remnants, vendor turnaround) answer fast from stored facts with a freshness stamp, not from a fresh crawl and never from invention.
+
+Rules that come with it: only owner-confirmed facts may drive a price; a vision suggestion is a candidate until confirmed, and high-value fields (material, scope, quantity, tolerance, heat treat) need a value-level confirm rather than a blanket yes; a new drawing revision is a diff and a warning, not a silent reuse. Design: [`OPUS_ARCHITECTURE_MANIFEST.md`](OPUS_ARCHITECTURE_MANIFEST.md) §4B.
+
 ### 2026-09-22 — Fast, witty casual chat
 
 Owner: casual replies must be as fast as possible on the Gemini API, and Jarvis should be as witty as possible. Shop jobs stay on Hermes. Wit is for conversation, not quotes or invented shop numbers.

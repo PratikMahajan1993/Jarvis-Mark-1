@@ -33,6 +33,16 @@ As-built snapshot: [`docs/CURRENT.md`](../docs/CURRENT.md) · locked vision: [`V
 
 ## Log
 
+### 2026-09-21 — Knowledge planes: a drawing is remembered, not reprocessed
+
+Owner: when Jarvis discusses an engineering drawing for the first time it saves the **confirmed** information; the next time that drawing comes up it talks from that store instead of processing the drawing again. Jarvis also needs a working memory of the shop floor and other known facts so familiar questions answer fast.
+
+Design answer (proposal in [`OPUS_ARCHITECTURE_MANIFEST.md`](OPUS_ARCHITECTURE_MANIFEST.md) §4B): three planes that never collapse — **ledger** (SQL master data owns every number), **knowledge cards** (per-entity confirmed facts with provenance; only owner-confirmed facts are quotable), **corpus** (chunks for citation). Drawing identity resolves by file hash → text fingerprint → `(customer, drawing_no, revision)`, so a revision change is a diff and a warning, never a silent reuse. Vision re-runs only when the card is missing, the revision changed, the bytes changed, extraction failed, or the owner asks. Shop-floor memory is an event log plus a rebuildable `shop_state` projection with a freshness stamp.
+
+### 2026-09-21 — Architecture manifest requested (proposal, not yet lock)
+
+Owner commissioned a one-time architectural overhaul document: resilience and state reconciliation, the `.cursor/rules` tier system, precision-machining features, master data schema, agent handoff protocol, and blind spots. Lands as [`work/OPUS_ARCHITECTURE_MANIFEST.md`](OPUS_ARCHITECTURE_MANIFEST.md). Nothing in it is a lock until the owner answers §8; `docs/CURRENT.md` stays as-built.
+
 ### 2026-09-22 — Casual chat is Gemini-direct
 
 Owner: casual replies should be as fast as the Gemini API allows, and the voice should be witty. Hermes stays on tool and quote turns.
