@@ -20,7 +20,7 @@ fix while wanting to continue testing elsewhere.
 
 1. Classify the observation (UI / voice / workflow / other).
 2. Stay with the user on the next test; **do not** block on the fix.
-3. Delegate to the matching roster worker, in the background:
+3. Delegate to the matching roster worker, in the background, with **`model: composer-2.5-fast`** (Composer 2.5 Fast — required, do not inherit):
 
 | Signal | Agent (roster name) |
 | ------ | ------------------- |

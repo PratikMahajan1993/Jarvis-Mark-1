@@ -54,6 +54,8 @@ TOOL_TO_AGENT: dict[str, AgentId] = {
     "quote_analyze_drawing": "data",
     "quote_build": "data",
     "quote_pdf": "data",
+    "quote_verify": "data",
+    "quote_playbook_note": "data",
     "quote_send": "ops",
     "memory_search": "research",
     "memory_upsert": "research",

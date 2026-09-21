@@ -12,6 +12,7 @@ interface ClickSparkProps {
   extraScale?: number;
   className?: string;
   children?: React.ReactNode;
+  "data-workspace"?: string;
 }
 
 interface Spark {
@@ -32,10 +33,12 @@ export default function ClickSpark({
   extraScale = 1,
   className = "",
   children,
+  "data-workspace": dataWorkspace,
 }: ClickSparkProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const sparksRef = useRef<Spark[]>([]);
   const startTimeRef = useRef<number | null>(null);
+  const kickRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -109,10 +112,21 @@ export default function ClickSpark({
         ctx.stroke();
         return true;
       });
+      if (sparksRef.current.length > 0) {
+        animationId = requestAnimationFrame(draw);
+      } else {
+        animationId = 0;
+      }
+    };
+    const kick = () => {
+      if (animationId) return;
       animationId = requestAnimationFrame(draw);
     };
-    animationId = requestAnimationFrame(draw);
-    return () => cancelAnimationFrame(animationId);
+    kickRef.current = kick;
+    return () => {
+      kickRef.current = null;
+      cancelAnimationFrame(animationId);
+    };
   }, [sparkColor, sparkSize, sparkRadius, sparkCount, duration, easeFunc, extraScale]);
 
   const handleClick = (event: React.MouseEvent) => {
@@ -129,10 +143,15 @@ export default function ClickSpark({
       startTime: now,
     }));
     sparksRef.current.push(...next);
+    kickRef.current?.();
   };
 
   return (
-    <div className={`relative h-full w-full ${className}`.trim()} onClick={handleClick}>
+    <div
+      className={`relative h-full w-full ${className}`.trim()}
+      data-workspace={dataWorkspace}
+      onClick={handleClick}
+    >
       <canvas ref={canvasRef} className="pointer-events-none absolute inset-0 z-[20] h-full w-full" />
       {children}
     </div>

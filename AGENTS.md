@@ -8,7 +8,7 @@ Persistent guidance for Cursor agents working in this repo during capability tes
 | ---- | ---- |
 | `.cursor/rules/jarvis-core.mdc` | Stack, HITL, ports, HUD shape |
 | `.cursor/rules/jarvis-capability-run.mdc` | Test-run: observe → dispatch → continue |
-| `.cursor/rules/jarvis-subagent-dispatch.mdc` | Roster specialists for observations |
+| `.cursor/rules/jarvis-subagent-dispatch.mdc` | All code changes via Composer 2.5 Fast roster workers |
 | `.cursor/rules/jarvis-react-bits.mdc` | HUD accents (when editing frontend) |
 
 ## Skills (auto-routed by description)
@@ -22,7 +22,7 @@ Persistent guidance for Cursor agents working in this repo during capability tes
 
 ## Specialized subagents (`.cursor/agents/`)
 
-Delegate to the worker named below, in the background during capability runs. Where the Task tool is available, the name is the `subagent_type`. Placement matters more than the spawn mechanism — see the right-hand column.
+The coordinator does not implement. Every code change is a Task with `subagent_type` from the roster below and **`model: composer-2.5-fast`** (Composer 2.5 Fast). Background unless the user asks to wait. Placement matters more than the spawn mechanism — see the right-hand column.
 
 | Agent | Owns | Needs the desk machine? |
 | ----- | ---- | ---- |

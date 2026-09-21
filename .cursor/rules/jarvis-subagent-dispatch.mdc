@@ -1,21 +1,24 @@
 ---
-description: Always dispatch specialized Jarvis subagents for observation-driven fixes
+description: All code changes go through Composer 2.5 Fast roster workers — coordinator does not patch
 alwaysApply: true
 ---
 
-# Specialized subagent dispatch
+# Code changes: Composer 2.5 Fast workers
 
-When the user reports a HUD/API observation, bug, or polish request during testing:
+The coordinator in this chat does **not** edit repo files to implement. Whenever a change is needed (HUD, API, tests, CSS, config, skills, rules, docs-as-built):
 
-1. Read skill **`jarvis-observation-dispatch`** (roster + prompt template).
-2. Delegate to the matching agent from `.cursor/agents/`:
+1. Pick the roster agent from `.cursor/agents/`:
    - UI/UX, layout, React Bits, cards, scroll, weather → **`jarvis-uiux`**
    - Speak, TTS, Voicebox, double-play, latency → **`jarvis-voice`**
    - Mail, HITL, RFQ, calendar, tools, Hermes routing → **`jarvis-workflows`**
-   - Agreed implementation / restarts / verify → **`jarvis-builder`**
-3. Run it in the background unless the user asks to wait.
-4. Select it by the agent file name (`jarvis-uiux`, etc.) — that name is the `subagent_type` wherever the Task tool is available.
-5. Never invent a one-off agent when a roster specialist exists.
-6. The coordinator stays on capability testing; workers report DONE/FILES/TRY/GAPS.
-7. Workers inherit nothing from the coordinator's chat. Put the repro, the files, and the acceptance check in the kickoff itself.
-8. A worker that cannot reach Hermes, Voicebox, real Google OAuth, GPU-representative Ollama, or physical mic/speaker hardware must not guess — it reports GAPS and that check goes to a desk-machine worker. HUD rendering, layout, scroll, and card-state checks do not need the desk machine: a cloud worker can build/serve the HUD and drive it with a headless browser.
+   - Anything else (impl, restarts, verify, generic patch) → **`jarvis-builder`**
+2. Launch it with Task `model: "composer-2.5-fast"` (Composer 2.5 Fast). Do **not** omit the model. Do **not** inherit the parent model.
+3. Run in the background unless the user asks to wait.
+4. Closed kickoff (workers see none of this chat): goal, repro, files in scope, acceptance, "do not expand scope."
+5. Never invent a one-off / `generalPurpose` implementer when a roster name exists.
+
+**Coordinator may still:** talk with the user, dispatch, log test observations, and update living notes in `work/*_POINTS.md` when the owner states new intent.
+
+**Coordinator must not:** apply code patches, restyle the HUD, or "just quickly fix" a file in this chat.
+
+Observation-driven fixes: also read skill **`jarvis-observation-dispatch`**. Placement stays cloud-default except Hermes / Voicebox / real Google OAuth / GPU Ollama / physical mic-speaker.

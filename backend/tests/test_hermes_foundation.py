@@ -115,6 +115,33 @@ def test_clean_speak_strips_markdown_keeps_newlines():
     assert "\n" in speak
 
 
+def test_warm_hermes_dedupes_within_ttl(monkeypatch):
+    from app.hermes import bridge as hb
+
+    hb._WARM_AT.clear()
+    hb._WARM_STATUS.clear()
+    monkeypatch.setattr(hb.settings, "hermes_enabled", True)
+    monkeypatch.setattr(hb.settings, "hermes_prefer_gateway", True)
+    monkeypatch.setattr(hb, "hermes_gateway_reachable", lambda timeout=1.5: True)
+    started = []
+
+    def fake_thread(target=None, name=None, daemon=None):
+        class _T:
+            def start(self):
+                started.append(name)
+
+        return _T()
+
+    monkeypatch.setattr(hb.threading, "Thread", fake_thread)
+    first = hb.warm_hermes("default", force=True)
+    hb._WARM_AT["default"] = hb.time.monotonic()
+    hb._WARM_STATUS["default"] = "ready"
+    second = hb.warm_hermes("default")
+    assert first.get("started") is True
+    assert second.get("started") is False
+    assert second.get("reason") == "fresh"
+
+
 def test_hermes_cli_available_or_skip():
     # Informational: environment may or may not have hermes on PATH in CI
     assert isinstance(hermes_available(), bool)

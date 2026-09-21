@@ -10,6 +10,14 @@ from .config import settings
 from .ollama_client import OllamaError
 
 _API = "https://generativelanguage.googleapis.com/v1beta"
+_HTTP: httpx.Client | None = None
+
+
+def _shared_client(timeout: float = 120) -> httpx.Client:
+    global _HTTP
+    if _HTTP is None or _HTTP.is_closed:
+        _HTTP = httpx.Client(timeout=timeout)
+    return _HTTP
 
 
 def _headers() -> dict[str, str]:
@@ -48,15 +56,73 @@ def chat(
     payload = _payload(messages, tools, format_json, options, allowed_function_names)
     used = (model or settings.gemini_model).strip() or settings.gemini_model
     url = f"{_API}/models/{used}:generateContent"
+    client = _shared_client(timeout)
     try:
-        with httpx.Client(timeout=timeout) as client:
-            response = client.post(url, headers=_headers(), json=payload)
-            data = response.json() if response.headers.get("content-type", "").startswith("application/json") else {}
+        response = client.post(url, headers=_headers(), json=payload)
+        data = response.json() if response.headers.get("content-type", "").startswith("application/json") else {}
+        if response.status_code >= 400:
+            raise OllamaError(_error_text(data, response.text))
+    except httpx.HTTPError as exc:
+        raise OllamaError(str(exc)) from exc
+    return _to_ollama_message(data)
+
+
+def chat_casual(
+    messages: list[dict[str, Any]],
+    *,
+    timeout: float = 45,
+    temperature: float = 0.9,
+    max_output_tokens: int = 120,
+) -> dict[str, Any]:
+    """Fast witty small talk — no tools, minimal thinking, keep-alive HTTP."""
+    if not settings.gemini_api_key:
+        raise OllamaError("GEMINI_API_KEY is empty.")
+    body = _casual_payload(messages, temperature=temperature, max_output_tokens=max_output_tokens)
+    used = settings.gemini_model.strip() or settings.gemini_model
+    url = f"{_API}/models/{used}:generateContent"
+    client = _shared_client(timeout)
+    try:
+        response = client.post(url, headers=_headers(), json=body)
+        data = response.json() if response.headers.get("content-type", "").startswith("application/json") else {}
+        if response.status_code >= 400:
+            err = _error_text(data, response.text).lower()
+            if "thinking" in err and "thinkingconfig" in body.get("generationConfig", {}):
+                body = _casual_payload(
+                    messages,
+                    temperature=temperature,
+                    max_output_tokens=max_output_tokens,
+                    thinking_level_minimal=True,
+                )
+                response = client.post(url, headers=_headers(), json=body)
+                data = response.json() if response.headers.get("content-type", "").startswith("application/json") else {}
             if response.status_code >= 400:
                 raise OllamaError(_error_text(data, response.text))
     except httpx.HTTPError as exc:
         raise OllamaError(str(exc)) from exc
     return _to_ollama_message(data)
+
+
+def _casual_payload(
+    messages: list[dict[str, Any]],
+    *,
+    temperature: float,
+    max_output_tokens: int,
+    thinking_level_minimal: bool = False,
+) -> dict[str, Any]:
+    system, contents = _contents(messages)
+    body: dict[str, Any] = {"contents": contents}
+    if system:
+        body["systemInstruction"] = {"parts": [{"text": system}]}
+    gen: dict[str, Any] = {
+        "temperature": temperature,
+        "maxOutputTokens": max_output_tokens,
+    }
+    if thinking_level_minimal:
+        gen["thinkingConfig"] = {"thinkingLevel": "MINIMAL"}
+    else:
+        gen["thinkingConfig"] = {"thinkingBudget": 0}
+    body["generationConfig"] = gen
+    return body
 
 
 def _payload(

@@ -1,12 +1,7 @@
 import type { MailAttachment, Scene } from "@/lib/types";
 import { WidgetCard } from "./Widgets";
-import { Panel, type Accent } from "./hud/Hud";
 
-const ACCENT_CYCLE: Accent[] = ["cyan", "violet", "magenta", "amber"];
-
-function cycleAccent(index: number): Accent {
-  return ACCENT_CYCLE[index % ACCENT_CYCLE.length];
-}
+const ORCH_PANEL = "rounded-xl border border-[color:var(--border)] bg-black/35 backdrop-blur-md";
 
 export function SceneBoard({
   scene,
@@ -40,14 +35,14 @@ export function SceneBoard({
       <section className="w-full px-0 pb-2">
         {scene.title ? (
           <header className="mb-3">
-            <h1 className="font-display text-xl text-white">{scene.title}</h1>
-            {scene.subtitle ? <p className="mt-1 text-xs text-white/40">{scene.subtitle}</p> : null}
+            <h1 className="font-display text-xl text-[color:var(--fg)]">{scene.title}</h1>
+            {scene.subtitle ? <p className="mt-1 text-xs text-[color:var(--muted)]">{scene.subtitle}</p> : null}
           </header>
         ) : null}
         {kpis.length ? (
           <div className="mb-3 grid grid-cols-2 gap-3">
             {kpis.map((widget, index) => (
-              <WidgetCard key={`kpi-${index}`} widget={widget} accent={cycleAccent(index)} {...widgetProps} />
+              <WidgetCard key={`kpi-${index}`} widget={widget} {...widgetProps} />
             ))}
           </div>
         ) : null}
@@ -64,24 +59,24 @@ export function SceneBoard({
     <section className="mx-auto w-full max-w-5xl px-6 pb-8">
       {scene.title ? (
         <header className="mb-10">
-          <h1 className="font-display text-5xl tracking-wide text-white md:text-6xl">{scene.title}</h1>
-          {scene.subtitle ? <p className="mt-2 text-white/40">{scene.subtitle}</p> : null}
+          <h1 className="font-display text-5xl tracking-wide text-[color:var(--fg)] md:text-6xl">{scene.title}</h1>
+          {scene.subtitle ? <p className="mt-2 text-[color:var(--muted)]">{scene.subtitle}</p> : null}
         </header>
       ) : null}
       {kpis.length ? (
         <div className={`mb-8 grid gap-4 ${dense ? "grid-cols-2 xl:grid-cols-4" : "grid-cols-2 md:grid-cols-3"}`}>
           {kpis.map((widget, index) => (
-            <Panel key={`kpi-${index}`} accent={cycleAccent(index)} bodyClassName="px-5 py-4">
-              <WidgetCard widget={widget} accent={cycleAccent(index)} {...widgetProps} />
-            </Panel>
+            <div key={`kpi-${index}`} className={`${ORCH_PANEL} px-5 py-4`}>
+              <WidgetCard widget={widget} {...widgetProps} />
+            </div>
           ))}
         </div>
       ) : null}
       <div className="grid gap-6">
         {rest.map((widget, index) => (
-          <Panel key={`w-${index}`} accent="cyan" bodyClassName="p-5">
+          <div key={`w-${index}`} className={`${ORCH_PANEL} p-5`}>
             <WidgetCard widget={widget} {...widgetProps} />
-          </Panel>
+          </div>
         ))}
       </div>
     </section>

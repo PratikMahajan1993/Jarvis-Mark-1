@@ -4,7 +4,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { MailAttachment } from "@/lib/types";
 import { api } from "@/lib/api";
 import type { ViewerCommand } from "@/lib/viewerMatch";
-import { HudButton } from "./hud/Hud";
 
 type Mode = "pan" | "crop" | "mark";
 type PenColor = "cyan" | "red";
@@ -13,7 +12,8 @@ type Point = { x: number; y: number };
 type Stroke = { points: Point[]; color: PenColor };
 type CropRect = { x: number; y: number; w: number; h: number };
 
-const PEN: Record<PenColor, string> = { cyan: "#3ee0d4", red: "#ff5c5c" };
+const PEN: Record<PenColor, string> = { cyan: "#7dffe0", red: "#ff5c5c" };
+const ACCENT_MINT = "#7dffe0";
 const RENDER_SCALE = 2;
 
 function isPdf(att: MailAttachment): boolean {
@@ -41,6 +41,7 @@ export function DrawingViewer({
   onSaved,
   voiceCommand,
   voiceSeq = 0,
+  embedded = false,
 }: {
   attachment: MailAttachment;
   onClose: () => void;
@@ -48,6 +49,8 @@ export function DrawingViewer({
   onSaved?: (speak: string) => void;
   voiceCommand?: ViewerCommand | null;
   voiceSeq?: number;
+  /** Fills parent container instead of full-screen HUD overlay. */
+  embedded?: boolean;
 }) {
   const [mode, setMode] = useState<Mode>("pan");
   const [pen, setPen] = useState<PenColor>("cyan");
@@ -197,7 +200,7 @@ export function DrawingViewer({
     }
     const box = cropDraft || crop;
     if (box && box.w > 0 && box.h > 0) {
-      ctx.strokeStyle = "#3ee0d4";
+      ctx.strokeStyle = ACCENT_MINT;
       ctx.lineWidth = 2 * RENDER_SCALE;
       ctx.setLineDash([8 * RENDER_SCALE, 6 * RENDER_SCALE]);
       ctx.strokeRect(box.x, box.y, box.w, box.h);
@@ -343,36 +346,60 @@ export function DrawingViewer({
   const title = attachment.local_name || attachment.filename;
 
   return (
-    <div className="absolute inset-0 z-30 flex flex-col bg-black/70 backdrop-blur-sm">
-      <header className="hud-panel hud-accent-cyan flex shrink-0 items-center justify-between rounded-none border-x-0 border-t-0 px-6 py-3">
-        <div>
-          <p className="font-mono text-[11px] uppercase tracking-[0.25em] text-cyan/50">Drawing viewer</p>
-          <p className="font-display text-xl text-white">{title}</p>
-        </div>
+    <div
+      className={
+        embedded
+          ? "relative flex h-full min-h-0 flex-col bg-[#0a1218]"
+          : "absolute inset-0 z-30 flex flex-col bg-black/70 backdrop-blur-sm"
+      }
+    >
+      <header
+        className={[
+          "flex shrink-0 items-center border-b border-[color:var(--border)] bg-black/55 backdrop-blur-md",
+          embedded ? "justify-end gap-1.5 px-3 py-2" : "justify-between px-6 py-3",
+        ].join(" ")}
+      >
+        {!embedded ? (
+          <div>
+            <p className="font-mono text-[11px] uppercase tracking-[0.25em] text-[color:var(--accent)]/60">
+              Drawing viewer
+            </p>
+            <p className="font-display text-xl text-[color:var(--fg)]">{title}</p>
+          </div>
+        ) : (
+          <p className="mr-auto truncate font-mono text-[10px] uppercase tracking-[0.14em] text-[color:var(--muted)]/70">
+            {title}
+          </p>
+        )}
         <div className="flex flex-wrap items-center gap-2">
           {numPages > 1 ? (
-            <div className="flex items-center gap-2 text-sm text-white/60">
-              <HudButton variant="ghost" disabled={pageNum <= 1} onClick={() => setPageNum((p) => Math.max(1, p - 1))}>
+            <div className="flex items-center gap-2 text-sm text-[color:var(--muted)]">
+              <button type="button" className="orch-btn orch-btn-ghost" disabled={pageNum <= 1} onClick={() => setPageNum((p) => Math.max(1, p - 1))}>
                 Prev
-              </HudButton>
+              </button>
               <span className="font-mono text-xs">
                 {pageNum} / {numPages}
               </span>
-              <HudButton variant="ghost" disabled={pageNum >= numPages} onClick={() => setPageNum((p) => Math.min(numPages, p + 1))}>
+              <button type="button" className="orch-btn orch-btn-ghost" disabled={pageNum >= numPages} onClick={() => setPageNum((p) => Math.min(numPages, p + 1))}>
                 Next
-              </HudButton>
+              </button>
             </div>
           ) : null}
-          <HudButton variant="ghost" onClick={() => setZoom((z) => Math.min(4, z * 1.25))}>
+          <button type="button" className="orch-btn orch-btn-ghost" onClick={() => setZoom((z) => Math.min(4, z * 1.25))}>
             Zoom +
-          </HudButton>
-          <HudButton variant="ghost" onClick={() => setZoom((z) => Math.max(0.25, z / 1.25))}>
+          </button>
+          <button type="button" className="orch-btn orch-btn-ghost" onClick={() => setZoom((z) => Math.max(0.25, z / 1.25))}>
             Zoom −
-          </HudButton>
+          </button>
           {(["pan", "crop", "mark"] as Mode[]).map((m) => (
-            <HudButton key={m} variant={mode === m ? "primary" : "ghost"} className="capitalize" onClick={() => setMode(m)}>
+            <button
+              key={m}
+              type="button"
+              className={`orch-btn capitalize ${mode === m ? "orch-btn-primary" : "orch-btn-ghost"}`}
+              onClick={() => setMode(m)}
+            >
               {m}
-            </HudButton>
+            </button>
           ))}
           {mode === "mark" ? (
             <>
@@ -381,7 +408,7 @@ export function DrawingViewer({
                 onClick={() => setPen("cyan")}
                 className={`h-6 w-6 rounded-full border-2 ${pen === "cyan" ? "border-white" : "border-transparent"}`}
                 style={{ background: PEN.cyan }}
-                aria-label="Cyan pen"
+                aria-label="Mint pen"
               />
               <button
                 type="button"
@@ -392,12 +419,14 @@ export function DrawingViewer({
               />
             </>
           ) : null}
-          <HudButton variant="primary" disabled={saving || loading} onClick={() => void saveMarked()}>
+          <button type="button" className="orch-btn orch-btn-primary" disabled={saving || loading} onClick={() => void saveMarked()}>
             {saving ? "Saving…" : "Save marked"}
-          </HudButton>
-          <HudButton variant="ghost" onClick={onClose}>
-            Close
-          </HudButton>
+          </button>
+          {!embedded ? (
+            <button type="button" className="orch-btn orch-btn-ghost" onClick={onClose}>
+              Close
+            </button>
+          ) : null}
         </div>
       </header>
 
@@ -420,7 +449,10 @@ export function DrawingViewer({
           }}
         >
           <div className="relative inline-block">
-            <canvas ref={pageCanvasRef} className="block max-h-[75vh] w-auto bg-[#0a1218]" />
+            <canvas
+              ref={pageCanvasRef}
+              className={`block w-auto bg-[#0a1218] ${embedded ? "max-h-full max-w-full" : "max-h-[75vh]"}`}
+            />
             <canvas
               ref={markCanvasRef}
               className="pointer-events-none absolute left-0 top-0 h-full w-full"

@@ -2,6 +2,37 @@
 @tailwind components;
 @tailwind utilities;
 
+@property --bg {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: oklch(10% 0.005 240);
+}
+@property --surface {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: oklch(14% 0.008 240);
+}
+@property --fg {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: oklch(96% 0.004 240);
+}
+@property --muted {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: oklch(62% 0.008 240);
+}
+@property --border {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: oklch(22% 0.01 240);
+}
+@property --accent {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: oklch(74% 0.15 160);
+}
+
 :root {
   color-scheme: dark;
   --bg: oklch(10% 0.005 240);
@@ -35,6 +66,156 @@ body {
 .orch-root {
   background-color: var(--bg);
   color: var(--fg);
+  transition:
+    background-color 1.05s cubic-bezier(0.22, 1, 0.36, 1),
+    color 1.05s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.orch-root[data-workspace="monitor"] {
+  --bg: oklch(12% 0.022 55);
+  --surface: oklch(16% 0.028 52);
+  --fg: oklch(94% 0.018 75);
+  --muted: oklch(58% 0.04 62);
+  --border: oklch(24% 0.03 55);
+  --accent: oklch(72% 0.14 78);
+}
+
+.hud-presence {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  opacity: 0;
+  pointer-events: none;
+  isolation: isolate;
+}
+
+.hud-presence:not(.hud-presence-on) *,
+.hud-presence:not(.hud-presence-on) {
+  pointer-events: none !important;
+}
+
+/* Pause casual orb rings when presence is off-screen (Monitor/Engineering live). */
+.hud-presence[aria-hidden="true"] .orch-core,
+.hud-presence[aria-hidden="true"] .orch-core-halo,
+.hud-presence[aria-hidden="true"] .orch-core-nucleus,
+.hud-presence[aria-hidden="true"] .orch-ring {
+  animation: none !important;
+}
+
+.hud-presence-on {
+  opacity: 1;
+}
+
+.hud-chrome {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(10px);
+}
+
+.hud-chrome:not(.hud-chrome-on),
+.hud-chrome:not(.hud-chrome-on) * {
+  pointer-events: none !important;
+}
+
+.hud-chrome-on {
+  opacity: 1;
+  transform: none;
+}
+
+.hud-morph-ready .hud-presence {
+  transition: opacity 1.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.hud-morph-ready .hud-chrome {
+  transition:
+    opacity 0.85s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.85s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .orch-root,
+  .hud-presence,
+  .hud-chrome,
+  .hud-morph-ready .hud-presence,
+  .hud-morph-ready .hud-chrome {
+    transition: none !important;
+  }
+
+  .hud-chrome {
+    transform: none;
+  }
+
+  .orch-core,
+  .orch-core-halo,
+  .orch-core-nucleus,
+  .orch-ring,
+  .orch-activity-orb-live .orch-activity-orb-core,
+  .orch-activity-orb-live .orch-activity-orb-ring {
+    animation: none !important;
+  }
+}
+
+.orch-btn {
+  border-radius: 0.375rem;
+  border-width: 1px;
+  padding: 0.375rem 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: background-color var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+}
+
+.orch-btn:disabled {
+  pointer-events: none;
+  opacity: 0.4;
+}
+
+.orch-btn-ghost {
+  border-color: var(--border);
+  background: transparent;
+  color: var(--fg);
+}
+
+.orch-btn-ghost:hover {
+  border-color: var(--accent);
+  background: rgb(255 255 255 / 0.05);
+}
+
+.orch-btn-primary {
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: var(--accent);
+}
+
+.orch-btn-primary:hover {
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+}
+
+.agent-sun {
+  background:
+    radial-gradient(circle at 34% 30%, rgba(255, 214, 160, 0.55), transparent 46%),
+    radial-gradient(circle at 50% 55%, rgba(196, 120, 48, 0.42), rgba(28, 18, 12, 0.15) 72%);
+  box-shadow: 0 0 10px 1px rgba(212, 140, 64, 0.16);
+}
+
+.agent-sun-idle {
+  opacity: 0.42;
+}
+
+.agent-sun-waiting {
+  opacity: 0.62;
+  box-shadow: 0 0 12px 2px rgba(212, 140, 64, 0.22);
+}
+
+.agent-sun-active {
+  opacity: 0.88;
+  box-shadow: 0 0 14px 3px rgba(232, 160, 72, 0.28);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-sun-waiting,
+  .agent-sun-active {
+    animation: none !important;
+  }
 }
 
 .orch-vignette {

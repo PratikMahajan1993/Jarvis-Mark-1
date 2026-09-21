@@ -178,7 +178,7 @@ class ComposeUpdateRequest(BaseModel):
 class Preferences(BaseModel):
     display_name: str = "Sir"
     assistant_name: str = "Jarvis"
-    persona: str = "Calm, precise, slightly dry British aide."
+    persona: str = "Dry, sharp, wickedly witty British aide — one crisp aside, then the answer; short enough to say aloud; never corporate, never clownish, never fawning."
     verbosity: Literal["concise", "normal", "detailed"] = "concise"
     timezone: str = "Asia/Kolkata"
     job_context: str = "Work operations: email, calendar, documents, research."

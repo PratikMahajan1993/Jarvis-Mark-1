@@ -458,9 +458,12 @@ def _chat_prompt(prefs: dict[str, Any], session_id: str = "default") -> str:
             + "\n".join(lines)
             + "\n"
         )
-    return f"""You are {prefs.get('assistant_name', 'Jarvis')}, a present and slightly dry British aide.
+    from .casual_voice import CASUAL_PERSONA
+
+    persona = prefs.get("persona") or CASUAL_PERSONA
+    return f"""You are {prefs.get('assistant_name', 'Jarvis')}, a present British aide.
 Address the user as {prefs.get('display_name', 'Sir')}.
-Persona: {prefs.get('persona')}
+Persona: {persona}
 Verbosity: {prefs.get('verbosity', 'concise')}.
 They may put your name anywhere in the sentence. Answer in one or two spoken sentences.
 Be present. Do not mention tools, JSON, or that you are a model.
@@ -995,6 +998,45 @@ def _revise_pending_email(session_id: str, message: str, pending: dict[str, Any]
     )
 
 
+def _run_casual_gemini(message: str, session_id: str, prefs: dict[str, Any]) -> ChatResponse:
+    from .brain import health, provider
+    from .casual_voice import casual_system_prompt
+    from . import gemini_client
+    from .ollama_client import OllamaError
+
+    status = health()
+    offline = not bool(status.get("model_ready"))
+    system = casual_system_prompt(prefs)
+    messages: list[dict[str, Any]] = [{"role": "system", "content": system}]
+    for item in db.recent_messages(session_id, 6):
+        messages.append({"role": item["role"], "content": item["content"]})
+
+    speak = ""
+    try:
+        if provider() == "gemini" and not offline:
+            response = gemini_client.chat_casual(messages)
+            speak = str(response.get("content") or "").strip()
+        elif not offline:
+            response = ollama_chat(
+                messages,
+                tools=None,
+                timeout=45,
+                options={"temperature": 0.9, "num_predict": 120},
+            )
+            speak = str(response.get("content") or "").strip()
+        else:
+            raise OllamaError("model offline")
+    except OllamaError as exc:
+        db.add_audit(session_id, "casual_chat", str(exc)[:400], "error")
+        speak = _social_reply(message, prefs) or "Yes?"
+
+    speak = re.sub(r"<think>.*?</think>", "", speak, flags=re.S).strip()
+    speak = speak[:320] or _social_reply(message, prefs) or "Yes?"
+    db.add_message(session_id, "assistant", speak)
+    db.add_audit(session_id, "casual_gemini", speak[:400], "ok")
+    return _chat_response(session_id, speak=speak, offline=offline)
+
+
 def run_agent(message: str, session_id: str = "default", route=None) -> ChatResponse:
     from .conversations import brain_lock
 
@@ -1023,6 +1065,10 @@ def _run_agent(message: str, session_id: str = "default", route=None) -> ChatRes
 
     # Thin semantic router: tool_ops → Hermes; vision → drawing/chat; casual → chat brain
     route_intent = getattr(route, "intent", None) if route is not None else None
+    from .intent import is_rfq_definition
+
+    if is_rfq_definition(message):
+        route_intent = "casual_chat"
 
     intent = classify(message)
     if route_intent == "casual_chat":
@@ -1060,20 +1106,27 @@ def _run_agent(message: str, session_id: str = "default", route=None) -> ChatRes
         db.add_message(session_id, "assistant", result.speak or "")
         return result
 
-    # Router tool_ops → Hermes first (when warm). Pending/compose already handled above.
+    if route_intent == "casual_chat" and intent.kind == "chat" and not is_drawing_session(session_id):
+        return _run_casual_gemini(message, session_id, prefs)
+
+    # Hermes-first when gateway is warm; Gemini legacy only on miss/unavailable.
     use_hermes = app_settings.hermes_enabled and hermes_available()
-    if route_intent == "tool_ops" and use_hermes:
+    router_casual = route_intent == "casual_chat"
+
+    def _hermes_reply(*, force_casual: bool | None = None) -> ChatResponse | None:
+        if not use_hermes:
+            return None
+        casual_flag = force_casual if force_casual is not None else (True if router_casual else None)
         try:
-            result = run_hermes_turn(message, session_id)
+            result = run_hermes_turn(message, session_id, casual=casual_flag)
             db.add_message(session_id, "assistant", result.speak or result.reply or "")
             db.add_audit(session_id, "hermes", (result.speak or "")[:400], "ok")
             return result
         except Exception as exc:
             db.add_audit(session_id, "hermes", str(exc)[:400], "error")
-            # Fall through to local / legacy
+            return None
 
-    # Local mail/calendar/briefing: skip Hermes when snapshot-ready (unless already tried above)
-    from .snapshot import wants_fresh, refresh as snapshot_refresh
+    from .snapshot import refresh as snapshot_refresh
 
     local_fast = intent.kind in {
         "mail_read",
@@ -1084,32 +1137,41 @@ def _run_agent(message: str, session_id: str = "default", route=None) -> ChatRes
         "briefing",
     }
     mail_pref_ok = (not intent.kind.startswith("mail_")) or prefs.get("email_enabled", True)
-    if local_fast and mail_pref_ok and route_intent != "tool_ops":
+
+    def _local_legacy() -> ChatResponse:
         if wants_fresh(message):
             try:
                 snapshot_refresh(force=True)
             except Exception:
                 pass
         return _run_agent_legacy(message, session_id, prefs=prefs, intent=intent, heard=heard)
+
+    # Snapshot-warm read paths: local-first even when router says tool_ops (A14).
+    if local_fast and mail_pref_ok and _skip_brain(intent.kind, message):
+        return _local_legacy()
+
+    # Shop sheet reads/writes: deterministic tools own OEE — Hermes must not define it from memory.
+    if intent.kind in {"shop_read", "shop_write", "shop_bind", "shop_create"}:
+        return _run_agent_legacy(message, session_id, prefs=prefs, intent=intent, heard=heard)
+
+    if route_intent == "tool_ops":
+        hit = _hermes_reply(force_casual=False)
+        if hit is not None:
+            return hit
+
+    # Local mail/calendar/briefing: skip Hermes when snapshot-ready (unless already tried above)
+    if local_fast and mail_pref_ok and route_intent != "tool_ops":
+        return _local_legacy()
 
     # After tool_ops Hermes miss, still allow local mail snapshot as soft fallback
     if local_fast and mail_pref_ok:
-        if wants_fresh(message):
-            try:
-                snapshot_refresh(force=True)
-            except Exception:
-                pass
-        return _run_agent_legacy(message, session_id, prefs=prefs, intent=intent, heard=heard)
+        return _local_legacy()
 
-    # Prefer Hermes for other turns. On timeout/error → Gemini legacy.
-    if use_hermes and route_intent != "tool_ops":
-        try:
-            result = run_hermes_turn(message, session_id)
-            db.add_message(session_id, "assistant", result.speak or result.reply or "")
-            db.add_audit(session_id, "hermes", (result.speak or "")[:400], "ok")
-            return result
-        except Exception as exc:
-            db.add_audit(session_id, "hermes", str(exc)[:400], "error")
+    # Casual chat, vision, and other non-snapshot turns → Hermes; Gemini only if Hermes misses.
+    if route_intent != "tool_ops":
+        hit = _hermes_reply(force_casual=True if router_casual else None)
+        if hit is not None:
+            return hit
 
     # Soft fallback / Hermes-down: definitional RFQ must be chat, never reason_rfq.
     if is_rfq_definition(message):

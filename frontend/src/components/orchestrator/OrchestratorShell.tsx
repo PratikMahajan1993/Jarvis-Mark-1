@@ -2,15 +2,16 @@
 
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { api } from "@/lib/api";
+import { liveLog } from "@/lib/liveLog";
 import type { ChatResponse, Conversation, PendingAction, Preferences, Scene } from "@/lib/types";
 import {
   DEFAULT_AGENTS,
   agentCode,
   agentForPending,
   agentIdFromTarget,
+  agentsFromApi,
   formatClock,
   type ActivityItem,
-  type AgentId,
   type AgentNode,
   type OrchestratorMode,
 } from "@/lib/orchestrator";
@@ -41,6 +42,8 @@ import { ConversationRail, type RailConversation } from "./ConversationRail";
 import { DraftComposeModal } from "./DraftComposeModal";
 import { HitlModal } from "./HitlModal";
 import { JarvisCore } from "./JarvisCore";
+import { EngineeringDesk } from "./engineering/EngineeringDesk";
+import { MonitorDesk } from "./monitor/MonitorDesk";
 import { Orchestra } from "./Orchestra";
 import { SuggestedTasksPanel, type SuggestedTask } from "./SuggestedTasksPanel";
 import {
@@ -51,6 +54,20 @@ import {
 } from "./ConnectGoogleModal";
 import { PreferencesPanel } from "./PreferencesPanel";
 import { WeatherCard } from "./WeatherCard";
+import {
+  chromeOn,
+  initialWorkspaceFromBootstrap,
+  loadStoredWorkspace,
+  loadStoredWorkspacePinned,
+  persistWorkspace,
+  persistWorkspacePinned,
+  presenceOn,
+  talkJumpWorkspace,
+  useWorkspaceLayers,
+  type HudWorkspace,
+} from "./hudWorkspace";
+import { HudChrome, HudPresence } from "./hudMorph";
+import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 
 const AMBIENT_SESSION = "default";
 const FOCUS_STORAGE_KEY = "jarvis.activeConversationId";
@@ -103,6 +120,9 @@ function mapDeskItems(
 
 function VoiceLine({ text, dimmed }: { text: string; dimmed?: boolean }) {
   const compact = text.length > 220 || text.split("\n").length > 4;
+  // BlurText animates each word as inline-block; on long/multi-line replies that
+  // breaks layout into scattered floating tokens — use plain text instead.
+  const animate = !dimmed && !compact;
   return (
     <h1
       className={[
@@ -113,16 +133,16 @@ function VoiceLine({ text, dimmed }: { text: string; dimmed?: boolean }) {
         .filter(Boolean)
         .join(" ")}
     >
-      {dimmed ? (
-        text
-      ) : (
+      {animate ? (
         <BlurText
           key={text}
           text={text}
-          delay={compact ? 40 : 70}
+          delay={70}
           stepDuration={0.24}
           className="inline"
         />
+      ) : (
+        text
       )}
     </h1>
   );
@@ -158,6 +178,7 @@ export function OrchestratorShell() {
   const [activeSession, setActiveSession] = useState(AMBIENT_SESSION);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [focusTitle, setFocusTitle] = useState("Everyday desk");
+  const [conversationFocus, setConversationFocus] = useState<Record<string, unknown>>({});
   const [prefs, setPrefs] = useState<Preferences | null>(null);
   const [error, setError] = useState("");
   const [suggested, setSuggested] = useState<SuggestedTask[]>([]);
@@ -166,6 +187,8 @@ export function OrchestratorShell() {
   const [prefsOpen, setPrefsOpen] = useState(false);
   const [googleStatus, setGoogleStatus] = useState<GoogleConnectStatus | null>(null);
   const [googleConnectOpen, setGoogleConnectOpen] = useState(false);
+  const [workspace, setWorkspaceState] = useState<HudWorkspace>("monitor");
+  const [workspacePinned, setWorkspacePinned] = useState(false);
 
   // Mirrors `state` synchronously (a render behind `state` itself) so
   // imperative callbacks can guard re-entrancy (e.g. a second send() firing
@@ -182,12 +205,67 @@ export function OrchestratorShell() {
   const confirmListenRef = useRef<(action: PendingAction) => void>(() => undefined);
   const sendRef = useRef<(message: string) => Promise<void>>(async () => undefined);
   const googlePromptSpokenRef = useRef(false);
+  const workspaceRef = useRef<HudWorkspace>("monitor");
+  const workspacePinnedRef = useRef(false);
+
+  const setWorkspaceExplicit = useCallback(
+    (next: HudWorkspace, reason?: "switcher" | "pin" | "auto-focus" | "talk-jump" | "ambient") => {
+      const from = workspaceRef.current;
+      if (from !== next && reason) {
+        liveLog(
+          "workspace",
+          { from, to: next, pinned: workspacePinnedRef.current, reason },
+          { sessionId: sessionRef.current },
+        );
+      }
+      workspaceRef.current = next;
+      setWorkspaceState(next);
+      persistWorkspace(next);
+    },
+    [],
+  );
+
+  const applyFocusWorkspace = useCallback(
+    (category: string) => {
+      const cat = (category || "").toLowerCase();
+      if (cat === "workflow" || cat === "drawing") {
+        setWorkspaceExplicit("engineering", "auto-focus");
+        return;
+      }
+      if (cat === "discussion" && !workspacePinnedRef.current) {
+        setWorkspaceExplicit("casual", "auto-focus");
+      }
+    },
+    [setWorkspaceExplicit],
+  );
+
+  const toggleWorkspacePin = useCallback(() => {
+    setWorkspacePinned((prev) => {
+      const next = !prev;
+      workspacePinnedRef.current = next;
+      persistWorkspacePinned(next);
+      liveLog(
+        "workspace",
+        { from: workspaceRef.current, to: workspaceRef.current, pinned: next, reason: "pin" },
+        { sessionId: sessionRef.current },
+      );
+      return next;
+    });
+  }, []);
 
   /** Applies a transition. Returns the new state if it took effect, or null
    * if the event was refused (no-op) — e.g. LISTEN_START while SPEAKING. */
   const applyEvent = useCallback((event: JarvisEvent) => {
-    const next = jarvisReducer(stateRef.current, event);
-    if (next === stateRef.current) return null;
+    const prev = stateRef.current;
+    const next = jarvisReducer(prev, event);
+    if (next === prev) return null;
+    if (prev.mode !== next.mode) {
+      liveLog(
+        "fsm",
+        { event: event.type, from_mode: prev.mode, to_mode: next.mode, refused: false },
+        { sessionId: sessionRef.current },
+      );
+    }
     stateRef.current = next;
     dispatch(event);
     return next;
@@ -221,7 +299,7 @@ export function OrchestratorShell() {
     );
   }, []);
 
-  const setAgentStates = useCallback((ids: AgentId[], state: AgentNode["state"]) => {
+  const setAgentStates = useCallback((ids: string[], state: AgentNode["state"]) => {
     setAgents((prev) =>
       prev.map((agent) => ({
         ...agent,
@@ -279,6 +357,7 @@ export function OrchestratorShell() {
 
   const loadSessionSurface = useCallback(
     async (sessionId: string, opts?: { announce?: boolean }) => {
+      void api.hermesWarm(sessionId).catch(() => null);
       const [waiting, session] = await Promise.all([
         api.pending(sessionId).catch(() => ({ items: [] as PendingAction[] })),
         api.session(sessionId).catch(() => null),
@@ -313,6 +392,10 @@ export function OrchestratorShell() {
     setActiveSession(AMBIENT_SESSION);
     setActiveConversationId(null);
     setFocusTitle("Everyday desk");
+    setConversationFocus({});
+    if (!workspacePinnedRef.current) {
+      setWorkspaceExplicit("monitor", "ambient");
+    }
     try {
       localStorage.removeItem(FOCUS_STORAGE_KEY);
     } catch {
@@ -321,15 +404,17 @@ export function OrchestratorShell() {
     await refreshDesk(null);
     await loadSessionSurface(AMBIENT_SESSION, { announce: true });
     showVoice("Back on the everyday desk.");
-  }, [loadSessionSurface, refreshDesk, showVoice]);
+  }, [loadSessionSurface, refreshDesk, setWorkspaceExplicit, showVoice]);
 
   const focusConversation = useCallback(
     async (row: Conversation, opts?: { announce?: boolean }) => {
+      applyFocusWorkspace(row.category);
       const sessionId = row.session_id || AMBIENT_SESSION;
       sessionRef.current = sessionId;
       setActiveSession(sessionId);
       setActiveConversationId(row.id);
       setFocusTitle(row.title || row.kind_label || "Conversation");
+      setConversationFocus(row.focus || {});
       try {
         localStorage.setItem(FOCUS_STORAGE_KEY, row.id);
       } catch {
@@ -343,7 +428,7 @@ export function OrchestratorShell() {
         else showVoice(IDLE_VOICE);
       }
     },
-    [loadSessionSurface, refreshDesk, showVoice],
+    [applyFocusWorkspace, loadSessionSurface, refreshDesk, showVoice],
   );
 
   const applyUiAction = useCallback(
@@ -393,7 +478,7 @@ export function OrchestratorShell() {
       const nextScene = sceneHasBoardContent(result.scene) ? result.scene! : EMPTY_SCENE;
       const boardOwnsHud =
         sceneHasBoardContent(nextScene) || nextAction?.kind === "email_compose";
-      if (boardOwnsHud) clearVoice();
+      if (boardOwnsHud && workspaceRef.current !== "engineering") clearVoice();
       else showVoice(display);
       setScene(nextScene);
 
@@ -410,12 +495,7 @@ export function OrchestratorShell() {
       }
 
       if (result.agents?.length) {
-        setAgents((prev) =>
-          prev.map((agent) => {
-            const match = result.agents!.find((row) => row.id === agent.id);
-            return match ? { ...agent, state: (match.state as AgentNode["state"]) || "" } : agent;
-          }),
-        );
+        setAgents(agentsFromApi(result.agents));
       } else if (result.target_agent) {
         const agentId = agentIdFromTarget(result.target_agent);
         if (agentId) {
@@ -459,12 +539,24 @@ export function OrchestratorShell() {
           if (settled === null) return;
           if (nextAction) {
             applyEvent({ type: "AWAIT_HITL", action: nextAction });
+            liveLog(
+              "hitl",
+              { phase: "shown", action_kind: nextAction.kind, action_id: nextAction.id },
+              { sessionId: sessionRef.current },
+            );
             confirmListenRef.current(nextAction);
           }
         });
       } else if (nextAction) {
         const settled = applyEvent({ type: "AWAIT_HITL", action: nextAction });
-        if (settled) confirmListenRef.current(nextAction);
+        if (settled) {
+          liveLog(
+            "hitl",
+            { phase: "shown", action_kind: nextAction.kind, action_id: nextAction.id },
+            { sessionId: sessionRef.current },
+          );
+          confirmListenRef.current(nextAction);
+        }
       } else {
         applyEvent({ type: "RESET" });
       }
@@ -481,6 +573,11 @@ export function OrchestratorShell() {
     stopListening();
     const started = applyEvent({ type: "HITL_LISTEN_START" });
     if (!started) return;
+    liveLog(
+      "hitl",
+      { phase: "listen-start", action_kind: action.kind, action_id: action.id },
+      { sessionId: sessionRef.current },
+    );
     void startListening({
       onFinal: (text) => {
         if (stateRef.current.mode !== "AWAITING_HITL" || stateRef.current.action.id !== action.id) return;
@@ -497,8 +594,22 @@ export function OrchestratorShell() {
           void sendRef.current(text);
         }
       },
-      onEnd: () => applyEvent({ type: "HITL_LISTEN_STOP" }),
-      onError: () => applyEvent({ type: "HITL_LISTEN_STOP" }),
+      onEnd: () => {
+        applyEvent({ type: "HITL_LISTEN_STOP" });
+        liveLog(
+          "hitl",
+          { phase: "listen-stop", action_kind: action.kind, action_id: action.id },
+          { sessionId: sessionRef.current },
+        );
+      },
+      onError: () => {
+        applyEvent({ type: "HITL_LISTEN_STOP" });
+        liveLog(
+          "hitl",
+          { phase: "listen-stop", action_kind: action.kind, action_id: action.id },
+          { sessionId: sessionRef.current },
+        );
+      },
     });
   }, [applyEvent]);
 
@@ -515,6 +626,15 @@ export function OrchestratorShell() {
         approved ? { type: "DECIDE_APPROVE", actionId: id } : { type: "DECIDE_REJECT", actionId: id },
       );
       if (!next) return;
+      liveLog(
+        "hitl",
+        {
+          phase: approved ? "authorize" : "reject",
+          action_kind: action.kind,
+          action_id: id,
+        },
+        { sessionId: sessionRef.current },
+      );
 
       const syncFields = fields || (action.kind === "email_compose" ? composeFieldsRef.current : undefined);
       if (approved) {
@@ -538,7 +658,9 @@ export function OrchestratorShell() {
         } catch {
           applyEvent({ type: "RESET" });
         }
-        setError(err instanceof Error ? err.message : "Confirm failed");
+        const msg = err instanceof Error ? err.message : "Confirm failed";
+        setError(msg);
+        liveLog("error", { message: msg }, { sessionId: sessionRef.current });
         pushLog("SYS", "Confirm failed.");
         showVoice("That did not go through. Awaiting instruction.");
       }
@@ -569,6 +691,18 @@ export function OrchestratorShell() {
         return;
       }
 
+      const jump = talkJumpWorkspace(text, workspaceRef.current);
+      if (jump) setWorkspaceExplicit(jump, "talk-jump");
+      liveLog(
+        "send",
+        {
+          text: text.length > 500 ? `${text.slice(0, 500)}…` : text,
+          workspace: workspaceRef.current,
+          talk_jump: jump ?? null,
+        },
+        { sessionId: sessionRef.current },
+      );
+
       const next = applyEvent({ type: "SEND", text });
       if (!next) return;
 
@@ -587,12 +721,13 @@ export function OrchestratorShell() {
         clearAgents();
         const msg = err instanceof Error ? err.message : "Request failed";
         setError(msg);
+        liveLog("error", { message: msg }, { sessionId: sessionRef.current });
         showVoice("Connection fault. Awaiting instruction.");
         pushLog("SYS", "Request failed.");
         applyEvent({ type: "RESET" });
       }
     },
-    [activeConversationId, applyEvent, applyResponse, clearAgents, decide, pushLog, refreshDesk, showVoice],
+    [activeConversationId, applyEvent, applyResponse, clearAgents, decide, pushLog, refreshDesk, setWorkspaceExplicit, showVoice],
   );
 
   useEffect(() => {
@@ -672,6 +807,7 @@ export function OrchestratorShell() {
           api.conversations(true).catch(() => ({ items: [] as Conversation[] })),
           api.suggestedTasks(false, AMBIENT_SESSION).catch(() => ({ items: [], weather: undefined })),
           api.googleStatus().catch(() => null),
+          api.hermesWarm(AMBIENT_SESSION).catch(() => null),
         ]);
         if (cancelled) return;
         if (preferences) {
@@ -689,12 +825,30 @@ export function OrchestratorShell() {
         const rows = deskRows.items || [];
         const restored = storedId ? rows.find((row) => row.id === storedId) : null;
         const focusId = restored?.id || null;
+        const pinned = loadStoredWorkspacePinned();
+        const stored = loadStoredWorkspace();
+        workspacePinnedRef.current = pinned;
+        setWorkspacePinned(pinned);
+        const initialWs = initialWorkspaceFromBootstrap({
+          restoredCategory: restored?.category,
+          pinned,
+          stored,
+        });
+        setWorkspaceState(initialWs);
+        workspaceRef.current = initialWs;
+        persistWorkspace(initialWs);
+        liveLog(
+          "hud_boot",
+          { workspace: initialWs, pinned, session: sessionRef.current },
+          { sessionId: sessionRef.current },
+        );
         setDesk(mapDeskItems(rows, focusId));
         if (restored) {
           sessionRef.current = restored.session_id || AMBIENT_SESSION;
           setActiveSession(sessionRef.current);
           setActiveConversationId(restored.id);
           setFocusTitle(restored.title || "Conversation");
+          setConversationFocus(restored.focus || {});
           void api.patchConversation(restored.id, { minimized: false }).catch(() => null);
           await loadSessionSurface(sessionRef.current, { announce: !skipAmbientAnnounce });
         } else {
@@ -780,6 +934,7 @@ export function OrchestratorShell() {
   const startNewDiscussion = useCallback(async () => {
     if (isBusy(stateRef.current)) return;
     try {
+      setWorkspaceExplicit("casual", "auto-focus");
       if (desk.length >= MAX_OPEN_CONVERSATIONS) {
         pushLog("SYS", `Max ${MAX_OPEN_CONVERSATIONS} open notes — oldest will be parked.`);
       }
@@ -790,12 +945,13 @@ export function OrchestratorShell() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not open discussion");
     }
-  }, [desk.length, focusConversation, pushLog, refreshDesk]);
+  }, [desk.length, focusConversation, pushLog, refreshDesk, setWorkspaceExplicit]);
 
   const openWorkflowFromTask = useCallback(
     async (task: SuggestedTask) => {
       if (isBusy(stateRef.current)) return;
       try {
+        setWorkspaceExplicit("engineering", "auto-focus");
         const resumeKey = `task:${task.id}`;
         const title =
           task.kind === "rfq"
@@ -821,15 +977,74 @@ export function OrchestratorShell() {
         setError(err instanceof Error ? err.message : "Could not open job");
       }
     },
-    [focusConversation, pushLog, send],
+    [focusConversation, pushLog, send, setWorkspaceExplicit],
   );
 
+  const layers = useWorkspaceLayers(workspace);
+  const monitorTheme = layers.theme === "monitor";
+  const prevMorphRef = useRef({ theme: layers.theme, chrome: layers.chrome });
+
+  useEffect(() => {
+    const prev = prevMorphRef.current;
+    if (prev.theme !== layers.theme) {
+      liveLog(
+        "morph",
+        { layer: "theme", from: prev.theme, to: layers.theme },
+        { sessionId: sessionRef.current },
+      );
+      prev.theme = layers.theme;
+    }
+    if (prev.chrome !== layers.chrome) {
+      liveLog(
+        "morph",
+        { layer: "chrome", from: prev.chrome, to: layers.chrome },
+        { sessionId: sessionRef.current },
+      );
+      prev.chrome = layers.chrome;
+    }
+  }, [layers.theme, layers.chrome]);
+
   return (
-    <ClickSpark className="orch-root relative flex h-screen flex-col overflow-hidden" sparkColor="#7dffe0">
+    <ClickSpark
+      className={[
+        "orch-root relative flex h-screen flex-col overflow-hidden",
+        layers.morphReady ? "hud-morph-ready" : "",
+      ].join(" ")}
+      sparkColor={monitorTheme ? "#FF6F37" : "#7dffe0"}
+      data-workspace={layers.theme}
+    >
       <div className="orch-vignette" />
-      <JarvisCore mode={mode} />
+      <HudPresence id="monitor" layers={layers} keepMounted>
+        <MonitorDesk
+          mode={mode}
+          agents={agents}
+          activity={activity}
+          orbitOn={chromeOn("monitor", layers)}
+        />
+      </HudPresence>
+      <HudPresence id="engineering" layers={layers}>
+        <EngineeringDesk
+          scene={scene}
+          focusTitle={focusTitle}
+          focus={conversationFocus}
+          voice={voice}
+          voiceVisible={voiceVisible}
+          dimmed={Boolean(hitlAction)}
+        />
+      </HudPresence>
+      <HudPresence id="casual" layers={layers} keepMounted>
+        <JarvisCore mode={mode} playing={presenceOn("casual", layers)} />
+      </HudPresence>
 
       <ActivityStream items={activity} />
+
+      <WorkspaceSwitcher
+        workspace={workspace}
+        pinned={workspacePinned}
+        dimmed={hitl}
+        onSelect={(ws) => setWorkspaceExplicit(ws, "switcher")}
+        onTogglePin={toggleWorkspacePin}
+      />
 
       <button
         type="button"
@@ -840,93 +1055,139 @@ export function OrchestratorShell() {
         Prefs
       </button>
 
-      <ConversationRail
-        items={desk}
-        openCount={desk.length}
-        maxOpen={MAX_OPEN_CONVERSATIONS}
-        ambientActive={activeSession === AMBIENT_SESSION && !activeConversationId}
-        dimmed={hitl}
-        hidden={dockHidden}
-        onSelectAmbient={() => void focusAmbient()}
-        onSelect={(id) => {
-          void (async () => {
-            const rows = await refreshDesk(activeConversationId);
-            const row = rows.find((item) => item.id === id);
-            if (row) await focusConversation(row, { announce: true });
-          })();
-        }}
-        onNewDiscussion={() => void startNewDiscussion()}
-      />
+      <HudChrome id="casual" layers={layers}>
+        <ConversationRail
+          items={desk}
+          openCount={desk.length}
+          maxOpen={MAX_OPEN_CONVERSATIONS}
+          ambientActive={activeSession === AMBIENT_SESSION && !activeConversationId}
+          dimmed={hitl}
+          hidden={dockHidden}
+          onSelectAmbient={() => void focusAmbient()}
+          onSelect={(id) => {
+            void (async () => {
+              const rows = await refreshDesk(activeConversationId);
+              const row = rows.find((item) => item.id === id);
+              if (row) await focusConversation(row, { announce: true });
+            })();
+          }}
+          onNewDiscussion={() => void startNewDiscussion()}
+        />
+      </HudChrome>
 
-      <main className="relative z-[1] flex flex-1 flex-col items-center justify-center px-16">
-        <div
-          className={[
-            "transition-all duration-[600ms]",
-            showCenterVoice
-              ? "translate-y-0 opacity-100"
-              : "pointer-events-none translate-y-2.5 opacity-0",
-          ].join(" ")}
-          aria-hidden={!showCenterVoice}
-        >
-          <VoiceLine text={voice} dimmed={Boolean(hitlAction)} />
-        </div>
-        {sceneHasBoardContent(scene) ? (
-          <SpotlightCard
-            className="orch-board mt-8 w-full max-w-[min(720px,92vw)] rounded-2xl border border-[color:var(--border)] bg-black/35 backdrop-blur-md"
-            bodyClassName="max-h-[38vh] overflow-y-auto p-4"
+      <HudChrome id="casual" layers={layers} className="relative z-[1] flex flex-1 flex-col">
+        <main className="pointer-events-auto flex flex-1 flex-col items-center justify-center px-16">
+          <div
+            className={[
+              "transition-all duration-[600ms]",
+              showCenterVoice
+                ? "translate-y-0 opacity-100"
+                : "pointer-events-none translate-y-2.5 opacity-0",
+            ].join(" ")}
+            aria-hidden={!showCenterVoice}
           >
-            <SceneBoard scene={scene} compact />
-          </SpotlightCard>
-        ) : null}
-        {sending ? (
-          <div className="orch-sending mt-10 flex flex-col items-center gap-3" aria-live="polite">
-            <div className="orch-sending-ring" />
-            <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--accent)]/80">
-              Transmitting…
-            </p>
+            <VoiceLine text={voice} dimmed={Boolean(hitlAction)} />
           </div>
-        ) : null}
-        {error ? (
-          <p className="mt-4 max-w-lg text-center font-mono text-xs text-red-300/80">{error}</p>
-        ) : null}
-        <p className="mt-6 font-mono text-[10px] uppercase tracking-[0.2em] text-[color:var(--muted)]/55">
-          <GradientText className="font-mono text-[10px] uppercase tracking-[0.2em]" animationSpeed={9}>
-            {prefs?.assistant_name || "Jarvis"}
-          </GradientText>
-          <span className="mx-2 text-[color:var(--muted)]/40">·</span>
-          {focusTitle}
+          {sceneHasBoardContent(scene) ? (
+            <SpotlightCard
+              className="orch-board mt-8 w-full max-w-[min(720px,92vw)] rounded-2xl border border-[color:var(--border)] bg-black/35 backdrop-blur-md"
+              bodyClassName="max-h-[38vh] overflow-y-auto p-4"
+            >
+              <SceneBoard scene={scene} compact />
+            </SpotlightCard>
+          ) : null}
+          {sending ? (
+            <div className="orch-sending mt-10 flex flex-col items-center gap-3" aria-live="polite">
+              <div className="orch-sending-ring" />
+              <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--accent)]/80">
+                Transmitting…
+              </p>
+            </div>
+          ) : null}
+          {error ? (
+            <p className="mt-4 max-w-lg text-center font-mono text-xs text-red-300/80">{error}</p>
+          ) : null}
+          <p className="mt-6 font-mono text-[10px] uppercase tracking-[0.2em] text-[color:var(--muted)]/55">
+            <GradientText className="font-mono text-[10px] uppercase tracking-[0.2em]" animationSpeed={9}>
+              {prefs?.assistant_name || "Jarvis"}
+            </GradientText>
+            <span className="mx-2 text-[color:var(--muted)]/40">·</span>
+            {focusTitle}
+          </p>
+        </main>
+      </HudChrome>
+      {layers.incoming !== "casual" && error ? (
+        <p className="pointer-events-auto absolute left-1/2 top-[3.5rem] z-[2] -translate-x-1/2 font-mono text-xs text-red-300/80">
+          {error}
         </p>
-      </main>
-
-      <Orchestra agents={agents} dimmed={hitl} />
-
-      {!hitl && (weatherLine || suggested.length) ? (
-        <aside className="pointer-events-auto absolute right-4 top-24 z-10 flex max-h-[calc(100vh-11rem)] w-[min(360px,92vw)] flex-col gap-3">
-          <WeatherCard line={weatherLine} />
-          <SuggestedTasksPanel
-            tasks={suggested}
-            onDismiss={(id) => {
-              void api.setSuggestedTaskStatus(id, "dismissed").catch(() => null);
-              setSuggested((prev) => prev.filter((t) => t.id !== id));
-            }}
-            onAction={(task, actionId) => {
-              if (task.kind === "rfq" && actionId === "engineering") {
-                void openWorkflowFromTask(task);
-              } else if (actionId === "calendar" || actionId === "meeting") {
-                void send(`Create a calendar event for: ${task.title}`);
-              } else if (actionId === "chat" || actionId === "review") {
-                void (async () => {
-                  const row = await api.startDiscussion(task.title.slice(0, 80));
-                  await focusConversation(row, { announce: true });
-                  void send(`Let's discuss: ${task.title}. ${task.detail || ""}`);
-                })();
-              } else {
-                void send(`${actionId} for suggested task: ${task.title}`);
-              }
-            }}
-          />
-        </aside>
       ) : null}
+
+      <HudChrome id="casual" layers={layers}>
+        <Orchestra agents={agents} dimmed={hitl} />
+      </HudChrome>
+
+      <HudChrome id="casual" layers={layers} className="pointer-events-none absolute right-4 top-24 z-10 flex max-h-[calc(100vh-11rem)] w-[min(360px,92vw)] flex-col gap-3">
+        {!hitl && (weatherLine || suggested.length) ? (
+          <aside className="pointer-events-auto flex max-h-[calc(100vh-11rem)] flex-col gap-3">
+            <WeatherCard line={weatherLine} />
+            <SuggestedTasksPanel
+              variant="suggested"
+              tasks={suggested}
+              onDismiss={(id) => {
+                void api.setSuggestedTaskStatus(id, "dismissed").catch(() => null);
+                setSuggested((prev) => prev.filter((t) => t.id !== id));
+              }}
+              onAction={(task, actionId) => {
+                if (task.kind === "rfq" && actionId === "engineering") {
+                  void openWorkflowFromTask(task);
+                } else if (actionId === "calendar" || actionId === "meeting") {
+                  void send(`Create a calendar event for: ${task.title}`);
+                } else if (actionId === "chat" || actionId === "review") {
+                  void (async () => {
+                    setWorkspaceExplicit("casual");
+                    const row = await api.startDiscussion(task.title.slice(0, 80));
+                    await focusConversation(row, { announce: true });
+                    void send(`Let's discuss: ${task.title}. ${task.detail || ""}`);
+                  })();
+                } else {
+                  void send(`${actionId} for suggested task: ${task.title}`);
+                }
+              }}
+            />
+          </aside>
+        ) : null}
+      </HudChrome>
+
+      <HudChrome id="monitor" layers={layers} className="pointer-events-none absolute right-4 top-24 z-10 flex max-h-[calc(100vh-11rem)] w-[min(360px,92vw)] flex-col gap-3">
+        {!hitl && suggested.length > 0 ? (
+          <aside className="pointer-events-auto flex max-h-[calc(100vh-11rem)] flex-col gap-3">
+            <SuggestedTasksPanel
+              variant="findings"
+              tasks={suggested}
+              onDismiss={(id) => {
+                void api.setSuggestedTaskStatus(id, "dismissed").catch(() => null);
+                setSuggested((prev) => prev.filter((t) => t.id !== id));
+              }}
+              onAction={(task, actionId) => {
+                if (task.kind === "rfq" && actionId === "engineering") {
+                  void openWorkflowFromTask(task);
+                } else if (actionId === "calendar" || actionId === "meeting") {
+                  void send(`Create a calendar event for: ${task.title}`);
+                } else if (actionId === "chat" || actionId === "review") {
+                  void (async () => {
+                    setWorkspaceExplicit("casual");
+                    const row = await api.startDiscussion(task.title.slice(0, 80));
+                    await focusConversation(row, { announce: true });
+                    void send(`Let's discuss: ${task.title}. ${task.detail || ""}`);
+                  })();
+                } else {
+                  void send(`${actionId} for suggested task: ${task.title}`);
+                }
+              }}
+            />
+          </aside>
+        ) : null}
+      </HudChrome>
 
       <CommandBaton
         value={compose}

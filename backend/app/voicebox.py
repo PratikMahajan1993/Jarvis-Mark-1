@@ -22,8 +22,23 @@ _STATUS_RE = re.compile(r'"status"\s*:\s*"([^"]+)"')
 _profile_cache: dict[str, dict[str, str]] = {}
 _audio_mem: dict[str, bytes] = {}
 _audio_lock = threading.Lock()
+_profile_ensure_lock = threading.Lock()
 _prefetch_inflight: set[str] = set()
 _MEM_LIMIT = 48
+
+# Jarvis default voice name → Kokoro preset when Voicebox has no cloned profiles yet.
+_PRESET_VOICE_BY_NAME: dict[str, tuple[str, str]] = {
+    "mark": ("kokoro", "bm_george"),
+    "george": ("kokoro", "bm_george"),
+    "daniel": ("kokoro", "bm_daniel"),
+    "adam": ("kokoro", "am_adam"),
+    "liam": ("kokoro", "am_liam"),
+}
+_DEFAULT_PRESET: tuple[str, str] = ("kokoro", "bm_george")
+
+
+class VoiceboxTtsError(RuntimeError):
+    """Voicebox could not produce audio (HUD should fall back to browser TTS)."""
 
 
 def voicebox_base() -> str:
@@ -41,11 +56,36 @@ def voicebox_reachable(timeout: float = 1.5) -> bool:
         return False
 
 
+def _named_profile_exists(client: httpx.Client, profile: str) -> bool:
+    name = (profile or "").strip() or "Mark"
+    for row in _profiles(client):
+        row_name = str(row.get("name") or "").strip()
+        row_id = str(row.get("id") or row.get("profile_id") or "").strip()
+        if row_id and row_name.lower() == name.lower():
+            return True
+    cached = _profile_cache.get(name.lower())
+    return bool(cached and cached.get("id"))
+
+
 def status_payload() -> dict[str, Any]:
     up = voicebox_reachable()
+    profile_ready = False
+    profile_count = 0
+    if up and settings.voicebox_enabled:
+        try:
+            with httpx.Client(timeout=2.0) as client:
+                rows = _profiles(client)
+                profile_count = len(rows)
+                profile_ready = profile_count > 0 and _named_profile_exists(
+                    client, settings.voicebox_profile or "Mark"
+                )
+        except Exception:
+            profile_ready = False
     return {
         "enabled": bool(settings.voicebox_enabled),
         "available": up,
+        "profile_ready": profile_ready,
+        "profile_count": profile_count,
         "url": voicebox_base(),
         "profile": settings.voicebox_profile or "Mark",
         "cached_clips": len(_audio_mem),
@@ -82,6 +122,39 @@ def _profiles(client: httpx.Client) -> list[dict[str, Any]]:
     return []
 
 
+def _preset_for_name(name: str) -> tuple[str, str]:
+    key = (name or "").strip().lower() or "mark"
+    return _PRESET_VOICE_BY_NAME.get(key, _DEFAULT_PRESET)
+
+
+def _ensure_preset_profile(client: httpx.Client, name: str) -> dict[str, Any]:
+    """Create a Kokoro preset profile when Voicebox returns an empty /profiles list."""
+    voice_name = (name or "").strip() or "Mark"
+    engine, voice_id = _preset_for_name(voice_name)
+    body = {
+        "name": voice_name,
+        "voice_type": "preset",
+        "preset_engine": engine,
+        "preset_voice_id": voice_id,
+        "default_engine": engine,
+        "language": "en",
+    }
+    response = client.post(f"{voicebox_base()}/profiles", json=body)
+    if response.status_code >= 400:
+        raise VoiceboxTtsError(
+            f"Voicebox profile create failed ({response.status_code}): {response.text[:240]}"
+        )
+    row = response.json() if response.content else {}
+    if not isinstance(row, dict):
+        raise VoiceboxTtsError("Voicebox profile create returned invalid payload")
+    row_id = str(row.get("id") or row.get("profile_id") or "").strip()
+    if not row_id:
+        raise VoiceboxTtsError(f"Voicebox profile missing id after create: {voice_name}")
+    eng = str(row.get("default_engine") or row.get("preset_engine") or engine).strip()
+    _profile_cache[voice_name.lower()] = {"id": row_id, "engine": eng}
+    return row
+
+
 def resolve_profile(client: httpx.Client, profile: str) -> dict[str, Any]:
     name = (profile or "").strip() or "Mark"
     cached = _profile_cache.get(name.lower())
@@ -107,7 +180,24 @@ def resolve_profile(client: httpx.Client, profile: str) -> dict[str, Any]:
                 chosen = row
                 break
     if not chosen:
-        raise RuntimeError(f"Voicebox profile not found: {name}")
+        with _profile_ensure_lock:
+            rows = _profiles(client)
+            for row in rows:
+                row_name = str(row.get("name") or "").strip()
+                row_id = str(row.get("id") or row.get("profile_id") or "").strip()
+                if row_id and row_name.lower() == name.lower():
+                    chosen = row
+                    break
+            if not chosen and rows:
+                for row in rows:
+                    row_id = str(row.get("id") or row.get("profile_id") or "").strip()
+                    if row_id:
+                        chosen = row
+                        break
+            if not chosen:
+                chosen = _ensure_preset_profile(client, name)
+    if not chosen:
+        raise VoiceboxTtsError(f"Voicebox profile not found: {name}")
     row_id = str(chosen.get("id") or chosen.get("profile_id") or "").strip()
     engine = str(chosen.get("default_engine") or chosen.get("preset_engine") or "").strip()
     if row_id:
@@ -172,9 +262,9 @@ def synthesize(
     """
     line = (text or "").strip()
     if not line:
-        raise RuntimeError("Empty speech text")
+        raise VoiceboxTtsError("Empty speech text")
     if not settings.voicebox_enabled:
-        raise RuntimeError("Voicebox disabled")
+        raise VoiceboxTtsError("Voicebox disabled")
 
     voice = (profile or settings.voicebox_profile or "Mark").strip() or "Mark"
     lang = language or "en"
@@ -190,7 +280,7 @@ def synthesize(
         profile_row = resolve_profile(client, voice)
         profile_id = str(profile_row.get("id") or profile_row.get("profile_id") or "").strip()
         if not profile_id:
-            raise RuntimeError(f"Voicebox profile missing id: {voice}")
+            raise VoiceboxTtsError(f"Voicebox profile missing id: {voice}")
         engine = (
             str(profile_row.get("default_engine") or profile_row.get("preset_engine") or "").strip()
             or None
@@ -205,11 +295,13 @@ def synthesize(
             body["engine"] = engine
         started = client.post(f"{base}/generate", json=body)
         if started.status_code >= 400:
-            raise RuntimeError(f"Voicebox generate failed ({started.status_code}): {started.text[:240]}")
+            raise VoiceboxTtsError(
+                f"Voicebox generate failed ({started.status_code}): {started.text[:240]}"
+            )
         payload = started.json() if started.content else {}
         generation_id = str(payload.get("id") or "").strip()
         if not generation_id:
-            raise RuntimeError("Voicebox did not return a generation id")
+            raise VoiceboxTtsError("Voicebox did not return a generation id")
 
         if payload.get("audio_path") or str(payload.get("status") or "").lower() in {
             "completed",
@@ -229,14 +321,14 @@ def synthesize(
             if state in {"completed", "complete", "done", "ready"}:
                 break
             if state in {"failed", "error", "cancelled", "canceled"}:
-                raise RuntimeError(f"Voicebox generation {state}")
+                raise VoiceboxTtsError(f"Voicebox generation {state}")
             time.sleep(0.05)
         else:
-            raise RuntimeError("Voicebox generation timed out")
+            raise VoiceboxTtsError("Voicebox generation timed out")
 
         audio = client.get(f"{base}/audio/{generation_id}")
         if audio.status_code >= 400 or not audio.content:
-            raise RuntimeError(f"Voicebox audio failed ({audio.status_code})")
+            raise VoiceboxTtsError(f"Voicebox audio failed ({audio.status_code})")
         _cache_put(key, audio.content)
         return audio.content
 

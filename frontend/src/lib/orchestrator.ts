@@ -1,10 +1,10 @@
 import type { PendingAction } from "./types";
 
-export type AgentId = "research" | "sec" | "data" | "ops";
+export type AgentId = string;
 export type AgentNodeState = "" | "active" | "waiting";
 
 export type AgentNode = {
-  id: AgentId;
+  id: string;
   code: string;
   label: string;
   state: AgentNodeState;
@@ -49,20 +49,23 @@ export function agentCode(id: AgentId): string {
   return DEFAULT_AGENTS.find((a) => a.id === id)?.code || "SYS";
 }
 
-/** Map backend ``target_agent`` orchestra code → AgentId. */
+/** Map backend ``target_agent`` orchestra code → agent id. */
 export function agentIdFromTarget(code: string | null | undefined): AgentId | null {
-  switch ((code || "").trim().toUpperCase()) {
-    case "RES.01":
-      return "research";
-    case "SEC.02":
-      return "sec";
-    case "DAT.03":
-      return "data";
-    case "OPS.04":
-      return "ops";
-    default:
-      return null;
-  }
+  const normalized = (code || "").trim().toUpperCase();
+  const found = DEFAULT_AGENTS.find((a) => a.code === normalized);
+  return found?.id ?? null;
+}
+
+/** Replace roster from API payload when the backend sends a full agent list. */
+export function agentsFromApi(
+  rows: { id: string; code: string; label?: string; state?: string }[],
+): AgentNode[] {
+  return rows.map((row) => ({
+    id: row.id,
+    code: row.code,
+    label: row.label || row.id,
+    state: (row.state as AgentNodeState) || "",
+  }));
 }
 
 export function shallICopy(action: PendingAction): {

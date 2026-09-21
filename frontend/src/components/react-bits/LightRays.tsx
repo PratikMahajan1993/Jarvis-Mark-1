@@ -105,7 +105,7 @@ export default function LightRays({
       if (cancelled || !containerRef.current) return;
 
       const renderer = new Renderer({
-        dpr: Math.min(window.devicePixelRatio, 1.75),
+        dpr: Math.min(window.devicePixelRatio || 1, 1),
         alpha: true,
       });
       rendererRef.current = renderer;

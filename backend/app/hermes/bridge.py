@@ -91,6 +91,38 @@ def hermes_session_title(session_id: str) -> str:
     return f"jarvis-{safe}"
 
 
+def _hermes_skills_home() -> Path:
+    if settings.hermes_home:
+        return Path(settings.hermes_home).expanduser()
+    return Path.home() / ".hermes"
+
+
+def ensure_playbooks_installed() -> bool:
+    """Copy repo quote playbook into Hermes skills dir (idempotent). No CLI required."""
+    source = Path(__file__).resolve().parent / "playbooks" / "quote"
+    if not source.is_dir() or not (source / "SKILL.md").is_file():
+        return False
+    dest = _hermes_skills_home() / "skills" / "shop" / "quote"
+    dest.mkdir(parents=True, exist_ok=True)
+
+    def _copy_tree(src: Path, dst: Path) -> None:
+        dst.mkdir(parents=True, exist_ok=True)
+        for item in src.iterdir():
+            target = dst / item.name
+            if item.is_dir():
+                _copy_tree(item, target)
+            else:
+                shutil.copy2(item, target)
+
+    for name in ("SKILL.md", "notes.md"):
+        shutil.copy2(source / name, dest / name)
+    for sub in ("files", "examples"):
+        sub_src = source / sub
+        if sub_src.is_dir():
+            _copy_tree(sub_src, dest / sub)
+    return True
+
+
 def ensure_jarvis_mcp_registered() -> bool:
     """Idempotently register the Jarvis MCP stdio server with Hermes."""
     if not hermes_cli_available():
@@ -270,9 +302,11 @@ def _activity_from_pending(pending: list[PendingAction]) -> list[ActivityEvent]:
 
 def _build_query(message: str, session_id: str, casual: bool, known: str | None) -> str:
     if casual:
+        from ..casual_voice import CASUAL_PERSONA
+
         return (
-            "[Jarvis: brief, candid personal assistant. One or two short sentences. "
-            "No tools.]\n\n" + message
+            "[Jarvis: dry, sharp, wickedly witty aide. One crisp aside then the answer. "
+            f"{CASUAL_PERSONA} No tools.]\n\n" + message
         )
     if not known:
         return (
@@ -289,9 +323,12 @@ def _build_query(message: str, session_id: str, casual: bool, known: str | None)
 
 def _instructions(casual: bool, session_id: str) -> str:
     if casual:
+        from ..casual_voice import CASUAL_PERSONA
+
         return (
-            "You are Jarvis: brief, candid personal assistant. "
-            "Reply in one or two short sentences. Do not use tools."
+            "You are Jarvis: dry, sharp, wickedly witty British aide. "
+            f"{CASUAL_PERSONA} "
+            "Reply in one or two short spoken sentences unless they ask to expand. Do not use tools."
         )
     return (
         "You are Jarvis: Operations Manager + personal assistant for a machining firm. "
@@ -339,21 +376,58 @@ def _extract_responses_text(payload: dict[str, Any]) -> str:
     return ""
 
 
-def warm_hermes() -> None:
-    """Prime the Hermes gateway so the first casual HUD turn is not a cold 30–60s stall."""
+_WARM_LOCK = threading.Lock()
+_WARM_AT: dict[str, float] = {}
+_WARM_STATUS: dict[str, str] = {}
+WARM_TTL_SEC = 180.0
+
+
+def hermes_warm_status(session_id: str = "default") -> dict[str, Any]:
+    """Expose warm state for HUD bootstrap / capability tests."""
+    key = (session_id or "default").strip() or "default"
+    last = _WARM_AT.get(key)
+    return {
+        "ok": True,
+        "session_id": key,
+        "enabled": settings.hermes_enabled,
+        "gateway": hermes_gateway_reachable(timeout=1.5),
+        "status": _WARM_STATUS.get(key, "idle"),
+        "last_warm_at": last,
+        "fresh": bool(last and (time.monotonic() - last) < WARM_TTL_SEC),
+    }
+
+
+def warm_hermes(session_id: str = "default", *, force: bool = False) -> dict[str, Any]:
+    """Prime the Hermes gateway for a Jarvis session (HUD open / API startup).
+
+    Uses the same session headers as live chat so the first casual turn reuses a warm path.
+    """
+    key = (session_id or "default").strip() or "default"
     if not settings.hermes_enabled or not settings.hermes_prefer_gateway:
-        return
+        return {**hermes_warm_status(key), "started": False, "reason": "hermes_disabled"}
+
+    now = time.monotonic()
+    with _WARM_LOCK:
+        if not force and key in _WARM_AT and (now - _WARM_AT[key]) < WARM_TTL_SEC:
+            return {**hermes_warm_status(key), "started": False, "reason": "fresh"}
+        if _WARM_STATUS.get(key) == "running":
+            return {**hermes_warm_status(key), "started": False, "reason": "running"}
+        _WARM_STATUS[key] = "running"
 
     def _run() -> None:
         try:
             if not hermes_gateway_reachable(timeout=2.0):
+                _WARM_STATUS[key] = "unreachable"
                 return
             base = hermes_gateway_url()
+            title = hermes_session_title(key)
             headers = {
                 "Authorization": f"Bearer {settings.hermes_api_key}",
                 "Content-Type": "application/json",
+                "X-Hermes-Session-Id": title,
+                "X-Hermes-Session-Key": f"jarvis:{key}",
             }
-            with httpx.Client(timeout=90.0) as client:
+            with httpx.Client(timeout=25.0) as client:
                 client.post(
                     f"{base}/v1/chat/completions",
                     headers=headers,
@@ -362,17 +436,20 @@ def warm_hermes() -> None:
                         "messages": [
                             {
                                 "role": "system",
-                                "content": "Reply with exactly one word: Ready. Do not use tools.",
+                                "content": _instructions(True, key),
                             },
                             {"role": "user", "content": "ping"},
                         ],
                         "stream": False,
                     },
                 )
+            _WARM_AT[key] = time.monotonic()
+            _WARM_STATUS[key] = "ready"
         except Exception:
-            pass
+            _WARM_STATUS[key] = "error"
 
-    threading.Thread(target=_run, name="jarvis-hermes-warm", daemon=True).start()
+    threading.Thread(target=_run, name=f"jarvis-hermes-warm-{key}", daemon=True).start()
+    return {**hermes_warm_status(key), "started": True}
 
 
 def _gateway_chat(
@@ -552,11 +629,12 @@ def _run_via_cli(message: str, session_id: str, casual: bool) -> tuple[str, str 
     return speak or "I am here.", hermes_id, elapsed_ms
 
 
-def run_hermes_turn(message: str, session_id: str = "default") -> ChatResponse:
+def run_hermes_turn(message: str, session_id: str = "default", *, casual: bool | None = None) -> ChatResponse:
     if not settings.hermes_enabled:
         raise RuntimeError("Hermes is not available")
 
-    casual = _is_casual(message)
+    if casual is None:
+        casual = _is_casual(message)
     title = hermes_session_title(session_id)
     transport = "cli"
     speak = ""
@@ -621,6 +699,10 @@ def run_hermes_turn(message: str, session_id: str = "default") -> ChatResponse:
         latency_ms=elapsed_ms,
         status="ok",
     )
+
+    warm_key = (session_id or "default").strip() or "default"
+    _WARM_AT[warm_key] = time.monotonic()
+    _WARM_STATUS[warm_key] = "ready"
 
     pending = _pending_models(session_id)
     if pending:

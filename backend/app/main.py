@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import base64
 import binascii
+import time
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Any, Literal
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -87,14 +89,26 @@ def startup() -> None:
 
         def _mcp_bg() -> None:
             try:
-                from .hermes.bridge import ensure_jarvis_mcp_registered, hermes_available
+                from .hermes.bridge import (
+                    ensure_jarvis_mcp_registered,
+                    ensure_playbooks_installed,
+                    hermes_available,
+                )
 
+                ensure_playbooks_installed()
                 if hermes_available():
                     ensure_jarvis_mcp_registered()
             except Exception:
                 pass
 
         threading.Thread(target=_mcp_bg, name="jarvis-mcp-register", daemon=True).start()
+    else:
+        try:
+            from .hermes.bridge import ensure_playbooks_installed
+
+            ensure_playbooks_installed()
+        except Exception:
+            pass
     try:
         from .voicebox import warm_voicebox
 
@@ -104,7 +118,21 @@ def startup() -> None:
     try:
         from .hermes.bridge import warm_hermes
 
-        warm_hermes()
+        warm_hermes("default")
+    except Exception:
+        pass
+    try:
+        from .live_log import record as live_record
+
+        boot_status = health()
+        live_record(
+            source="api",
+            kind="health_once",
+            fields={
+                "ok": boot_status.get("ok"),
+                "model_ready": boot_status.get("model_ready"),
+            },
+        )
     except Exception:
         pass
 
@@ -164,6 +192,38 @@ def api_voicebox_status() -> dict:
     return vb.status_payload()
 
 
+class LiveLogRequest(BaseModel):
+    source: Literal["api", "hud"] = "hud"
+    kind: str
+    session_id: str = "default"
+    latency_ms: int | None = None
+    fields: dict[str, Any] | None = None
+
+
+@app.post("/api/live-log")
+def api_live_log(payload: LiveLogRequest) -> dict:
+    try:
+        from .live_log import record as live_record
+
+        live_record(
+            source=payload.source,
+            kind=payload.kind,
+            session_id=payload.session_id,
+            latency_ms=payload.latency_ms,
+            fields=payload.fields,
+        )
+    except Exception:
+        pass
+    return {"ok": True}
+
+
+@app.get("/api/live-log/recent")
+def api_live_log_recent(limit: int = 80) -> dict:
+    from .live_log import log_paths, recent_events
+
+    return {"items": recent_events(limit=limit), "paths": log_paths()}
+
+
 @app.post("/api/tts")
 def api_tts(payload: TtsRequest) -> Response:
     """Proxy local Voicebox TTS so the browser avoids CORS to :17493."""
@@ -172,11 +232,35 @@ def api_tts(payload: TtsRequest) -> Response:
     text = (payload.text or "").strip()
     if not text:
         raise HTTPException(400, "Empty text")
+    t0 = time.perf_counter()
+    ok = False
+    err_msg = ""
     try:
         wav = vb.synthesize(text, profile=payload.profile or None, language=payload.language or "en")
+        ok = True
+        return Response(content=wav, media_type="audio/wav")
     except Exception as exc:
-        raise HTTPException(502, str(exc)[:400]) from exc
-    return Response(content=wav, media_type="audio/wav")
+        err_msg = str(exc)[:200]
+        # 503 (not 502): Voicebox unreachable or synthesis failed — HUD falls back to browser TTS.
+        raise HTTPException(503, err_msg) from exc
+    finally:
+        try:
+            from .live_log import record as live_record
+
+            live_record(
+                source="api",
+                kind="tts",
+                latency_ms=int((time.perf_counter() - t0) * 1000),
+                fields={
+                    "text_len": len(text),
+                    "text_preview": text[:80],
+                    "profile": payload.profile or None,
+                    "ok": ok,
+                    "error": err_msg or None,
+                },
+            )
+        except Exception:
+            pass
 
 
 @app.get("/api/metrics")
@@ -280,10 +364,22 @@ def api_mail_attachments_reply(payload: MailReplyAttachmentAction) -> dict:
 
 @app.post("/api/chat")
 async def api_chat(payload: ChatRequest) -> dict:
-    from .semantic_router import classify_intent, handle_ui_command, stamp_route
+    from .semantic_router import classify_intent, handle_ui_command, stamp_route, try_obvious_casual
 
+    t0 = time.perf_counter()
     message = payload.message.strip()
-    classification = await classify_intent(message)
+    try:
+        from .live_log import record as live_record
+
+        live_record(
+            source="api",
+            kind="chat_in",
+            session_id=payload.session_id,
+            fields={"message": message},
+        )
+    except Exception:
+        pass
+    classification = try_obvious_casual(message) or await classify_intent(message)
 
     if classification.intent == "ui_command":
         result = handle_ui_command(message, payload.session_id, classification)
@@ -299,6 +395,18 @@ async def api_chat(payload: ChatRequest) -> dict:
         record_turn(session_id=payload.session_id, user=message, response=data, source="chat")
     except Exception:
         pass
+    try:
+        from .live_log import chat_out_fields, record as live_record
+
+        live_record(
+            source="api",
+            kind="chat_out",
+            session_id=payload.session_id,
+            latency_ms=int((time.perf_counter() - t0) * 1000),
+            fields=chat_out_fields(data),
+        )
+    except Exception:
+        pass
     speak = str(data.get("speak") or "").strip()
     if speak:
         try:
@@ -312,6 +420,7 @@ async def api_chat(payload: ChatRequest) -> dict:
 
 @app.post("/api/confirm")
 def api_confirm(payload: ConfirmRequest) -> dict:
+    t0 = time.perf_counter()
     result = resolve_pending(payload.action_id, payload.approved, payload.session_id)
     data = result.model_dump()
     remember_hud(payload.session_id, data)
@@ -324,6 +433,23 @@ def api_confirm(payload: ConfirmRequest) -> dict:
             user=f"[{decision}] action_id={payload.action_id}",
             response=data,
             source="confirm",
+        )
+    except Exception:
+        pass
+    try:
+        from .live_log import chat_out_fields, record as live_record
+
+        live_record(
+            source="api",
+            kind="confirm",
+            session_id=payload.session_id,
+            latency_ms=int((time.perf_counter() - t0) * 1000),
+            fields={
+                "decision": "Authorize" if payload.approved else "Reject",
+                "action_id": payload.action_id,
+                "speak": str(data.get("speak") or "").strip(),
+                "pending": chat_out_fields(data).get("pending"),
+            },
         )
     except Exception:
         pass
@@ -381,10 +507,30 @@ def api_suggested_task_status(task_id: str, status: str = "dismissed") -> dict:
     return row
 
 
+@app.post("/api/hermes/warm")
+def api_hermes_warm(session_id: str = "default", force: bool = False) -> dict:
+    from .hermes.bridge import warm_hermes
+
+    return warm_hermes(session_id, force=force)
+
+
+@app.get("/api/hermes/warm")
+def api_hermes_warm_status(session_id: str = "default") -> dict:
+    from .hermes.bridge import hermes_warm_status
+
+    return hermes_warm_status(session_id)
+
+
 @app.post("/api/office/refresh")
 def api_office_refresh(session_id: str = "default") -> dict:
     from .office_day import refresh_suggested_tasks
 
+    try:
+        from .hermes.bridge import warm_hermes
+
+        warm_hermes(session_id)
+    except Exception:
+        pass
     return refresh_suggested_tasks(session_id)
 
 

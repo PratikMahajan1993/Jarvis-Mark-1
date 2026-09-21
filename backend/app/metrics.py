@@ -42,6 +42,26 @@ def record_mission_step(
         tokens=tokens,
         cost=cost,
     )
+    if role in {"tool", "result", "hermes", "prompt"}:
+        try:
+            from .live_log import record as live_record
+
+            live_record(
+                source="api",
+                kind="tool",
+                session_id=session_id,
+                latency_ms=latency_ms,
+                fields={
+                    "name": detail.split()[0][:80] if detail else role,
+                    "role": role,
+                    "detail": (detail or "")[:400],
+                    "status": status,
+                    "mission_id": mission_id,
+                    "step": step,
+                },
+            )
+        except Exception:
+            pass
     # Mirror into classic audit only for hermes/prompt outcomes (avoid triple-logging tools)
     if role in {"hermes", "prompt"} and status != "ok":
         label = f"mission:{mission_id}:{role}"
@@ -67,6 +87,22 @@ def record_hermes_latency(
     }
     with _lock:
         _latency_samples.append(sample)
+    try:
+        from .live_log import record as live_record
+
+        live_record(
+            source="api",
+            kind="hermes_latency",
+            session_id=session_id,
+            latency_ms=int(latency_ms),
+            fields={
+                "transport": transport,
+                "casual": casual,
+                "ok": ok,
+            },
+        )
+    except Exception:
+        pass
 
 
 def metrics_snapshot() -> dict[str, Any]:

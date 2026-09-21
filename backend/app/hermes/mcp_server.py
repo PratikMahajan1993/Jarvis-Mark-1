@@ -253,8 +253,17 @@ def jarvis_quote_build(
     material: str = "",
     vision_summary: str = "",
     customer: str = "",
+    scope: str = "",
+    rm_source: str = "",
+    rm_source_note: str = "",
+    rm_price: str = "",
+    machine: str = "",
+    machining_rate: str = "",
 ) -> str:
-    """Build a quotation spreadsheet from part + vision notes."""
+    """Build a quotation spreadsheet from part + vision notes.
+
+    Optional scope (labour or with_material), rm_source, rm_source_note, rm_price, machine, and machining_rate must come from the owner or tools — never invented; machining_rate must not be below the demo minimum in playbooks/quote/files/mhr-demo.md.
+    """
     return _dump(
         execute_tool(
             "quote_build",
@@ -263,6 +272,12 @@ def jarvis_quote_build(
                 "material": material,
                 "vision_summary": vision_summary,
                 "customer": customer,
+                "scope": scope,
+                "rm_source": rm_source,
+                "rm_source_note": rm_source_note,
+                "rm_price": rm_price,
+                "machine": machine,
+                "machining_rate": machining_rate,
             },
             _session(),
         )
@@ -276,8 +291,26 @@ def jarvis_quote_pdf(part_name: str = "") -> str:
 
 
 @mcp.tool()
+def jarvis_quote_verify() -> str:
+    """Deterministic quote proof checklist before send. Does not invent numbers."""
+    return _dump(execute_tool("quote_verify", {}, _session()))
+
+
+@mcp.tool()
+def jarvis_quote_playbook_note(what_went_wrong: str, change: str, layer: str = "process") -> str:
+    """Append a dated correction line to the quote playbook notes.md."""
+    return _dump(
+        execute_tool(
+            "quote_playbook_note",
+            {"what_went_wrong": what_went_wrong, "layer": layer, "change": change},
+            _session(),
+        )
+    )
+
+
+@mcp.tool()
 def jarvis_quote_send(to: str, subject: str = "", body: str = "", pdf_path: str = "") -> str:
-    """Queue quote PDF email for HITL Authorize (does not send)."""
+    """Queue quote PDF email for HITL Authorize (does not send). Refuses when proof stop=true."""
     return _dump(
         execute_tool(
             "quote_send",

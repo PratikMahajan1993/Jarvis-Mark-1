@@ -16,6 +16,26 @@ export type SuggestedTask = {
   meta?: Record<string, unknown>;
 };
 
+function plainDetail(raw: string): string {
+  if (!raw) return "";
+  let text = raw
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*$/gi, " ")
+    .replace(/<script[\s\S]*$/gi, " ");
+  text = text.replace(/<[^>]+>/g, " ");
+  text = text
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'");
+  const cssCut = text.search(/@media\b|behavior\s*:\s*url|v\\:\*|o\\:\*|w\\:\*/i);
+  if (cssCut >= 0) text = text.slice(0, cssCut);
+  return text.replace(/\s+/g, " ").trim();
+}
+
 function TaskCard({
   task,
   onAction,
@@ -73,7 +93,7 @@ function TaskCard({
             {task.title}
           </h3>
           <p className="mt-1.5 text-[0.8rem] leading-relaxed text-[color:var(--muted)] line-clamp-3">
-            {task.detail}
+            {plainDetail(task.detail)}
           </p>
 
           <div
@@ -108,24 +128,28 @@ export function SuggestedTasksPanel({
   tasks,
   onAction,
   onDismiss,
+  variant = "suggested",
 }: {
   tasks: SuggestedTask[];
   onAction: (task: SuggestedTask, actionId: string) => void;
   onDismiss: (taskId: string) => void;
+  variant?: "suggested" | "findings";
 }) {
   if (!tasks.length) return null;
+
+  const heading = variant === "findings" ? "Findings" : "Suggested";
 
   return (
     <section
       className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden"
-      aria-label="Suggested tasks"
+      aria-label={variant === "findings" ? "Agent findings" : "Suggested tasks"}
     >
       <div className="shrink-0 px-0.5">
         <GradientText
           className="font-mono text-[0.65rem] uppercase tracking-[0.16em]"
           animationSpeed={10}
         >
-          Suggested
+          {heading}
         </GradientText>
       </div>
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overflow-x-hidden pr-1 [scrollbar-width:thin] [scrollbar-color:rgba(125,255,224,0.25)_transparent]">

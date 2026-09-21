@@ -1021,7 +1021,7 @@ def _update_shop_sheet(
 def _quote_analyze_drawing(session_id: str, path: str = "", prompt: str = "", **_: Any) -> dict[str, Any]:
     from ..quote import analyze_drawing_vision
 
-    result = analyze_drawing_vision(path, prompt=prompt)
+    result = analyze_drawing_vision(path, prompt=prompt, session_id=session_id)
     scene = {
         "title": "Drawing vision",
         "subtitle": result.get("name") or path,
@@ -1037,6 +1037,12 @@ def _quote_build(
     vision_summary: str = "",
     customer: str = "",
     line_items: list[dict[str, Any]] | None = None,
+    scope: str = "",
+    rm_source: str = "",
+    rm_source_note: str = "",
+    rm_price: Any = "",
+    machine: str = "",
+    machining_rate: Any = "",
     **_: Any,
 ) -> dict[str, Any]:
     from ..quote import build_quote
@@ -1048,6 +1054,12 @@ def _quote_build(
         vision_summary=vision_summary,
         line_items=line_items,
         customer=customer,
+        scope=scope,
+        rm_source=rm_source,
+        rm_source_note=rm_source_note,
+        rm_price=rm_price,
+        machine=machine,
+        machining_rate=machining_rate,
     )
     artifact = result.get("artifact") or {}
     scene = {
@@ -1064,8 +1076,35 @@ def _quote_build(
 def _quote_pdf(session_id: str, part_name: str = "", **_: Any) -> dict[str, Any]:
     from ..quote import quote_to_pdf
 
-    # Prefer last quote rows from memory if present
     result = quote_to_pdf(session_id=session_id, part_name=part_name)
+    return _ok(result)
+
+
+def _quote_verify(session_id: str, **_: Any) -> dict[str, Any]:
+    from ..quote import verify_quote
+
+    result = verify_quote(session_id=session_id)
+    scene = result.get("scene") or {}
+    speak = "Quote proof passed." if result.get("passed") else f"{result.get('failed_count', 0)} check(s) failed."
+    if result.get("stop"):
+        speak = f"Quote proof stopped: {result.get('failed_count')} failures — fix before send."
+    return _ok(result, scene=scene, speak=speak)
+
+
+def _quote_playbook_note(
+    session_id: str,
+    what_went_wrong: str = "",
+    layer: str = "process",
+    change: str = "",
+    **_: Any,
+) -> dict[str, Any]:
+    from ..quote import append_playbook_note
+
+    result = append_playbook_note(
+        what_went_wrong=what_went_wrong,
+        layer=layer,
+        change=change,
+    )
     return _ok(result)
 
 
@@ -1077,7 +1116,17 @@ def _quote_send(
     pdf_path: str = "",
     **_: Any,
 ) -> dict[str, Any]:
-    from ..quote import queue_quote_send
+    from ..quote import queue_quote_send, verify_quote
+
+    verify_result = verify_quote(session_id=session_id)
+    if verify_result.get("stop"):
+        return {
+            "ok": False,
+            "error": "Quote proof failed (>2 checks). Fix before send.",
+            "data": verify_result,
+            "scene": verify_result.get("scene"),
+            "speak": "Too many proof failures — fix the quote before queuing send.",
+        }
 
     if not pdf_path:
         pdf_id = ""
@@ -1095,12 +1144,15 @@ def _quote_send(
         subject=subj,
         body=body_text,
         pdf_path=pdf_path,
+        verify_snapshot=verify_result,
     )
     pending = result.get("pending")
+    fail_n = int(verify_result.get("failed_count") or 0)
+    warn = f" ({fail_n} proof warning(s))" if fail_n else ""
     scene = {
         "title": "Quote ready to send",
         "subtitle": subj,
-        "widgets": [{"type": "markdown", "text": f"To **{to}**\n\n{body_text}"}],
+        "widgets": [{"type": "markdown", "text": f"To **{to}**{warn}\n\n{body_text}"}],
     }
     return _ok(result, scene=scene, pending=pending, speak="Authorize to send the quote PDF.")
 
@@ -1204,6 +1256,8 @@ HANDLERS.update(
         "quote_analyze_drawing": _quote_analyze_drawing,
         "quote_build": _quote_build,
         "quote_pdf": _quote_pdf,
+        "quote_verify": _quote_verify,
+        "quote_playbook_note": _quote_playbook_note,
         "quote_send": _quote_send,
         "office_refresh_tasks": _office_refresh_tasks,
         "office_list_tasks": _office_list_tasks,
@@ -1707,6 +1761,80 @@ TOOL_SCHEMAS = [
                     "sheet_name": {"type": "string"},
                     "updates": {"type": "array"},
                 },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "quote_build",
+            "description": "Build a local quotation spreadsheet. Optional scope, RM source, machine, and MHR must come from the owner or tools — never invented.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "part_name": {"type": "string"},
+                    "material": {"type": "string"},
+                    "vision_summary": {"type": "string"},
+                    "customer": {"type": "string"},
+                    "scope": {
+                        "type": "string",
+                        "description": "labour or with_material — owner-confirmed only",
+                    },
+                    "rm_source": {"type": "string"},
+                    "rm_source_note": {"type": "string"},
+                    "rm_price": {
+                        "type": "string",
+                        "description": "Owner- or tool-confirmed raw material price — never invented",
+                    },
+                    "machine": {"type": "string"},
+                    "machining_rate": {
+                        "type": "string",
+                        "description": "Must not be below demo minimum in mhr-demo.md when machine is listed there",
+                    },
+                    "line_items": {"type": "array"},
+                },
+                "required": ["part_name"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "quote_verify",
+            "description": "Deterministic quote proof checklist before send. Never invent numbers.",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "quote_playbook_note",
+            "description": "Append a dated correction to the quote playbook notes.md.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "what_went_wrong": {"type": "string"},
+                    "layer": {"type": "string", "enum": ["process", "toolbox", "proof"]},
+                    "change": {"type": "string"},
+                },
+                "required": ["what_went_wrong", "change"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "quote_send",
+            "description": "Queue quote PDF email for HITL Authorize. Does not send. Refuses when proof stop=true.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "to": {"type": "string"},
+                    "subject": {"type": "string"},
+                    "body": {"type": "string"},
+                    "pdf_path": {"type": "string"},
+                },
+                "required": ["to"],
             },
         },
     },

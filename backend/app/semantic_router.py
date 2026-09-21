@@ -7,6 +7,7 @@ Sits in front of Hermes / local tool paths so the HUD gets a reliable
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
@@ -15,7 +16,7 @@ from .config import settings
 
 logger = logging.getLogger(__name__)
 
-ROUTER_MODEL = "gemini-2.5-flash"
+ROUTER_MODEL = "gemini-3.6-flash"
 
 SYSTEM = """You are Jarvis's thin semantic router for a machine-shop work HUD.
 Classify the operator utterance into exactly one intent and one orchestra agent.
@@ -23,8 +24,10 @@ Classify the operator utterance into exactly one intent and one orchestra agent.
 intents:
 - ui_command: desk/window actions only (open/minimize conversation, show/hide dock, switch notes)
 - casual_chat: greetings, small talk, definitions, general Q&A with no tool side effects
+  (e.g. "what is an RFQ?", "what does RFQ mean?", "explain RFQ" — knowledge only, no inbox/tools)
 - vision_task: drawings, PDFs, images, dimensions, markups, "look at this print"
-- tool_ops: mail, calendar, sheets, RFQ/quote, send/draft email, search inbox, shop OEE, files, Drive
+- tool_ops: mail, calendar, sheets, process/work RFQ or quote, send/draft email, search inbox, shop OEE, files, Drive
+  (NOT definitional "what is an RFQ" — that is casual_chat)
 
 target_agent codes:
 - RES.01 Research — brief, web, casual synthesis
@@ -43,11 +46,79 @@ class IntentClassification(BaseModel):
     confidence: float = Field(ge=0.0, le=1.0)
 
 
+def _casual_definition(message: str) -> bool:
+    """Definitional RFQ asks are chat, not tool_ops (reuse intent.py rules)."""
+    from .intent import is_rfq_definition
+
+    return is_rfq_definition(message)
+
+
+_WORK_MARKERS = (
+    "email",
+    "mail",
+    "inbox",
+    "gmail",
+    "calendar",
+    "schedule",
+    "sheet",
+    "oee",
+    "quote",
+    "send",
+    "draft",
+    "reply",
+    "drive",
+    "attachment",
+    "authorize",
+    "authorise",
+    "rfq",
+    "cnc",
+    "drawing",
+    "pdf",
+    "blueprint",
+    "inbox",
+    "unread",
+    "brief me",
+    "briefing",
+)
+
+
+def try_obvious_casual(message: str) -> IntentClassification | None:
+    """Skip router Gemini for tight small-talk heuristics only."""
+    text = (message or "").strip()
+    if not text:
+        return IntentClassification(intent="casual_chat", target_agent="RES.01", confidence=1.0)
+    if _casual_definition(text):
+        return IntentClassification(intent="casual_chat", target_agent="RES.01", confidence=0.98)
+    low = text.lower()
+    if re.search(r"\b(tell me a joke|make me laugh|say something funny)\b", low):
+        return IntentClassification(intent="casual_chat", target_agent="RES.01", confidence=0.96)
+    if re.search(r"\bjoke\b", low) and re.search(r"\b(about|on|regarding)\b", low):
+        if not any(m in low for m in ("mail", "email", "quote", "rfq", "send", "draft", "invoice")):
+            return IntentClassification(intent="casual_chat", target_agent="RES.01", confidence=0.94)
+    if any(marker in low for marker in _WORK_MARKERS):
+        return None
+    if re.match(
+        r"^(hi|hello|hey|yo|good\s+(morning|afternoon|evening|night))\b",
+        low,
+    ):
+        return IntentClassification(intent="casual_chat", target_agent="RES.01", confidence=0.97)
+    if re.search(r"\b(thanks|thank you|cheers|much obliged)\b", low) and len(low.split()) <= 12:
+        return IntentClassification(intent="casual_chat", target_agent="RES.01", confidence=0.96)
+    if re.search(
+        r"\bhow\s+(?:'s|'re|are|is)\s+(?:your|you|the)\b",
+        low,
+    ) or re.search(r"\bhow\s+are\s+you\b", low):
+        return IntentClassification(intent="casual_chat", target_agent="RES.01", confidence=0.96)
+    return None
+
+
 def _fallback(message: str) -> IntentClassification:
     """Local heuristic when Gemini is unavailable — keep the desk alive."""
     low = (message or "").strip().lower()
     if not low:
         return IntentClassification(intent="casual_chat", target_agent="RES.01", confidence=0.2)
+    if _casual_definition(message):
+        return IntentClassification(intent="casual_chat", target_agent="RES.01", confidence=0.85)
     if any(
         phrase in low
         for phrase in (
@@ -84,7 +155,7 @@ def _fallback(message: str) -> IntentClassification:
             "reply",
             "drive",
         )
-    ):
+    ) and not _casual_definition(message):
         agent: Literal["RES.01", "SEC.02", "DAT.03", "OPS.04", "SYS"] = "OPS.04"
         if any(word in low for word in ("inbox", "unread", "read", "open", "from", "attachment")):
             agent = "SEC.02"
@@ -95,10 +166,12 @@ def _fallback(message: str) -> IntentClassification:
 
 
 async def classify_intent(message: str) -> IntentClassification:
-    """Ultra-fast structured classification via gemini-2.5-flash + response_schema."""
+    """Ultra-fast structured classification via gemini-3.6-flash + response_schema."""
     text = (message or "").strip()
     if not text:
         return IntentClassification(intent="casual_chat", target_agent="RES.01", confidence=1.0)
+    if _casual_definition(text):
+        return IntentClassification(intent="casual_chat", target_agent="RES.01", confidence=0.95)
     if not settings.gemini_api_key:
         return _fallback(text)
 
@@ -120,12 +193,16 @@ async def classify_intent(message: str) -> IntentClassification:
         )
         parsed = response.parsed
         if isinstance(parsed, IntentClassification):
-            return parsed
-        if isinstance(parsed, dict):
-            return IntentClassification.model_validate(parsed)
-        raw = (response.text or "").strip()
-        if raw:
-            return IntentClassification.model_validate_json(raw)
+            result = parsed
+        elif isinstance(parsed, dict):
+            result = IntentClassification.model_validate(parsed)
+        else:
+            raw = (response.text or "").strip()
+            result = IntentClassification.model_validate_json(raw) if raw else None
+        if result is not None:
+            if _casual_definition(text) and result.intent != "casual_chat":
+                return IntentClassification(intent="casual_chat", target_agent="RES.01", confidence=0.95)
+            return result
     except Exception as exc:
         logger.warning("semantic_router fallback: %s", exc)
 
@@ -202,7 +279,7 @@ def handle_ui_command(message: str, session_id: str, classification: IntentClass
         intent="ui_command", target_agent="SYS", confidence=1.0
     )
     cmd = parse_window_command(message)
-    agents = [AgentStatus(**row) for row in agent_status_payload({}))
+    agents = [AgentStatus(**row) for row in agent_status_payload({})]
 
     if not cmd:
         speak = "I can open, minimize, or switch conversations — say which note."

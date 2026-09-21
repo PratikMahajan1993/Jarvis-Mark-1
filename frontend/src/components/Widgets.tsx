@@ -1,20 +1,34 @@
 import type { Conversation, CriticalAlert, CriticalKind, CriticalTone, MailAttachment, RfqPublic, Widget } from "@/lib/types";
 import { isSavedLocal } from "@/lib/viewerMatch";
 import { splitMarkdownTables } from "@/lib/tables";
-import { useMemo, useState } from "react";
-import { ACCENT_SOLID_BG, ACCENT_TEXT, ACCENT_TEXT_SOFT, type Accent, Alert, HudButton, Panel, StatusDot } from "./hud/Hud";
+import { useMemo, useState, type ButtonHTMLAttributes } from "react";
+import { ACCENT_TEXT, Alert, HudButton, Panel, StatusDot } from "./hud/Hud";
 
-const ACCENT_CYCLE: Accent[] = ["cyan", "violet", "magenta", "amber"];
+const WIDGET_LABEL = "font-mono text-[11px] uppercase tracking-[0.18em] text-[color:var(--accent)]/60";
+const BAR_OPACITIES = [0.85, 0.65, 0.45, 0.35];
 
-function cycleAccent(index: number): Accent {
-  return ACCENT_CYCLE[index % ACCENT_CYCLE.length];
+function OrchButton({
+  variant = "ghost",
+  className = "",
+  type = "button",
+  ...props
+}: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "primary" | "ghost" }) {
+  return (
+    <button
+      type={type}
+      className={["orch-btn", variant === "primary" ? "orch-btn-primary" : "orch-btn-ghost", className]
+        .filter(Boolean)
+        .join(" ")}
+      {...props}
+    />
+  );
 }
 
-function Kpi({ widget, accent = "cyan" }: { widget: Widget; accent?: Accent }) {
+function Kpi({ widget }: { widget: Widget }) {
   return (
     <div>
-      <p className={`font-mono text-[10px] uppercase tracking-[0.22em] ${ACCENT_TEXT_SOFT[accent]}`}>{widget.label}</p>
-      <p className="mt-1.5 font-display text-4xl leading-none text-white">{widget.value ?? "—"}</p>
+      <p className={`font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--accent)]/60`}>{widget.label}</p>
+      <p className="mt-1.5 font-display text-4xl leading-none text-[color:var(--fg)]">{widget.value ?? "—"}</p>
     </div>
   );
 }
@@ -22,20 +36,20 @@ function Kpi({ widget, accent = "cyan" }: { widget: Widget; accent?: Accent }) {
 function TableCard({ widget }: { widget: Widget }) {
   return (
     <div className="overflow-auto">
-      {widget.title ? <h3 className="mb-3 font-mono text-[11px] uppercase tracking-[0.18em] text-cyan/60">{widget.title}</h3> : null}
+      {widget.title ? <h3 className={`mb-3 ${WIDGET_LABEL}`}>{widget.title}</h3> : null}
       <table className="w-full text-left text-sm">
-        <thead className="text-[11px] uppercase tracking-widest text-white/30">
+        <thead className="text-[11px] uppercase tracking-widest text-[color:var(--muted)]">
           <tr>
             {(widget.columns || []).map((col) => (
-              <th key={col} className="border-b border-white/10 pb-2 pr-6 font-medium">{col}</th>
+              <th key={col} className="border-b border-[color:var(--border)] pb-2 pr-6 font-medium">{col}</th>
             ))}
           </tr>
         </thead>
         <tbody>
           {(widget.rows || []).map((row, index) => (
-            <tr key={index} className="border-t border-white/5">
+            <tr key={index} className="border-t border-[color:var(--border)]/60">
               {row.map((cell, cellIndex) => (
-                <td key={cellIndex} className="py-2.5 pr-6 text-white/75">{String(cell)}</td>
+                <td key={cellIndex} className="py-2.5 pr-6 text-[color:var(--fg)]/75">{String(cell)}</td>
               ))}
             </tr>
           ))}
@@ -51,14 +65,14 @@ function MarkdownCard({ widget }: { widget: Widget }) {
   if (!hasTable) {
     return (
       <div>
-        {widget.title ? <h3 className="mb-2 font-mono text-[11px] uppercase tracking-[0.18em] text-cyan/60">{widget.title}</h3> : null}
-        <div className="whitespace-pre-wrap leading-relaxed text-white/70">{widget.text}</div>
+        {widget.title ? <h3 className={`mb-2 ${WIDGET_LABEL}`}>{widget.title}</h3> : null}
+        <div className="whitespace-pre-wrap leading-relaxed text-[color:var(--muted)]">{widget.text}</div>
       </div>
     );
   }
   return (
     <div className="space-y-6">
-      {widget.title ? <h3 className="font-mono text-[11px] uppercase tracking-[0.18em] text-cyan/60">{widget.title}</h3> : null}
+      {widget.title ? <h3 className={WIDGET_LABEL}>{widget.title}</h3> : null}
       {blocks.map((block, index) =>
         block.kind === "table" ? (
           <TableCard
@@ -66,7 +80,7 @@ function MarkdownCard({ widget }: { widget: Widget }) {
             widget={{ type: "table", columns: block.columns, rows: block.rows }}
           />
         ) : (
-          <div key={`p-${index}`} className="whitespace-pre-wrap leading-relaxed text-white/70">
+          <div key={`p-${index}`} className="whitespace-pre-wrap leading-relaxed text-[color:var(--muted)]">
             {block.text}
           </div>
         ),
@@ -80,15 +94,18 @@ function ChartCard({ widget }: { widget: Widget }) {
   const max = Math.max(1, ...points.map((point) => Number(point.value) || 0));
   return (
     <div>
-      {widget.title ? <h3 className="mb-4 font-mono text-[11px] uppercase tracking-[0.18em] text-cyan/60">{widget.title}</h3> : null}
+      {widget.title ? <h3 className={`mb-4 ${WIDGET_LABEL}`}>{widget.title}</h3> : null}
       <div className="flex h-32 items-end gap-3">
         {points.map((point, index) => (
           <div key={point.label} className="flex flex-1 flex-col items-center gap-2">
             <div
-              className={`w-full rounded-t ${ACCENT_SOLID_BG[cycleAccent(index)]} opacity-80`}
-              style={{ height: `${(Number(point.value) / max) * 100}%` }}
+              className="w-full rounded-t bg-[color:var(--accent)]"
+              style={{
+                height: `${(Number(point.value) / max) * 100}%`,
+                opacity: BAR_OPACITIES[index % BAR_OPACITIES.length],
+              }}
             />
-            <span className="text-[11px] text-white/35">{point.label}</span>
+            <span className="text-[11px] text-[color:var(--muted)]">{point.label}</span>
           </div>
         ))}
       </div>
@@ -100,19 +117,21 @@ function Timeline({ widget }: { widget: Widget }) {
   const items = widget.items || [];
   return (
     <div>
-      {widget.title ? <h3 className="mb-4 font-mono text-[11px] uppercase tracking-[0.18em] text-cyan/60">{widget.title}</h3> : null}
-      <ol className="relative space-y-5 border-l border-white/10 pl-5">
+      {widget.title ? <h3 className={`mb-4 ${WIDGET_LABEL}`}>{widget.title}</h3> : null}
+      <ol className="relative space-y-5 border-l border-[color:var(--border)] pl-5">
         {items.map((item, index) => {
           const title = String(item.title ?? "");
           const time = String(item.time ?? "");
           const detail = item.detail != null ? String(item.detail) : "";
-          const accent = cycleAccent(index);
           return (
             <li key={`${title}-${index}`} className="relative">
-              <span className={`absolute -left-[25px] top-1 h-2 w-2 rounded-full ${ACCENT_SOLID_BG[accent]}`} />
-              <span className="font-mono text-[11px] uppercase tracking-[0.12em] text-white/40">{time}</span>
-              <p className="mt-0.5 text-white">{title}</p>
-              {detail ? <p className="text-sm text-white/35">{detail}</p> : null}
+              <span
+                className="absolute -left-[25px] top-1 h-2 w-2 rounded-full bg-[color:var(--accent)]"
+                style={{ opacity: BAR_OPACITIES[index % BAR_OPACITIES.length] }}
+              />
+              <span className="font-mono text-[11px] uppercase tracking-[0.12em] text-[color:var(--muted)]">{time}</span>
+              <p className="mt-0.5 text-[color:var(--fg)]">{title}</p>
+              {detail ? <p className="text-sm text-[color:var(--muted)]">{detail}</p> : null}
             </li>
           );
         })}
@@ -162,28 +181,28 @@ function AttachmentList({
 
   return (
     <div>
-      {widget.title ? <h3 className="mb-3 font-mono text-[11px] uppercase tracking-[0.18em] text-cyan/60">{widget.title}</h3> : null}
+      {widget.title ? <h3 className={`mb-3 ${WIDGET_LABEL}`}>{widget.title}</h3> : null}
       <ul className="space-y-2">
         {items.map((item) => (
-          <li key={item.attachment_id || item.filename} className="flex items-start gap-3 border-t border-white/5 py-2.5">
+          <li key={item.attachment_id || item.filename} className="flex items-start gap-3 border-t border-[color:var(--border)]/60 py-2.5">
             <input
               type="checkbox"
               checked={selected.has(item.attachment_id)}
               onChange={() => toggle(item.attachment_id)}
               aria-label={item.filename}
-              className="mt-1 h-4 w-4 accent-cyan"
+              className="mt-1 h-4 w-4 accent-[color:var(--accent)]"
             />
             <div className="min-w-0 flex-1">
-              <p className="truncate text-white/85">{item.filename}</p>
-              <p className="text-xs text-cyan/70">{statusText(item)}</p>
+              <p className="truncate text-[color:var(--fg)]/85">{item.filename}</p>
+              <p className="text-xs text-[color:var(--accent)]/70">{statusText(item)}</p>
               {item.drive_link ? (
-                <a href={item.drive_link} target="_blank" rel="noreferrer" className="text-xs text-white/35 underline">
+                <a href={item.drive_link} target="_blank" rel="noreferrer" className="text-xs text-[color:var(--muted)] underline">
                   Drive link
                 </a>
               ) : null}
             </div>
             {onView ? (
-              <HudButton
+              <OrchButton
                 variant="primary"
                 disabled={busy || !isSavedLocal(item)}
                 title={isSavedLocal(item) ? "View saved drawing" : "Save locally first"}
@@ -191,21 +210,21 @@ function AttachmentList({
                 className="shrink-0 py-1"
               >
                 View
-              </HudButton>
+              </OrchButton>
             ) : null}
           </li>
         ))}
       </ul>
       <div className="mt-4 flex flex-wrap gap-3">
-        <HudButton variant="primary" disabled={busy || !emailId || selectedIds.length === 0} onClick={() => onSave(emailId, selectedIds, selectedNames)}>
+        <OrchButton variant="primary" disabled={busy || !emailId || selectedIds.length === 0} onClick={() => onSave(emailId, selectedIds, selectedNames)}>
           Save selected
-        </HudButton>
-        <HudButton variant="ghost" disabled={busy || !emailId || selectedIds.length === 0} onClick={() => onReply(emailId, selectedIds, selectedNames)}>
+        </OrchButton>
+        <OrchButton variant="ghost" disabled={busy || !emailId || selectedIds.length === 0} onClick={() => onReply(emailId, selectedIds, selectedNames)}>
           Attach to reply
-        </HudButton>
+        </OrchButton>
         {onView ? (
-          <HudButton
-            variant="secondary"
+          <OrchButton
+            variant="ghost"
             disabled={busy || !items.some((item) => selected.has(item.attachment_id) && isSavedLocal(item))}
             onClick={() => {
               const saved = items.find((item) => selected.has(item.attachment_id) && isSavedLocal(item));
@@ -213,7 +232,7 @@ function AttachmentList({
             }}
           >
             View selected
-          </HudButton>
+          </OrchButton>
         ) : null}
       </div>
     </div>
@@ -221,19 +240,54 @@ function AttachmentList({
 }
 
 function Quote({ widget }: { widget: Widget }) {
-  return <p className="font-display text-3xl text-white/80">{widget.text}</p>;
+  return <p className="font-display text-3xl text-[color:var(--fg)]/80">{widget.text}</p>;
+}
+
+function ChecklistCard({ widget }: { widget: Widget }) {
+  const items = widget.items || [];
+  return (
+    <div>
+      {widget.title ? <h3 className={`mb-3 ${WIDGET_LABEL}`}>{widget.title}</h3> : null}
+      <ul className="space-y-3">
+        {items.map((item, index) => {
+          const label = String(item.label ?? "");
+          const pass = item.pass === true;
+          const evidence = item.evidence != null ? String(item.evidence) : "";
+          return (
+            <li
+              key={`${label}-${index}`}
+              className="border-t border-[color:var(--border)]/60 pt-2.5 first:border-t-0 first:pt-0"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <span className="text-sm text-[color:var(--fg)]/90">{label}</span>
+                <span
+                  className={[
+                    "shrink-0 font-mono text-[10px] uppercase tracking-[0.14em]",
+                    pass ? "text-[#7dffe0]" : "text-amber-400/90",
+                  ].join(" ")}
+                >
+                  {pass ? "Pass" : "Fail"}
+                </span>
+              </div>
+              {evidence ? (
+                <p className="mt-1 font-mono text-[11px] leading-relaxed text-[color:var(--muted)]/80">{evidence}</p>
+              ) : null}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
 }
 
 export function WidgetCard({
   widget,
-  accent,
   onSaveAttachments,
   onReplyAttachments,
   onViewAttachment,
   busy,
 }: {
   widget: Widget;
-  accent?: Accent;
   onSaveAttachments?: (emailId: string, attachmentIds: string[], filenames: string[]) => void;
   onReplyAttachments?: (emailId: string, attachmentIds: string[], filenames: string[]) => void;
   onViewAttachment?: (item: MailAttachment) => void;
@@ -241,7 +295,7 @@ export function WidgetCard({
 }) {
   switch (widget.type) {
     case "kpi":
-      return <Kpi widget={widget} accent={accent} />;
+      return <Kpi widget={widget} />;
     case "table":
       return <TableCard widget={widget} />;
     case "chart":
@@ -250,6 +304,8 @@ export function WidgetCard({
       return <Timeline widget={widget} />;
     case "quote":
       return <Quote widget={widget} />;
+    case "checklist":
+      return <ChecklistCard widget={widget} />;
     case "attachments":
       return (
         <AttachmentList

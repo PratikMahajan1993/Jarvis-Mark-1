@@ -208,5 +208,10 @@ export const api = {
     json<Record<string, unknown>>(`/api/office/refresh?session_id=${encodeURIComponent(sessionId)}`, {
       method: "POST",
     }),
+  hermesWarm: (sessionId = "default", force = false) =>
+    json<{ ok: boolean; started?: boolean; fresh?: boolean; status?: string; gateway?: boolean }>(
+      `/api/hermes/warm?session_id=${encodeURIComponent(sessionId)}&force=${force ? "true" : "false"}`,
+      { method: "POST" },
+    ),
   metrics: () => json<Record<string, unknown>>("/api/metrics"),
 };

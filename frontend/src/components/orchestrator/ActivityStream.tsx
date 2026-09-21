@@ -30,7 +30,7 @@ export function ActivityStream({ items }: { items: ActivityItem[] }) {
   return (
     <details
       ref={detailsRef}
-      className="orch-activity absolute left-12 top-12 z-[2]"
+      className="orch-activity absolute left-4 top-[3.35rem] z-[2]"
     >
       <summary
         className={[

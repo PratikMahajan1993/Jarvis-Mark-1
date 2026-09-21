@@ -71,49 +71,50 @@ function OrbDust({ active, hitl }: { active: boolean; hitl: boolean }) {
   );
 }
 
-export function JarvisCore({ mode }: { mode: OrchestratorMode }) {
+export function JarvisCore({ mode, playing = true }: { mode: OrchestratorMode; playing?: boolean }) {
   const active = mode === "busy" || mode === "listening";
   const hitl = mode === "hitl";
   return (
     <>
-      {/* WebGL wash — kept faint so it doesn't fight the desk */}
-      <div
-        className={[
-          "pointer-events-none absolute inset-0 z-0 overflow-hidden transition-opacity duration-[900ms]",
-          hitl ? "opacity-20" : active ? "opacity-55" : "opacity-40",
-        ].join(" ")}
-      >
-        <div className="absolute inset-0 opacity-70">
-          <LightRays
-            raysOrigin="top-center"
-            raysColor="#7dffe0"
-            raysSpeed={active ? 0.75 : 0.45}
-            lightSpread={1.5}
-            rayLength={1.45}
-            pulsating
-            fadeDistance={1.2}
-            saturation={0.8}
-            followMouse
-            mouseInfluence={0.1}
-            noiseAmount={0.06}
-            distortion={0.03}
-          />
+      {playing ? (
+        <div
+          className={[
+            "pointer-events-none absolute inset-0 z-0 overflow-hidden transition-opacity duration-[900ms]",
+            hitl ? "opacity-20" : active ? "opacity-55" : "opacity-40",
+          ].join(" ")}
+        >
+          <div className="absolute inset-0 opacity-70">
+            <LightRays
+              raysOrigin="top-center"
+              raysColor="#7dffe0"
+              raysSpeed={active ? 0.75 : 0.45}
+              lightSpread={1.5}
+              rayLength={1.45}
+              pulsating
+              fadeDistance={1.2}
+              saturation={0.8}
+              followMouse
+              mouseInfluence={0.1}
+              noiseAmount={0.06}
+              distortion={0.03}
+            />
+          </div>
+          <div className="absolute left-1/2 top-1/2 h-[720px] w-[720px] -translate-x-1/2 -translate-y-1/2 opacity-50">
+            <Particles
+              particleCount={active ? 150 : 110}
+              particleSpread={8.5}
+              speed={active ? 0.08 : 0.045}
+              particleColors={["#7dffe0", "#9bffe8", "#5ad4c0", "#e8fffa"]}
+              alphaParticles
+              particleBaseSize={active ? 78 : 62}
+              sizeRandomness={0.85}
+              cameraDistance={24}
+              moveParticlesOnHover={false}
+              pixelRatio={1}
+            />
+          </div>
         </div>
-        <div className="absolute left-1/2 top-1/2 h-[720px] w-[720px] -translate-x-1/2 -translate-y-1/2 opacity-50">
-          <Particles
-            particleCount={active ? 150 : 110}
-            particleSpread={8.5}
-            speed={active ? 0.08 : 0.045}
-            particleColors={["#7dffe0", "#9bffe8", "#5ad4c0", "#e8fffa"]}
-            alphaParticles
-            particleBaseSize={active ? 78 : 62}
-            sizeRandomness={0.85}
-            cameraDistance={24}
-            moveParticlesOnHover={false}
-            pixelRatio={1}
-          />
-        </div>
-      </div>
+      ) : null}
 
       <div className="pointer-events-none absolute left-1/2 top-1/2 z-[1] flex h-[640px] w-[640px] -translate-x-1/2 -translate-y-1/2 items-center justify-center">
         <div
@@ -145,7 +146,7 @@ export function JarvisCore({ mode }: { mode: OrchestratorMode }) {
         />
       </div>
 
-      <OrbDust active={active} hitl={hitl} />
+      {playing ? <OrbDust active={active} hitl={hitl} /> : null}
 
       <div
         className={[

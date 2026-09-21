@@ -317,6 +317,37 @@ def test_classify_decision_variants(text: str, expected: bool | None):
 
 # --- Agent routing: mail_draft bypasses Hermes; chat uses Hermes when up ----
 
+def test_run_agent_unread_mail_skips_hermes_when_snapshot_warm():
+    """A14: router tool_ops must not block on Hermes when snapshot is warm."""
+    session = f"route-unread-{uuid.uuid4().hex[:8]}"
+    _clear_session(session)
+    object.__setattr__(settings, "hermes_enabled", True)
+
+    from app.schemas import ChatResponse, Scene
+    from app.semantic_router import IntentClassification
+
+    route = IntentClassification(intent="tool_ops", target_agent="SEC.02", confidence=0.9)
+
+    def boom(*_a, **_k):
+        raise AssertionError("Hermes must not run for warm snapshot mail_search")
+
+    with patch("app.hermes.bridge.run_hermes_turn", side_effect=boom), patch(
+        "app.agent.snapshot_ready", return_value=True
+    ), patch("app.agent._run_agent_legacy") as legacy:
+        legacy.return_value = ChatResponse(
+            speak="Three unread threads.",
+            reply="Three unread threads.",
+            scene=Scene(title="Inbox", widgets=[]),
+            pending=[],
+            offline=False,
+        )
+        result = run_agent("Any unread mail?", session, route=route)
+
+    legacy.assert_called_once()
+    assert "unread" in (result.speak or "").lower()
+    _clear_session(session)
+
+
 def test_run_agent_mail_draft_skips_hermes():
     session = f"route-draft-{uuid.uuid4().hex[:8]}"
     _clear_session(session)
@@ -334,6 +365,36 @@ def test_run_agent_mail_draft_skips_hermes():
         result = run_agent("Draft an email to ops@example.com", session)
     assert result.pending
     assert result.pending[0].kind == "email_compose"
+    _clear_session(session)
+
+
+def test_run_agent_shop_oee_skips_hermes():
+    """F1: shop OEE must read the bound sheet — never Hermes textbook definitions."""
+    from app.schemas import Scene
+    from app.semantic_router import IntentClassification
+
+    session = f"route-shop-oee-{uuid.uuid4().hex[:8]}"
+    _clear_session(session)
+    object.__setattr__(settings, "hermes_enabled", True)
+    route = IntentClassification(intent="tool_ops", target_agent="DAT.03", confidence=0.9)
+
+    def boom(*_a, **_k):
+        raise AssertionError("Hermes must not run for shop_read")
+
+    fake = {
+        "speak": "Shop OEE is 87 percent.",
+        "scene": {"title": "Shop log", "subtitle": "Production", "widgets": []},
+        "data": {"ok": True},
+    }
+    with patch("app.hermes.bridge.run_hermes_turn", side_effect=boom), patch(
+        "app.agent.execute_tool",
+        return_value={"speak": fake["speak"], "scene": fake["scene"], "data": fake["data"]},
+    ) as tool:
+        result = run_agent("What's shop OEE?", session, route=route)
+    tool.assert_called()
+    assert tool.call_args[0][0] == "read_shop_sheet"
+    assert "87" in (result.speak or "")
+    assert "Overall Equipment Effectiveness" not in (result.speak or "")
     _clear_session(session)
 
 

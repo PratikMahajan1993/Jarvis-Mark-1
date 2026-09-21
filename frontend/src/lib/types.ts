@@ -1,5 +1,5 @@
 export type Widget = {
-  type: "kpi" | "table" | "markdown" | "chart" | "timeline" | "quote" | "attachments";
+  type: "kpi" | "table" | "markdown" | "chart" | "timeline" | "quote" | "attachments" | "checklist";
   label?: string;
   value?: string | number;
   hint?: string;
