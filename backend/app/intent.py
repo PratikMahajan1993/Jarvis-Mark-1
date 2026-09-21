@@ -468,6 +468,40 @@ def is_rfq_definition(message: str) -> bool:
     return bool(_RFQ_DEFINITION.search(prepare(message)))
 
 
+# Starting a shop quote workflow (no sheet in focus yet) — not reason_rfq / vision-first.
+_QUOTE_START_EXCLUDE = re.compile(
+    r"\bquote\s+on\s+this\s+drawing\b"
+    r"|\bwhat(?:'s|s)\s+in\s+this\s+rfq\b"
+    r"|\btreat\s+this\s+as\s+(?:an?\s+)?rfq\b"
+    r"|\bthis\s+drawing\s+quotation\b"
+    r"|\bprocess\s+this\s+rfq\b",
+    re.I,
+)
+_QUOTE_START = re.compile(
+    r"\bstart\s+q[u]?o[u]?t[e]?\s+work\s*fl[o0]w"
+    r"|\b(?:create|make|start|want)\s+(?:a\s+)?(?:new\s+)?q[u]?o[u]?t[e]?\b"
+    r"|\bnew\s+q[u]?o[u]?t[e]?\b"
+    r"|\b(?:make|create)\s+a?\s*q[u]?o[u]?tation\b"
+    r"|\bq[u]?o[u]?tation\s+for\b"
+    r"|\bwork\s+on\s+the\s+rfq\b"
+    r"|\bq[u]?o[u]?t[e]?\s+this\s+(?:drawing|rfq)\b"
+    r"|\bmake\s+a\s+q[u]?o[u]?tation\b",
+    re.I,
+)
+
+
+def is_quote_start(message: str) -> bool:
+    """True when the operator is opening a quote workflow, not analyzing an in-focus RFQ."""
+    if is_rfq_definition(message):
+        return False
+    text = prepare(message)
+    if not text:
+        return False
+    if _QUOTE_START_EXCLUDE.search(text):
+        return False
+    return bool(_QUOTE_START.search(text))
+
+
 def _rule_cnc(text: str, _low: str, _person: str) -> Intent | None:
     if _CNC.search(text):
         return Intent("cnc_suggest")
@@ -476,6 +510,8 @@ def _rule_cnc(text: str, _low: str, _person: str) -> Intent | None:
 
 def _rule_rfq(text: str, _low: str, person: str) -> Intent | None:
     if is_rfq_definition(text):
+        return None
+    if is_quote_start(text):
         return None
     if _RFQ.search(text):
         return Intent("rfq_reason", person=person)

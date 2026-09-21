@@ -37,10 +37,26 @@ Kinds in `SNAPSHOT_KINDS` (briefing, mail_search, mail_read, calendar_list) use 
 
 ## Desk model
 
-- Ambient session = everyday desk
+- Ambient session = everyday desk (default workspace **monitor** when unpinned)
+- **Workspaces:** `casual` | `monitor` | `engineering` — orthogonal to turn FSM (`orchestratorFsm.ts`)
+- **Talk-jump:** `talkJumpWorkspace(text, current)` — returns `null` unless `current === "monitor"`; engineering hints jump to Engineering; same quote/drawing words on Casual do **not** jump
 - Discussions / jobs = named conversations in Open notes
 - Suggested RFQ “engineering” opens/resumes a job workflow note
 - Weather is **outside** the scrollable tasks list (`WeatherCard` + `shrink-0`)
+- **HITL restore:** `OrchestratorShell.loadSessionSurface` fetches `pending_actions` and opens `HitlModal` for the first row (any workspace)
+
+## Quote playbook (shop-quote)
+
+| Piece | Location |
+| ----- | -------- |
+| Repo source | `backend/app/hermes/playbooks/quote/` (`SKILL.md` name **shop-quote**) |
+| Hermes install | `{hermes home}/skills/shop/quote` via `ensure_playbooks_installed()` in `hermes/bridge.py` on API startup |
+| Tool impl | `backend/app/quote.py` + `tools/registry.py` + `hermes/mcp_server.py` (`jarvis_quote_*`) |
+| Start detection | `intent.is_quote_start` → router `tool_ops` / `DAT.03`; blocks `reason_rfq` for quote starts |
+| Hermes path | `agent.py` `_hermes_reply` first; timeout/error → fixed local drawing-path question (30s default) |
+| Sessions | Quote facts in `memories` per `session_id`; Hermes map in `data/hermes_sessions.json` |
+
+Deep workflow: skill **`jarvis-quote-playbook`**.
 
 ## React Bits inventory
 

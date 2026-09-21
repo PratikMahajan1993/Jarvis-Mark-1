@@ -159,6 +159,25 @@ def build_quote(
             "notes": (vision_summary or "")[:240],
         }
     ]
+    rate_num = _parse_numeric(machining_rate)
+    if rate_num is not None:
+        for it in items:
+            if _parse_numeric(it.get("unit_price")) is None:
+                it["unit_price"] = rate_num
+    rm_num = _parse_numeric(rm_price)
+    scope_norm = (scope or "").strip().lower()
+    if rm_num is not None and rm_num > 0 and scope_norm == "with_material":
+        has_rm_row = any(_RM_ROW_RE.search(str(it.get("item") or "")) for it in items)
+        if not has_rm_row:
+            items.append(
+                {
+                    "item": "Raw material",
+                    "material": material or "TBD",
+                    "qty": 1,
+                    "unit_price": rm_num,
+                    "notes": "Material supply",
+                }
+            )
     columns = ["Item", "Material", "Qty", "Unit price", "Notes"]
     rows = [
         [

@@ -29,10 +29,12 @@ description: >
 | Chat / tools | `backend/app/agent.py`, `tools/registry.py` |
 | Semantic router | `semantic_router.py` — Gemini flash intent + `target_agent`; UI commands via `handle_ui_command` |
 | Intent / mail fast path | `intent.py`, `snapshot.py` — local mail/calendar/briefing skip Hermes when snapshot-ready |
+| Quote playbook | `quote.py`, `hermes/playbooks/quote/`, `hermes/mcp_server.py`, `intent.is_quote_start`, Hermes timeout fallback in `agent.py` — see skill `jarvis-quote-playbook` |
+| HUD workspaces | `frontend/.../hudWorkspace.ts` — talk-jump to Engineering **only from monitor** |
 | Conversations desk | `conversations.py`, `db.py` (`MAX_EXPANDED = 3`) |
 | Speak / prefetch | `voicebox.py`, `main.py` `/api/tts`, `frontend/src/lib/voice.ts` |
 | Suggested tasks / weather | `office_day.py`, `SuggestedTasksPanel.tsx`, `WeatherCard.tsx` |
-| HITL | pending actions + `HitlModal` / confirm listen |
+| HITL | `pending_actions` + `HitlModal` (Authorize/Reject); `loadSessionSurface` restores first pending on session load |
 | Capability turn log | `turn_log.py` → `work/LAST_TURNS.md` + `/api/turns/recent` |
 
 ## Do not

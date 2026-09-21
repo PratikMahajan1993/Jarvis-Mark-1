@@ -19,10 +19,17 @@ Local work HUD. Prefer existing modules; do not invent a parallel stack.
 | TTS | Voicebox `:17493` via `POST /generate` (not `/speak`) | browser plays once |
 | React Bits | Vendored in `frontend/src/components/react-bits/` | accents only |
 
+## Jobs & quote (locked)
+
+- **Jobs** = Hermes **playbooks** installed under `{hermes home}/skills/shop/…`. First shipped job: **shop-quote** (source `backend/app/hermes/playbooks/quote/`).
+- **Orchestra codes** (`RES.01`, `SEC.02`, `DAT.03`, `OPS.04`) = HUD labels in `agents.py`, not separate agents. One Hermes brain.
+- **Quote numbers** (RM, MHR floors, outsource, totals) come from **tools** + owner-confirmed inputs — never from chat invention.
+- **Talk-jump:** Engineering workspace from speech only when current HUD workspace is **monitor** (`talkJumpWorkspace` in `hudWorkspace.ts`). Casual does not auto-switch to Engineering for quote/drawing words.
+
 ## Non-negotiables
 
 - Tools own mail/calendar/files/Drive. Brain never invents prices, mail, or calendar facts.
-- HITL (**Authorize / Shall I**) before send mail, Task for Gemini, calendar writes, quote send, broad memory wipe.
+- HITL (**Authorize / Reject** on desk; legacy copy may say Shall I) before send mail, Task for Gemini, calendar writes, quote send, broad memory wipe.
 - Files only under `<repo>/exports` (`EXPORTS_DIR=./exports`).
 - Max **3** expanded Open notes (`MAX_EXPANDED = 3`).
 - Prefer `127.0.0.1:8000` (avoid ghost `0.0.0.0:8000` listeners).

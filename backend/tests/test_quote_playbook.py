@@ -194,6 +194,45 @@ def test_verify_does_not_require_delivery_time():
     assert result["passed"] is True
 
 
+def test_quote_build_machining_rate_fills_empty_unit_price():
+    session = "quote-build-mhr-unit-price"
+    result = execute_tool(
+        "quote_build",
+        {
+            "part_name": "Bracket",
+            "material": "EN8",
+            "customer": "Deepak",
+            "scope": "labour",
+            "machining_rate": "900",
+            "line_items": [
+                {
+                    "item": "Bracket",
+                    "material": "EN8",
+                    "qty": 2,
+                    "unit_price": "",
+                    "notes": "From drawing",
+                }
+            ],
+        },
+        session,
+    )
+    assert result.get("ok") is True
+    rows = (result.get("data") or {}).get("rows") or []
+    assert rows and _parse_row_price(rows[0]) == 900.0
+
+    db.add_memory(session, "last_quote_drawing", "fixture-drawing.pdf")
+    quote_to_pdf(session_id=session, part_name="Bracket")
+    verify = verify_quote(session_id=session)
+    by_id = {c["id"]: c for c in verify["checks"]}
+    assert by_id["unit_prices"]["pass"] is True
+
+
+def _parse_row_price(row: list) -> float:
+    from app.quote import _parse_numeric
+
+    return _parse_numeric(row[3]) or 0.0
+
+
 def test_quote_build_tool_round_trips_scope_and_mhr_into_verify():
     session = "quote-build-tool-roundtrip"
     result = execute_tool(
@@ -233,6 +272,7 @@ def test_quote_build_tool_round_trips_scope_and_mhr_into_verify():
     by_id = {c["id"]: c for c in verify["checks"]}
     assert by_id["scope_labour_no_rm"]["pass"] is True
     assert by_id["mhr_demo_floor"]["pass"] is True
+    assert by_id["unit_prices"]["pass"] is True
 
 
 def test_quote_build_tool_with_material_rm_price_passes_verify():

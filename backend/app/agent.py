@@ -1177,6 +1177,15 @@ def _run_agent(message: str, session_id: str = "default", route=None) -> ChatRes
     if is_rfq_definition(message):
         intent = Intent("chat")
 
+    from .intent import is_quote_start
+
+    if is_quote_start(message):
+        speak = (
+            "Which drawing should I quote — an inbox attachment, a file on the desk, or a photo?"
+        )
+        db.add_message(session_id, "assistant", speak)
+        return _chat_response(session_id, speak=speak)
+
     return _run_agent_legacy(message, session_id, prefs=prefs, intent=intent, heard=heard)
 
 

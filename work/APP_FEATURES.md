@@ -94,6 +94,14 @@ Owner: upgrade the 24/7 shop assistant using the Actionable AI delegation loop o
 
 Owner agreed: drawing may already be local from Gmail sync, a hard copy, or a HUD drop. Lookup order is focus → named local search → save mail attach → ask for photo/drop. Never guess. Orchestrator drag-drop is wanted (not built on the primary desk yet).
 
+### 2026-09-22 — Docs for the next agent
+
+Owner is switching to another Cursor agent to run the quote workflow. As-built docs, README, architecture skill, and a quote-playbook skill should match the desk: Hermes-first, three workspaces, shop-quote playbook, talk-jump only from Monitor, Hermes timeout falls back to a local “where is the drawing?” line.
+
+### 2026-09-22 — Quote start must not be a vision task
+
+Live test: “Start quote workflow for XYZ drawing” with no file was classified `vision_task` and answered by the RFQ sheet path (“could not see the sheet”). Owner wants a tighten pass before a live Engineering drawing discussion. Quote-start phrases go to the shop-quote playbook. No drawing path means ask where the file is. Do not run `reason_rfq` until a local path exists.
+
 ### 2026-09-22 — Quote email (interview Q9, locked)
 
 Owner: the quotation email is a short formal message. The total quoted cost of the component is in bold in the body. The full quotation PDF is attached.

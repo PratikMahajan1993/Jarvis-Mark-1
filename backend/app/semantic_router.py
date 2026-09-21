@@ -112,6 +112,14 @@ def try_obvious_casual(message: str) -> IntentClassification | None:
     return None
 
 
+def _quote_start_route(message: str) -> IntentClassification | None:
+    from .intent import is_quote_start
+
+    if is_quote_start(message):
+        return IntentClassification(intent="tool_ops", target_agent="DAT.03", confidence=0.88)
+    return None
+
+
 def _fallback(message: str) -> IntentClassification:
     """Local heuristic when Gemini is unavailable — keep the desk alive."""
     low = (message or "").strip().lower()
@@ -119,6 +127,9 @@ def _fallback(message: str) -> IntentClassification:
         return IntentClassification(intent="casual_chat", target_agent="RES.01", confidence=0.2)
     if _casual_definition(message):
         return IntentClassification(intent="casual_chat", target_agent="RES.01", confidence=0.85)
+    quote_route = _quote_start_route(message)
+    if quote_route is not None:
+        return quote_route
     if any(
         phrase in low
         for phrase in (
@@ -135,7 +146,7 @@ def _fallback(message: str) -> IntentClassification:
         )
     ):
         return IntentClassification(intent="ui_command", target_agent="SYS", confidence=0.55)
-    if any(word in low for word in ("drawing", "pdf", "dimension", "blueprint", "print ", "markup", "vision")):
+    if any(word in low for word in ("drawing", "pdf", "dimension", "blueprint", "print", "markup", "vision")):
         return IntentClassification(intent="vision_task", target_agent="DAT.03", confidence=0.5)
     if any(
         word in low
@@ -172,6 +183,9 @@ async def classify_intent(message: str) -> IntentClassification:
         return IntentClassification(intent="casual_chat", target_agent="RES.01", confidence=1.0)
     if _casual_definition(text):
         return IntentClassification(intent="casual_chat", target_agent="RES.01", confidence=0.95)
+    quote_route = _quote_start_route(text)
+    if quote_route is not None:
+        return quote_route
     if not settings.gemini_api_key:
         return _fallback(text)
 
@@ -202,6 +216,8 @@ async def classify_intent(message: str) -> IntentClassification:
         if result is not None:
             if _casual_definition(text) and result.intent != "casual_chat":
                 return IntentClassification(intent="casual_chat", target_agent="RES.01", confidence=0.95)
+            if quote_route is not None:
+                return quote_route
             return result
     except Exception as exc:
         logger.warning("semantic_router fallback: %s", exc)

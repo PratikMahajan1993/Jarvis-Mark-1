@@ -321,7 +321,7 @@ def _build_query(message: str, session_id: str, casual: bool, known: str | None)
     return message
 
 
-def _instructions(casual: bool, session_id: str) -> str:
+def _instructions(casual: bool, session_id: str, message: str = "") -> str:
     if casual:
         from ..casual_voice import CASUAL_PERSONA
 
@@ -330,13 +330,23 @@ def _instructions(casual: bool, session_id: str) -> str:
             f"{CASUAL_PERSONA} "
             "Reply in one or two short spoken sentences unless they ask to expand. Do not use tools."
         )
-    return (
+    base = (
         "You are Jarvis: Operations Manager + personal assistant for a machining firm. "
         "Prefer Jarvis MCP tools (jarvis_draft_email, jarvis_search_emails, "
         "jarvis_read_shop_sheet, etc.). "
         f"HITL session id: {session_id}. "
         "External writes queue for human authorization — never claim they were sent."
     )
+    if message:
+        from ..intent import is_quote_start
+
+        if is_quote_start(message):
+            base += (
+                " Quote start: load skill shop-quote (skill_view). "
+                "If there is no local drawing path yet, ask which drawing and where it lives "
+                "(inbox, file on the desk, photo). Do not call reason_rfq or analyze until a path exists."
+            )
+    return base
 
 
 def _extract_responses_text(payload: dict[str, Any]) -> str:
@@ -464,7 +474,7 @@ def _gateway_chat(
     """Warm chat/completions path — faster and more reliable than /v1/responses for short turns."""
     title = hermes_session_title(session_id)
     messages: list[dict[str, str]] = [
-        {"role": "system", "content": _instructions(casual, session_id)},
+        {"role": "system", "content": _instructions(casual, session_id, message)},
     ]
     # Carry recent Jarvis turns so follow-ups work without Hermes conversation store.
     # Keep this short — Hermes already injects a large tool system prompt (~15k tokens).
@@ -529,7 +539,7 @@ def _run_via_gateway(message: str, session_id: str, casual: bool) -> tuple[str, 
     body: dict[str, Any] = {
         "model": "hermes-agent",
         "input": message,
-        "instructions": _instructions(False, session_id),
+        "instructions": _instructions(False, session_id, message),
         "conversation": title,
         "store": True,
     }

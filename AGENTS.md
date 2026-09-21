@@ -2,20 +2,31 @@
 
 Persistent guidance for Cursor agents working in this repo during capability testing and builds.
 
+## Docs of record
+
+| Doc | Role |
+| --- | --- |
+| `work/ARCHITECTURE_POINTS.md`, `work/APP_FEATURES.md`, `work/UI_UX_POINTS.md` | **Conversation record** — owner intent and locks (living notes) |
+| `docs/CURRENT.md` | **As-built** — what works on the desk today |
+| `work/VISION_WORKBOOK.md` | Long-form vision (do not rewrite casually) |
+| `work/CAPABILITY_TEST_MATRIX.md` | Capability test IDs and log |
+
 ## Always-on rules
 
 | Rule | Role |
 | ---- | ---- |
-| `.cursor/rules/jarvis-core.mdc` | Stack, HITL, ports, HUD shape |
+| `.cursor/rules/jarvis-core.mdc` | Stack, HITL, ports, HUD shape, playbooks |
 | `.cursor/rules/jarvis-capability-run.mdc` | Test-run: observe → dispatch → continue |
 | `.cursor/rules/jarvis-subagent-dispatch.mdc` | All code changes via Composer 2.5 Fast roster workers |
 | `.cursor/rules/jarvis-react-bits.mdc` | HUD accents (when editing frontend) |
+| `.cursor/rules/jarvis-living-notes.mdc` | When to update `work/*_POINTS.md` |
 
 ## Skills (auto-routed by description)
 
 | Skill | Use when |
 | ----- | -------- |
 | `jarvis-architecture` | Any structural / stack / workflow change |
+| `jarvis-quote-playbook` | Quote/RFQ workflow, shop-quote skill, `quote_verify`, Engineering desk |
 | `jarvis-react-bits` | Adding or fixing React Bits surfaces |
 | `jarvis-capability-test` | Running matrix IDs A1…J* |
 | `jarvis-observation-dispatch` | User reports a live observation mid-test |
@@ -33,7 +44,7 @@ The coordinator does not implement. Every code change is a Task with `subagent_t
 
 **UI/UX rule:** always reuse `jarvis-uiux` for visual work — do not invent ad-hoc UI agents.
 
-**Placement policy:** cloud workers run on isolated VMs, but they do have a browser: the HUD builds and serves in the cloud (`next build` / `next dev`), and a headless Chrome can load, screenshot, and script it (see `jarvis-react-bits` skill for the one WebGL flag the orb's particle background needs headlessly). So HUD rendering, layout, scroll behavior, and card states are cloud-verifiable, and work whose acceptance is "the code/HUD is correct" can run in the cloud by default. What a cloud worker genuinely cannot reach is Hermes (`:8642`), Voicebox (`:17493`), real Google OAuth, GPU-representative Ollama (no owner GPU in the cloud), and physical mic/speaker hardware — work that depends on one of those five needs the desk machine.
+**Placement policy:** cloud workers run on isolated VMs, but they do have a browser: the HUD builds and serves in the cloud (`next build` / `next dev`), and a headless Chrome can load, screenshot, and script it (see `jarvis-react-bits` skill for the one WebGL flag the orb's particle background needs headlessly). So HUD rendering, layout, scroll behavior, and card states are cloud-verifiable, and work whose acceptance is "the code/HUD is correct" can run in the cloud by default. What a cloud worker genuinely cannot reach is Hermes (`:8642`), Voicebox (`:17493`), real Google OAuth, GPU-representative Ollama (no owner GPU in the cloud), and physical mic/speaker hardware — work that depends on one of these five needs the desk machine.
 
 **Kickoff rule:** a worker gets the repo, `AGENTS.md`, and `.cursor/rules/` automatically — and nothing from the coordinator's chat. Every kickoff carries goal, files in scope, acceptance check, and "do not expand scope". A worker with an isolated branch commits and pushes it; a worker sharing the desk checkout does not commit unless told.
 
