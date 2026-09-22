@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from datetime import datetime
@@ -20,6 +21,43 @@ CLIENT_NAMES_PATH = _PLAYBOOK_ROOT / "files" / "client-names.md"
 MHR_DEMO_PATH = _PLAYBOOK_ROOT / "files" / "mhr-demo.md"
 
 _RM_ROW_RE = re.compile(r"raw\s*material|\brm\b|material\s*supply|material\s*purchase", re.I)
+
+
+def pdf_file_sha256(path: str | Path) -> str | None:
+    """SHA-256 hex digest of PDF file bytes, or None if not a readable file."""
+    p = Path(path)
+    if not p.is_file():
+        return None
+    h = hashlib.sha256()
+    with p.open("rb") as fh:
+        for chunk in iter(lambda: fh.read(65536), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def quote_refuse_if_pdf_drift(
+    session_id: str,
+    pdf_path: str,
+    verify_result: dict[str, Any],
+) -> dict[str, Any] | None:
+    """Return a blocked verify-shaped result when PDF bytes differ from last verify binding."""
+    expected = _latest_memory(session_id, "last_quote_pdf_sha256")
+    if not expected:
+        return None
+    current = pdf_file_sha256(pdf_path) if pdf_path else None
+    if current == expected:
+        return None
+    got = current or "missing"
+    checks = list(verify_result.get("checks") or [])
+    checks.append(
+        _check(
+            "pdf_sha256",
+            False,
+            f"PDF changed since verify (bound {expected[:16]}…, now {got[:16] if got != 'missing' else got})",
+            "last_quote_pdf_path",
+        )
+    )
+    return _finalize_verify(checks)
 
 
 def _latest_memory(session_id: str, key: str) -> str:
@@ -671,7 +709,14 @@ def verify_quote(*, session_id: str, stage: str = "draft") -> dict[str, Any]:
             )
         )
 
-    return _finalize_verify(checks)
+    result = _finalize_verify(checks)
+    if pdf_ok and pdf_file:
+        digest = pdf_file_sha256(pdf_file)
+        if digest:
+            result["pdf_sha256"] = digest
+            if stage_norm != "send":
+                db.add_memory(session_id, "last_quote_pdf_sha256", digest)
+    return result
 
 
 def append_playbook_note(*, what_went_wrong: str, layer: str, change: str) -> dict[str, Any]:
@@ -708,18 +753,24 @@ def queue_quote_send(
     pdf_path: str,
     verify_snapshot: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    pdf_sha256 = (verify_snapshot or {}).get("pdf_sha256")
+    if not pdf_sha256 and pdf_path:
+        pdf_sha256 = pdf_file_sha256(pdf_path)
+    payload: dict[str, Any] = {
+        "to": to,
+        "subject": subject,
+        "body": body,
+        "attachment_paths": [pdf_path] if pdf_path else [],
+        "verify": verify_snapshot or {},
+    }
+    if pdf_sha256:
+        payload["pdf_sha256"] = pdf_sha256
     pending = request_human_approval(
         session_id=session_id,
         kind="quote_send",
         title=f"Send quote: {subject}",
         summary=f"To {to} with PDF attachment",
-        payload={
-            "to": to,
-            "subject": subject,
-            "body": body,
-            "attachment_paths": [pdf_path] if pdf_path else [],
-            "verify": verify_snapshot or {},
-        },
+        payload=payload,
         tool_name="quote_send",
     )
     return {"ok": True, "pending": pending, "queued": True, "sent": False}

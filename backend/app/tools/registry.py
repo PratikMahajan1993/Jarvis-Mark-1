@@ -1116,7 +1116,7 @@ def _quote_send(
     pdf_path: str = "",
     **_: Any,
 ) -> dict[str, Any]:
-    from ..quote import queue_quote_send, verify_quote
+    from ..quote import queue_quote_send, quote_refuse_if_pdf_drift, verify_quote
 
     verify_result = verify_quote(session_id=session_id, stage="send")
     if verify_result.get("stop"):
@@ -1136,6 +1136,15 @@ def _quote_send(
         art = db.get_artifact(pdf_id) if pdf_id else None
         if art:
             pdf_path = art.get("path") or ""
+    drift = quote_refuse_if_pdf_drift(session_id, pdf_path, verify_result)
+    if drift:
+        return {
+            "ok": False,
+            "error": "Quote proof blocked — PDF changed since verify.",
+            "data": drift,
+            "scene": drift.get("scene"),
+            "speak": "Quote proof blocked — the PDF no longer matches the verified file.",
+        }
     subj = subject or "Quotation"
     body_text = body or "Please find the quotation attached."
     result = queue_quote_send(
