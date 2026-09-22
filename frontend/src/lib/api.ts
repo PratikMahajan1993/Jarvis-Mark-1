@@ -233,4 +233,26 @@ export const api = {
       { method: "POST" },
     ),
   metrics: () => json<Record<string, unknown>>("/api/metrics"),
+  quoteVarianceErosion: (limit = 20) =>
+    json<{
+      items: Array<{
+        quote_line_id: string;
+        kind: string;
+        description: string;
+        erosion_minor: number;
+        quoted_amount_minor: number;
+        actual_amount_minor: number;
+        source_ref: string;
+        recorded_at: string;
+      }>;
+    }>(`/api/quote-variance/erosion?limit=${encodeURIComponent(String(limit))}`),
+  toolwatchCapture: (body: {
+    utterance: string;
+    open_job_machine?: string;
+    tool_instance_id?: string;
+  }) =>
+    json<Record<string, unknown>>("/api/toolwatch/capture", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
 };
