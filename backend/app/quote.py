@@ -690,12 +690,19 @@ def verify_quote(*, session_id: str, stage: str = "draft") -> dict[str, Any]:
                 from datetime import datetime
                 from zoneinfo import ZoneInfo
 
-                from .masterdata import mhr_demo_floor_rupees_as_of, sync_mhr_demo_if_enabled
+                from .masterdata.mhr_lookup import (
+                    machine_hour_rate_as_of,
+                    mhr_rate_is_sendable_as_of,
+                    sync_mhr_demo_if_enabled,
+                )
 
                 as_of = datetime.now(ZoneInfo(settings.tz)).date().isoformat()
                 with db.connect() as conn:
                     sync_mhr_demo_if_enabled(conn)
-                    floor = mhr_demo_floor_rupees_as_of(conn, machine, as_of)
+                    rate_row = machine_hour_rate_as_of(conn, machine_type=machine, as_of=as_of)
+                    floor = (
+                        rate_row["min_mhr_minor"] / 100.0 if rate_row is not None else None
+                    )
                 mhr_source = "machine_hour_rates"
                 if floor is None:
                     checks.append(
@@ -706,12 +713,37 @@ def verify_quote(*, session_id: str, stage: str = "draft") -> dict[str, Any]:
                             mhr_source,
                         )
                     )
+                elif not mhr_rate_is_sendable_as_of(rate_row):
+                    seed_note = ""
+                    if rate_row and rate_row["shipped_seed_value_minor"] is not None:
+                        if rate_row["min_mhr_minor"] == rate_row["shipped_seed_value_minor"]:
+                            seed_note = " (still the shipped demo seed value)"
+                    if rate_row and not rate_row["attested_by"]:
+                        msg = (
+                            f"{machine} MHR floor {floor} as of {as_of} is not owner-attested"
+                            f"{seed_note}"
+                        )
+                    else:
+                        msg = (
+                            f"{machine} MHR floor {floor} as of {as_of} cannot price a send"
+                            f"{seed_note}"
+                        )
+                    checks.append(
+                        _check(
+                            "mhr_demo_floor",
+                            False,
+                            msg,
+                            mhr_source,
+                        )
+                    )
                 elif mhr_rate >= floor:
+                    att_date = (rate_row["attested_at"] or "")[:10] if rate_row else ""
+                    att_note = f", attested {att_date}" if att_date else ""
                     checks.append(
                         _check(
                             "mhr_demo_floor",
                             True,
-                            f"{machine} rate {mhr_rate} ≥ floor {floor} (as of {as_of})",
+                            f"{machine} rate {mhr_rate} ≥ floor {floor} (as of {as_of}{att_note})",
                             mhr_source,
                         )
                     )
