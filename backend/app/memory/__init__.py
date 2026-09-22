@@ -1,4 +1,4 @@
-"""Local dual-write memory + RAG (foundation Phase 1).
+"""Local-first memory + RAG (SQLite ledger + LanceDB vectors).
 
 Engine: LanceDB when importable; otherwise SQLite vector blobs.
 Embeddings: local deterministic hash vectors (no model download) — upgrade later.
@@ -13,7 +13,7 @@ from .store import (
     search,
     upsert,
 )
-from .dual_write import mirror_fact
+from .mirror import mirror_fact
 from .ingest import ingest_text, reindex_recent_mail
 
 __all__ = [

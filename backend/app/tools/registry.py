@@ -811,7 +811,7 @@ def _open_artifact(session_id: str, artifact_id: str = "", **_: Any) -> dict[str
 
 def _remember(session_id: str, key: str, value: str, **_: Any) -> dict[str, Any]:
     db.add_memory(session_id, key, value)
-    from ..memory.dual_write import mirror_fact
+    from ..memory.mirror import mirror_fact
 
     mirror_fact(f"{key}: {value}", namespace="profile", key=f"pref:{key}", meta={"session_id": session_id})
     return _ok({"key": key, "value": value})

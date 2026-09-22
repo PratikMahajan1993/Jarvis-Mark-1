@@ -1,4 +1,4 @@
-"""Best-effort dual-write into local memory while Honcho remains live."""
+"""Local memory mirror: upsert durable facts into SQLite + LanceDB."""
 
 from __future__ import annotations
 
@@ -24,6 +24,6 @@ def mirror_fact(
             namespace=namespace,
             key=key or f"fact-{abs(hash(body)) % 10_000_000}",
             text=body,
-            meta={"source": "dual_write", **(meta or {})},
+            meta={"source": "mirror", **(meta or {})},
         ),
     }
