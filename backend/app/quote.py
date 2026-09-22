@@ -686,35 +686,74 @@ def verify_quote(*, session_id: str, stage: str = "draft") -> dict[str, Any]:
                 )
             )
         else:
-            demo_mins = _parse_mhr_demo_mins()
-            floor = demo_mins.get(machine.lower())
-            if floor is None:
-                checks.append(
-                    _check(
-                        "mhr_demo_floor",
-                        False,
-                        f"Machine {machine!r} is not listed in mhr-demo.md",
-                        "mhr-demo.md",
+            if settings.masterdata_enabled:
+                from datetime import datetime
+                from zoneinfo import ZoneInfo
+
+                from .masterdata import mhr_demo_floor_rupees_as_of, sync_mhr_demo_if_enabled
+
+                as_of = datetime.now(ZoneInfo(settings.tz)).date().isoformat()
+                with db.connect() as conn:
+                    sync_mhr_demo_if_enabled(conn)
+                    floor = mhr_demo_floor_rupees_as_of(conn, machine, as_of)
+                mhr_source = "machine_hour_rates"
+                if floor is None:
+                    checks.append(
+                        _check(
+                            "mhr_demo_floor",
+                            False,
+                            f"Machine {machine!r} has no effective MHR floor as of {as_of}",
+                            mhr_source,
+                        )
                     )
-                )
-            elif mhr_rate >= floor:
-                checks.append(
-                    _check(
-                        "mhr_demo_floor",
-                        True,
-                        f"{machine} rate {mhr_rate} ≥ demo minimum {floor}",
-                        "mhr-demo.md",
+                elif mhr_rate >= floor:
+                    checks.append(
+                        _check(
+                            "mhr_demo_floor",
+                            True,
+                            f"{machine} rate {mhr_rate} ≥ floor {floor} (as of {as_of})",
+                            mhr_source,
+                        )
                     )
-                )
+                else:
+                    checks.append(
+                        _check(
+                            "mhr_demo_floor",
+                            False,
+                            f"{machine} rate {mhr_rate} below floor {floor} (as of {as_of})",
+                            mhr_source,
+                        )
+                    )
             else:
-                checks.append(
-                    _check(
-                        "mhr_demo_floor",
-                        False,
-                        f"{machine} rate {mhr_rate} below demo minimum {floor}",
-                        "mhr-demo.md",
+                demo_mins = _parse_mhr_demo_mins()
+                floor = demo_mins.get(machine.lower())
+                if floor is None:
+                    checks.append(
+                        _check(
+                            "mhr_demo_floor",
+                            False,
+                            f"Machine {machine!r} is not listed in mhr-demo.md",
+                            "mhr-demo.md",
+                        )
                     )
-                )
+                elif mhr_rate >= floor:
+                    checks.append(
+                        _check(
+                            "mhr_demo_floor",
+                            True,
+                            f"{machine} rate {mhr_rate} ≥ demo minimum {floor}",
+                            "mhr-demo.md",
+                        )
+                    )
+                else:
+                    checks.append(
+                        _check(
+                            "mhr_demo_floor",
+                            False,
+                            f"{machine} rate {mhr_rate} below demo minimum {floor}",
+                            "mhr-demo.md",
+                        )
+                    )
 
     delivery_missing = _delivery_empty(session_id)
     if delivery_missing:
