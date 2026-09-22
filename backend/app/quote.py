@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -374,6 +374,71 @@ def _rm_basis_applies(scope: str, rm_present: bool) -> bool:
     return rm_present or scope == "with_material"
 
 
+_RM_BASIS_MAX_AGE_DAYS = 30
+_RM_BASIS_WARN_AGE_DAYS = 25
+
+
+def _quote_calendar_today() -> date:
+    from zoneinfo import ZoneInfo
+
+    return datetime.now(ZoneInfo(settings.tz)).date()
+
+
+def _parse_rm_basis_date(raw: str) -> date | None:
+    text = (raw or "").strip()
+    if not text:
+        return None
+    try:
+        return date.fromisoformat(text[:10])
+    except ValueError:
+        return None
+
+
+def _rm_basis_age_days(basis_date_raw: str) -> int | None:
+    basis = _parse_rm_basis_date(basis_date_raw)
+    if basis is None:
+        return None
+    return (_quote_calendar_today() - basis).days
+
+
+def _rm_basis_date_check(
+    basis_date: str,
+    *,
+    stage_norm: str,
+) -> dict[str, Any]:
+    age = _rm_basis_age_days(basis_date)
+    if age is None:
+        return _check(
+            "rm_basis_date",
+            True,
+            basis_date[:40],
+            "last_quote_rm_basis_date",
+        )
+    if age <= 24:
+        return _check(
+            "rm_basis_date",
+            True,
+            basis_date[:40],
+            "last_quote_rm_basis_date",
+        )
+    if age <= _RM_BASIS_MAX_AGE_DAYS:
+        return _check(
+            "rm_basis_date",
+            False,
+            f"RM basis {age} day(s) old (dated {basis_date[:10]})",
+            "last_quote_rm_basis_date",
+            severity="WARN",
+        )
+    severity = "BLOCKER" if stage_norm == "send" else "WARN"
+    return _check(
+        "rm_basis_date",
+        False,
+        f"RM basis {age} day(s) old — max {_RM_BASIS_MAX_AGE_DAYS} (dated {basis_date[:10]})",
+        "last_quote_rm_basis_date",
+        severity=severity,
+    )
+
+
 def _finalize_verify(checks: list[dict[str, Any]]) -> dict[str, Any]:
     blocker_failures = [
         c for c in checks if not c["pass"] and c.get("severity", "BLOCKER") == "BLOCKER"
@@ -718,14 +783,7 @@ def verify_quote(*, session_id: str, stage: str = "draft") -> dict[str, Any]:
     if _rm_basis_applies(scope, rm_present):
         basis_date = _latest_memory(session_id, "last_quote_rm_basis_date").strip()
         if basis_date and not _is_tbd(basis_date):
-            checks.append(
-                _check(
-                    "rm_basis_date",
-                    True,
-                    basis_date[:40],
-                    "last_quote_rm_basis_date",
-                )
-            )
+            checks.append(_rm_basis_date_check(basis_date, stage_norm=stage_norm))
         else:
             checks.append(
                 _check(

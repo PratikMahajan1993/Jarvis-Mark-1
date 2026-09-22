@@ -92,15 +92,15 @@ def test_undated_rm_basis_blocks():
     assert "rm_basis_date" in failed
 
 
-def test_dated_rm_basis_does_not_age_check():
+def test_dated_rm_basis_stale_blocks_send():
     session = "pg1-old-dated-rm"
     _minimal_send_ready(session)
     db.add_memory(session, "last_quote_rm_basis_date", "2020-01-01")
     result = verify_quote(session_id=session, stage="send")
     by_id = {c["id"]: c for c in result["checks"]}
-    assert by_id["rm_basis_date"]["pass"] is True
-    age_ids = {c["id"] for c in result["checks"] if "age" in c["id"].lower()}
-    assert not age_ids
+    assert by_id["rm_basis_date"]["pass"] is False
+    assert by_id["rm_basis_date"]["severity"] == "BLOCKER"
+    assert result["stop"] is True
 
 
 def test_missing_delivery_warns_draft_blocks_send():
