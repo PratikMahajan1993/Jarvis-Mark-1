@@ -258,8 +258,74 @@ def quote_to_pdf(*, session_id: str, part_name: str = "", rows: list[list[Any]] 
     return {"ok": True, "artifact": artifact}
 
 
-def _check(label: str, passed: bool, evidence: str, source: str) -> dict[str, Any]:
-    return {"id": label, "pass": passed, "evidence": evidence, "source": source}
+def _check(
+    label: str,
+    passed: bool,
+    evidence: str,
+    source: str,
+    *,
+    severity: str = "BLOCKER",
+) -> dict[str, Any]:
+    return {
+        "id": label,
+        "pass": passed,
+        "evidence": evidence,
+        "source": source,
+        "severity": severity,
+    }
+
+
+def _normalize_stage(stage: str) -> str:
+    norm = (stage or "draft").strip().lower()
+    return norm if norm == "send" else "draft"
+
+
+def _delivery_empty(session_id: str) -> bool:
+    raw = _latest_memory(session_id, "last_quote_delivery_days").strip()
+    return _is_tbd(raw)
+
+
+def _rm_basis_applies(scope: str, rm_present: bool) -> bool:
+    return rm_present or scope == "with_material"
+
+
+def _finalize_verify(checks: list[dict[str, Any]]) -> dict[str, Any]:
+    blocker_failures = [
+        c for c in checks if not c["pass"] and c.get("severity", "BLOCKER") == "BLOCKER"
+    ]
+    warn_failures = [c for c in checks if not c["pass"] and c.get("severity") == "WARN"]
+    stop = bool(blocker_failures)
+    verdict = "block" if stop else "pass"
+    failed_count = len(blocker_failures)
+    checklist_items = [
+        {
+            "label": c["id"],
+            "pass": c["pass"],
+            "evidence": c["evidence"],
+            "severity": c.get("severity", "BLOCKER"),
+        }
+        for c in checks
+    ]
+    scene = {
+        "title": "Quote proof",
+        "widgets": [
+            {
+                "type": "checklist",
+                "title": "Quote proof",
+                "items": checklist_items,
+            }
+        ],
+    }
+    return {
+        "ok": True,
+        "passed": failed_count == 0,
+        "failed_count": failed_count,
+        "warn_count": len(warn_failures),
+        "stop": stop,
+        "verdict": verdict,
+        "checks": checks,
+        "scene": scene,
+    }
 
 
 def _reference_client_names() -> list[str]:
@@ -278,10 +344,10 @@ def _reference_client_names() -> list[str]:
     return names
 
 
-def verify_quote(*, session_id: str) -> dict[str, Any]:
-    """Deterministic quote proof — no Gemini. Returns checklist + stop when >2 fails."""
+def verify_quote(*, session_id: str, stage: str = "draft") -> dict[str, Any]:
+    """Deterministic quote proof — any BLOCKER failure sets stop."""
+    stage_norm = _normalize_stage(stage)
     checks: list[dict[str, Any]] = []
-    failed = 0
 
     # 1. Line items / rows exist
     artifact_id = _latest_memory(session_id, "last_quote")
@@ -298,11 +364,12 @@ def verify_quote(*, session_id: str) -> dict[str, Any]:
     if rows_ok:
         checks.append(_check("rows_exist", True, f"{len(rows)} row(s) in artifact {artifact_id}", "last_quote_rows"))
     else:
-        failed += 1
         checks.append(_check("rows_exist", False, "No quote rows or artifact id in session memory", "last_quote"))
 
-    # 2. Numeric unit prices (fail on empty/TBD)
+    # 2. Unit prices — positive numeric required (zero/negative/absent ⇒ BLOCKER)
     price_failures: list[str] = []
+    line_extended = 0.0
+    qty_rate_failures: list[str] = []
     for idx, row in enumerate(rows, start=1):
         if len(row) < 4:
             price_failures.append(f"row {idx}: missing price column")
@@ -311,19 +378,72 @@ def verify_quote(*, session_id: str) -> dict[str, Any]:
         qty = _parse_numeric(row[2] if len(row) > 2 else 1) or 1.0
         price = _parse_numeric(unit)
         if price is None:
-            price_failures.append(f"empty unit_price row {idx}")
-        elif qty > 0 and price >= 0:
-            # sanity: numeric present
-            pass
+            price_failures.append(f"absent unit_price row {idx}")
+        elif price <= 0:
+            price_failures.append(f"non-positive unit_price row {idx} ({price})")
+        else:
+            line_extended += qty * price
+        if price is not None and price > 0 and len(row) >= 6:
+            stated_total = _parse_numeric(row[4])
+            if stated_total is not None:
+                expected = qty * price
+                if abs(stated_total - expected) > 0.009:
+                    qty_rate_failures.append(
+                        f"row {idx}: qty×rate {expected:g} ≠ line total {stated_total:g}"
+                    )
     if rows and not price_failures:
-        checks.append(_check("unit_prices", True, f"All {len(rows)} row(s) have numeric unit prices", "last_quote_rows"))
+        checks.append(
+            _check(
+                "unit_prices",
+                True,
+                f"All {len(rows)} row(s) have positive unit prices",
+                "last_quote_rows",
+            )
+        )
     elif rows:
-        failed += 1
         checks.append(
             _check("unit_prices", False, "; ".join(price_failures[:5]), "last_quote_rows")
         )
     elif not rows_ok:
         checks.append(_check("unit_prices", False, "Skipped — no rows", "last_quote_rows"))
+
+    if rows:
+        if line_extended <= 0:
+            checks.append(
+                _check(
+                    "quote_total",
+                    False,
+                    f"Quote total {line_extended:g} must be > 0",
+                    "last_quote_rows",
+                )
+            )
+        else:
+            checks.append(
+                _check(
+                    "quote_total",
+                    True,
+                    f"Quote total {line_extended:g}",
+                    "last_quote_rows",
+                )
+            )
+        if qty_rate_failures:
+            checks.append(
+                _check(
+                    "qty_rate_mismatch",
+                    False,
+                    "; ".join(qty_rate_failures[:5]),
+                    "last_quote_rows",
+                )
+            )
+        else:
+            checks.append(
+                _check(
+                    "qty_rate_mismatch",
+                    True,
+                    "Line totals match qty × unit price where stated",
+                    "last_quote_rows",
+                )
+            )
 
     # 3. Material grade present
     material = _latest_memory(session_id, "last_quote_material")
@@ -336,7 +456,6 @@ def verify_quote(*, session_id: str) -> dict[str, Any]:
     if mat_ok:
         checks.append(_check("material", True, material, "last_quote_material"))
     else:
-        failed += 1
         checks.append(_check("material", False, f"Material empty or TBD ({material or 'missing'})", "last_quote_material"))
 
     # 4. Drawing filename recorded
@@ -344,7 +463,6 @@ def verify_quote(*, session_id: str) -> dict[str, Any]:
     if drawing.strip():
         checks.append(_check("drawing", True, drawing, "last_quote_drawing"))
     else:
-        failed += 1
         checks.append(_check("drawing", False, "No drawing filename in session memory", "last_quote_drawing"))
 
     # 5. PDF artifact exists under exports
@@ -364,7 +482,6 @@ def verify_quote(*, session_id: str) -> dict[str, Any]:
     if pdf_ok:
         checks.append(_check("pdf", True, str(pdf_file), "last_quote_pdf"))
     else:
-        failed += 1
         checks.append(
             _check(
                 "pdf",
@@ -390,7 +507,6 @@ def verify_quote(*, session_id: str) -> dict[str, Any]:
     if not ref_names:
         checks.append(_check("customer_spelling", True, "no reference names", "client-names.md"))
     elif not customer.strip():
-        failed += 1
         checks.append(_check("customer_spelling", False, "Customer name empty", "last_quote_customer"))
     else:
         norm = customer.strip().lower()
@@ -398,7 +514,6 @@ def verify_quote(*, session_id: str) -> dict[str, Any]:
         if match:
             checks.append(_check("customer_spelling", True, f"'{customer}' matches reference list", "client-names.md"))
         else:
-            failed += 1
             checks.append(
                 _check(
                     "customer_spelling",
@@ -415,7 +530,6 @@ def verify_quote(*, session_id: str) -> dict[str, Any]:
 
     if scope == "labour":
         if rm_present:
-            failed += 1
             detail = []
             if rm_mem is not None and rm_mem > 0:
                 detail.append(f"memory rm_price={rm_mem}")
@@ -445,13 +559,33 @@ def verify_quote(*, session_id: str) -> dict[str, Any]:
                 )
             )
         else:
-            failed += 1
             checks.append(
                 _check(
                     "scope_with_material_rm",
                     False,
                     "With-material scope requires RM price (memory or RM line item)",
                     "last_quote_rm_price",
+                )
+            )
+
+    if _rm_basis_applies(scope, rm_present):
+        basis_date = _latest_memory(session_id, "last_quote_rm_basis_date").strip()
+        if basis_date and not _is_tbd(basis_date):
+            checks.append(
+                _check(
+                    "rm_basis_date",
+                    True,
+                    basis_date[:40],
+                    "last_quote_rm_basis_date",
+                )
+            )
+        else:
+            checks.append(
+                _check(
+                    "rm_basis_date",
+                    False,
+                    "Raw-material price basis requires a dated evidence (supplier quote, invoice, or estimate)",
+                    "last_quote_rm_basis_date",
                 )
             )
 
@@ -463,7 +597,6 @@ def verify_quote(*, session_id: str) -> dict[str, Any]:
                 _check("rm_estimate_source", True, note[:120], "last_quote_rm_source_note")
             )
         else:
-            failed += 1
             checks.append(
                 _check(
                     "rm_estimate_source",
@@ -475,11 +608,38 @@ def verify_quote(*, session_id: str) -> dict[str, Any]:
 
     machine = _latest_memory(session_id, "last_quote_machine").strip()
     mhr_rate = _parse_numeric(_latest_memory(session_id, "last_quote_machining_rate"))
-    if machine and mhr_rate is not None:
-        demo_mins = _parse_mhr_demo_mins()
-        floor = demo_mins.get(machine.lower())
-        if floor is not None:
-            if mhr_rate >= floor:
+    if machine or mhr_rate is not None:
+        if not machine:
+            checks.append(
+                _check(
+                    "mhr_machine",
+                    False,
+                    "Machining rate recorded but machine type is missing",
+                    "last_quote_machine",
+                )
+            )
+        elif mhr_rate is None:
+            checks.append(
+                _check(
+                    "mhr_rate",
+                    False,
+                    f"Machine {machine!r} recorded but machining rate is missing",
+                    "last_quote_machining_rate",
+                )
+            )
+        else:
+            demo_mins = _parse_mhr_demo_mins()
+            floor = demo_mins.get(machine.lower())
+            if floor is None:
+                checks.append(
+                    _check(
+                        "mhr_demo_floor",
+                        False,
+                        f"Machine {machine!r} is not listed in mhr-demo.md",
+                        "mhr-demo.md",
+                    )
+                )
+            elif mhr_rate >= floor:
                 checks.append(
                     _check(
                         "mhr_demo_floor",
@@ -489,7 +649,6 @@ def verify_quote(*, session_id: str) -> dict[str, Any]:
                     )
                 )
             else:
-                failed += 1
                 checks.append(
                     _check(
                         "mhr_demo_floor",
@@ -499,26 +658,30 @@ def verify_quote(*, session_id: str) -> dict[str, Any]:
                     )
                 )
 
-    stop = failed > 2
-    checklist_items = [{"label": c["id"], "pass": c["pass"], "evidence": c["evidence"]} for c in checks]
-    scene = {
-        "title": "Quote proof",
-        "widgets": [
-            {
-                "type": "checklist",
-                "title": "Quote proof",
-                "items": checklist_items,
-            }
-        ],
-    }
-    return {
-        "ok": True,
-        "passed": failed == 0,
-        "failed_count": failed,
-        "stop": stop,
-        "checks": checks,
-        "scene": scene,
-    }
+    delivery_missing = _delivery_empty(session_id)
+    if delivery_missing:
+        delivery_sev = "BLOCKER" if stage_norm == "send" else "WARN"
+        checks.append(
+            _check(
+                "delivery_days",
+                False,
+                "Delivery time not entered — owner must type it (never computed)",
+                "last_quote_delivery_days",
+                severity=delivery_sev,
+            )
+        )
+    else:
+        delivery_val = _latest_memory(session_id, "last_quote_delivery_days").strip()
+        checks.append(
+            _check(
+                "delivery_days",
+                True,
+                delivery_val[:80],
+                "last_quote_delivery_days",
+            )
+        )
+
+    return _finalize_verify(checks)
 
 
 def append_playbook_note(*, what_went_wrong: str, layer: str, change: str) -> dict[str, Any]:

@@ -44,6 +44,7 @@ def _seed_good_quote(session: str) -> None:
         ],
     )
     quote_to_pdf(session_id=session, part_name="Bracket")
+    db.add_memory(session, "last_quote_delivery_days", "14")
 
 
 def test_quote_verify_fails_on_empty_session():
@@ -73,11 +74,12 @@ def test_quote_verify_passes_fixture():
     assert all(c["pass"] for c in result["checks"])
 
 
-def test_quote_verify_stop_when_more_than_two_fails():
+def test_quote_verify_stop_on_any_blocker():
     session = "verify-stop"
     db.add_memory(session, "last_quote_drawing", "only-drawing.pdf")
     result = verify_quote(session_id=session)
-    assert result["failed_count"] > 2
+    assert result["failed_count"] >= 1
+    assert result["verdict"] == "block"
     assert result["stop"] is True
 
 
@@ -185,12 +187,17 @@ def test_verify_fails_rm_estimate_without_source_note():
     assert "rm_estimate_source" in failed
 
 
-def test_verify_does_not_require_delivery_time():
+def test_verify_delivery_warns_at_draft_not_stop():
     session = "verify-no-delivery"
     _seed_good_quote(session)
-    result = verify_quote(session_id=session)
-    check_ids = {c["id"] for c in result["checks"]}
-    assert "delivery_time" not in check_ids
+    db.add_memory(session, "last_quote_delivery_days", "")
+    result = verify_quote(session_id=session, stage="draft")
+    by_id = {c["id"]: c for c in result["checks"]}
+    assert "delivery_days" in by_id
+    assert by_id["delivery_days"]["pass"] is False
+    assert by_id["delivery_days"]["severity"] == "WARN"
+    assert result["verdict"] == "pass"
+    assert result["stop"] is False
     assert result["passed"] is True
 
 
@@ -303,7 +310,9 @@ def test_quote_build_tool_with_material_rm_price_passes_verify():
     assert mems.get("last_quote_rm_price") == "4200"
 
     db.add_memory(session, "last_quote_drawing", "fixture-drawing.pdf")
+    db.add_memory(session, "last_quote_rm_basis_date", "2026-03-01")
     quote_to_pdf(session_id=session, part_name="Bracket")
     verify = verify_quote(session_id=session)
     by_id = {c["id"]: c for c in verify["checks"]}
     assert by_id["scope_with_material_rm"]["pass"] is True
+    assert by_id["rm_basis_date"]["pass"] is True

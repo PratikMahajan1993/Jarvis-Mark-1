@@ -1118,14 +1118,14 @@ def _quote_send(
 ) -> dict[str, Any]:
     from ..quote import queue_quote_send, verify_quote
 
-    verify_result = verify_quote(session_id=session_id)
+    verify_result = verify_quote(session_id=session_id, stage="send")
     if verify_result.get("stop"):
         return {
             "ok": False,
-            "error": "Quote proof failed (>2 checks). Fix before send.",
+            "error": "Quote proof blocked — fix BLOCKER failures before send.",
             "data": verify_result,
             "scene": verify_result.get("scene"),
-            "speak": "Too many proof failures — fix the quote before queuing send.",
+            "speak": "Quote proof blocked — fix blockers before queuing send.",
         }
 
     if not pdf_path:
