@@ -11,7 +11,7 @@
 
 | Reader | Read |
 | ------ | ---- |
-| Owner | §0 (including §0.1, the locked decisions and what each becomes), §3, §4B.1–4B.3, §6 (severity P0/P1), §8.7's one reversal to confirm, §8.8's five open defaults |
+| Owner | §0 (including §0.1, the locked decisions and what each becomes), §3, §4B.1–4B.3, §6 (severity P0/P1), §8.8's three open defaults |
 | Sub-agent dispatcher | §5 in full, then the chunk table §5.6 |
 | Implementation worker | Only the sections its kickoff quotes. Workers never read this document for scope — the kickoff carries the excerpt |
 
@@ -49,13 +49,13 @@ Full statements in §8. Their mechanical consequences, because a decision that d
 
 | Lock | Becomes |
 | ---- | ------- |
-| **Cloud vision: default-deny per customer, 5 drawings per 10:00→10:00 cycle, owner override** | Two independent gates — a per-customer **consent** gate no quota override can bypass, and a **quota ledger** that claims a unit atomically before any provider dispatch, counts a document once by sha256, and raises a HITL card when the cycle is spent (§4B.4, §2.7, **V1/V2**) |
+| **Cloud vision: default-deny per customer, 5 drawings per 10:00→10:00 cycle, owner override, and only the owner may spend a unit** | Three gates — a per-customer **consent** gate no override can bypass; a **trigger** gate, since automated ingest stops at the free local extract and marks the drawing `needs_vision` rather than charging the pool; and a **quota ledger** that claims a unit atomically before dispatch, counts a document once by sha256, asks before spending on a pack over four sheets, and raises a HITL card when the cycle is spent (§4B.4, §2.7, **V1/V1b/V2**) |
 | **Keep the `demo` rate table; owner hand-edits it with real rates** | `source_kind='demo'` stays, but sendability moves from *storage* to *attestation*: a rate row still carrying its shipped seed value, or carrying no `attested_by`, is a **BLOCKER**; an owner-attested row prices real quotes (§4.3, §6.2, **S5**) |
 | **Sole commercial authority — no second signature** | No approval tiers, no delegation model. `approved_by` stays as a single-owner audit stamp, and claim-once HITL (§1.5) becomes *more* important, not less: with one signer, a double-tap is the only thing that can forge a second approval (**Q2**) |
 | **`toolwatch` v0 on the manual shop log; defer FOCAS/MTConnect** | No control-network integration and no `machine_telemetry` table in this overhaul. v0 needs a **capture surface** instead — a one-line spoken or HUD entry per insert change — or it has no data to learn from (§3.1, **M5**) |
 | **Raw-material basis older than 30 days is a hard block** | A global `rm_basis_max_age_days = 30` BLOCKER, evaluated **again at the moment of send**, not only at verify — a quote proved on day 29 and authorized on day 31 must fail (§2.5, §4.4, **Q5**) |
 | **Strip Honcho; 100 % local-first on LanceDB + SQLite** | One docstring and one module in code (`backend/app/memory/dual_write.py`), and a superseded strategy in `VISION_WORKBOOK.md` §2. It also promotes §6.4 from a defect to a blocker: LanceDB must become the **read** path, because it is now the committed vector store rather than an optional mirror (§4B.8, **K5/K8**) |
-| **Jarvis never guesses a delivery date** | No capacity model, no computed lead time, ever. `delivery_days` stays empty until the owner types it, and an empty value is a BLOCKER **at authorize** (§2.5, §3.5, **Q4**) |
+| **Jarvis never guesses a delivery date, but insists on having one** | No capacity model, no computed lead time, ever. The check is **stage-aware**: WARN at `stage='draft'` so pricing can be reviewed, BLOCKER at `stage='send'`. Jarvis asks during drafting and again on the Authorize card, which carries the field inline (§2.5, §3.5, **PG1**) |
 
 Two of these reverse earlier positions in this document, deliberately: demo-sourced rates now *can* price a real quote once attested, and a missing delivery date now *does* block a send. §8 flags the second one against the owner's earlier interview answer.
 
@@ -388,16 +388,16 @@ alwaysApply: false
 
 # Quote workflow — non-negotiables
 
-Underquoting is the failure the owner has actually suffered — a price corrected
-after send, an assumed material, a forgotten outsource, material billed to a
-labour-only customer. Code here fails closed.
+Underquoting is the failure the owner has actually suffered — a price corrected after
+send, an assumed material, a forgotten outsource, material billed to a labour-only
+customer. Fail closed.
 
 ## Provenance (no exceptions)
 
 - Every money-bearing line carries `rate_source_id` → a `supplier_rm_quotes`,
   `machine_hour_rates`, `outsource_quotes`, or `owner_input` row. No source, no line.
-- An estimate is a first-class, labelled thing: `is_estimate = 1` plus a basis
-  naming historical transactions or market trend. An unlabelled estimate is a bug.
+- An estimate is labelled: `is_estimate = 1` plus a basis naming historical
+  transactions or market trend. An unlabelled estimate is a bug.
 - Sendability follows **attestation, not storage.** `source_kind='demo'` is a
   supported production source while the Master Data UI is deferred, but a rate row
   is quotable only when `attested_by` is set and its value differs from the shipped
@@ -406,9 +406,8 @@ labour-only customer. Code here fails closed.
 
 ## Manufacturing physics the code must respect
 
-- Machining cost = Σ(operation time × MHR) + setup + tooling. Setup is per batch,
-  not per piece — per piece on a 100-off is an overquote, omitted on a 1-off is an
-  underquote.
+- Machining cost = Σ(operation time × MHR) + setup + tooling. Setup is per batch: per
+  piece on a 100-off overquotes, omitted on a 1-off underquotes.
 - Cycle time comes from `cycletime` estimates or measured `routing_operations`
   actuals, never a guess; estimates carry a confidence band and sample count.
 - Material cost = nested blank mass or length × rate, including saw kerf, facing
@@ -416,11 +415,10 @@ labour-only customer. Code here fails closed.
 - Scope drives material: labour-only orders never carry a raw-material line;
   with-material orders always do. Default is per customer; this order's mail or
   the owner's word overrides it; neither present → ask.
-- Outsource (heat treat, plating, grinding, any process not in-house, no suitable
-  machine, the customer asked, or capacity full) is a priced line with a vendor
-  quote, and the case is recorded. Never a guessed amount.
-- Tolerance and finish drive process from a table, not model judgement. Unreadable
-  tolerance or GD&T → ask.
+- Outsource (heat treat, plating, grinding, no suitable machine, the customer asked,
+  or capacity full) is a priced line with a vendor quote and a recorded case. Never
+  a guessed amount.
+- Tolerance and finish drive process from a table, not judgement; unreadable → ask.
 - Units and currency travel with every number; money is integer minor units.
 
 ## MHR floor and freshness
@@ -431,20 +429,23 @@ labour-only customer. Code here fails closed.
 - **Missing data is a failure, not a skip.** No machine, no rate, machine absent
   from the rate table, or expired rate row → BLOCKER. Never silently omit the check.
 - Raw-material basis older than **30 days** is a BLOCKER (`rm_basis_max_age_days`) —
-  supplier quote, invoice, or labelled estimate alike, dated by its evidence. Age is
-  measured at **send**: proved on day 29, authorized on day 31 must fail. Outsource
-  age is a WARN until the owner rules.
+  supplier quote, invoice, or estimate alike, dated by its evidence and measured at
+  **send**: proved day 29, authorized day 31 must fail. Outsource age is a WARN.
 
 ## Proof (`quote_verify`)
 
 - Checks are classed: `BLOCKER` or `WARN`. Any BLOCKER ⇒ `stop: true`; counting
   failures is not a severity model.
+- Severity is per **stage**: `verify_quote(stage='draft'|'send')`. A draft exists so
+  the owner can review pricing, so it never fails on a field he fills at the end.
 - BLOCKERs include: zero/negative/absent unit price, total ≤ 0, qty × rate
   mismatch, missing rate source, missing or expired MHR floor basis, unattested or
   shipped-seed rate value, raw-material basis older than 30 days, scope↔material
   contradiction, missing outsource price on an outsourced operation, unlabelled
   estimate, a price driven by an unconfirmed drawing fact, missing drawing revision,
-  attachment hash mismatch, and an empty delivery field at send.
+  attachment hash mismatch, and an empty delivery field **at `stage='send'`**.
+- Delivery is the one stage-dependent check: **WARN at draft, BLOCKER at send.** Ask
+  once while drafting and again on the Authorize card, which carries the field inline.
 - Proof runs against the stored `quote_revision`, not chat memory. The verified PDF
   is bound by sha256; `quote_send` re-hashes and refuses on drift.
 
@@ -453,9 +454,8 @@ labour-only customer. Code here fails closed.
 - `quote_send` queues an Authorize card and never sets `sent: true`.
 - The Authorize card shows total, currency, scope, rate sources, estimate flags, and
   whether identical content was already delivered.
-- **Delivery is never computed.** No capacity model, no vendor-lead-time sum, no
-  inference from past jobs. `delivery_days` stays empty until the owner types it, and
-  an empty value is a BLOCKER at authorize — build and verify may proceed without it.
+- **Delivery is never computed** — no capacity model, no vendor-lead-time sum, no
+  inference from past jobs. Owner-typed or empty; never a suggestion.
 - Corrections go to the playbook `notes.md` via `quote_playbook_note`, then the
   broken step re-runs. Fix the folder, not the chat.
 ```
@@ -557,9 +557,15 @@ the customer and part. Cloud analysis also costs money per call. Both are bounde
 
 - Cap: **5 drawings per cycle**, where a cycle runs 10:00 → 10:00 local time.
 - One **document** (one sha256) is one unit, however many pages or calls it needs.
-  A pack above the page threshold asks first rather than silently spending the unit.
-- The counter is global and includes every source: automated mail ingest, UI upload,
-  and owner-initiated analysis.
+  Above `vision_page_threshold` (default 4) the tool asks first, after extracting a
+  local sheet index, so a 40-sheet pack never silently spends the unit.
+- **Only the owner spends a unit.** Automated mail ingest must never dispatch to a
+  cloud model: it runs the free local extract, sets `analysis_state='needs_vision'`,
+  and surfaces the drawing on the bench. The unit is charged when the owner opens
+  that RFQ and asks for the analysis. A background job, a watch, a retry loop, or a
+  Hermes tool call cannot charge a unit on its own.
+- The counter is global across everything the owner initiates — bench-triggered
+  analysis and manual UI upload draw on one pool.
 - **Claim before dispatch.** Insert the usage row inside the same transaction that
   checks the count, keyed unique on `(cycle_start, file_sha256)`. Two concurrent
   ingests must not both see the fourth unit free.
@@ -882,7 +888,8 @@ CREATE TABLE part_revisions (
   drawing_artifact_id TEXT, drawing_sha256 TEXT,        -- identity for §4B recall
   material_id TEXT REFERENCES materials(id),
   blank_spec TEXT, finished_mass_kg REAL, units TEXT NOT NULL DEFAULT 'mm',
-  analysis_state TEXT NOT NULL DEFAULT 'none',          -- none|vision_done|owner_confirmed|failed
+  analysis_state TEXT NOT NULL DEFAULT 'none',          -- none|needs_vision|vision_done|
+                                                        -- owner_confirmed|failed
   superseded_by TEXT REFERENCES part_revisions(id),
   UNIQUE (component_id, revision)
 );
@@ -971,7 +978,9 @@ CREATE TABLE vision_quota_usage (
   cycle_start TEXT NOT NULL,                  -- 10:00 local boundary, computed not stored ad hoc
   file_sha256 TEXT NOT NULL,
   customer_id TEXT REFERENCES customers(id),
-  source TEXT NOT NULL CHECK (source IN ('mail_ingest','ui_upload','owner_request')),
+  spent_by TEXT NOT NULL CHECK (spent_by IN ('owner_bench','owner_upload','owner_override')),
+  arrival TEXT NOT NULL,                      -- mail_ingest|ui_upload|walk_in: how it arrived,
+                                              -- never who spent the unit (§8.1: only the owner does)
   pages INTEGER NOT NULL DEFAULT 1,
   state TEXT NOT NULL CHECK (state IN ('claimed','dispatched','failed','override')),
   turn_id TEXT, override_action_id TEXT REFERENCES pending_actions(id),
@@ -1160,7 +1169,11 @@ CREATE TABLE shop_state (                    -- materialised projection, rebuild
  [2] cheap deterministic extract: PDF text, title block, dimension tokens, notes list
         │        (free, local, always runs; also becomes corpus chunks)
         ▼
- [3] cloud vision ONLY past both gates (§8.1):
+ [3] cloud vision ONLY when the owner asks, and only past both gates (§8.1).
+        │        automated ingest never reaches here: it stops at [2], sets
+        │        analysis_state='needs_vision', and waits on the bench.
+        │        gate 0 trigger  - owner opened this RFQ and asked; no job, watch, retry
+        │                          or tool call may spend a unit on its own
         │        gate 1 consent  - customer_terms.allow_cloud_vision=1 AND nda=0, owner-attested;
         │                          unknown customer = deny and ask; no override grants consent
         │        gate 2 quota    - <5 documents charged this 10:00->10:00 cycle; unit claimed
@@ -1183,7 +1196,7 @@ CREATE TABLE shop_state (                    -- materialised projection, rebuild
  [8] quotable set = confirmed facts only.  Unconfirmed → the card's open_questions, spoken aloud.
 ```
 
-**The quota is affordable because the cache is the default path.** Five documents per cycle is a real constraint only if every conversation re-analyses a drawing. It does not: step 1 answers repeat drawings for free, step 2 resolves title blocks and dimension text locally for free, and step 3 is reached only for a genuinely new sheet that the local extract could not read. The HUD carries the used/total count so the owner can see the budget before an RFQ morning, and the cycle boundary at 10:00 means a night-shift mail ingest and the morning's manual uploads draw on the *same* pool — which is the hazard flagged in §6.28.
+**The quota is affordable because nothing spends it by accident.** Five documents per cycle would be tight if every conversation re-analysed a drawing, and it is not: step 1 answers repeat drawings for free, step 2 resolves title blocks and dimension text locally for free, and step 3 is reached only when the owner opens a genuinely new sheet that the local extract could not read. Overnight RFQs queue as `needs_vision` rather than charging the pool (§8.1), so the budget the owner sees at 10:00 is the budget he gets. The HUD carries the used/total count and the reset time.
 
 Why the confirm step exists rather than "just save what was said": a quote priced on a vision guess is exactly the failure the owner has already paid for. `entity_facts.state` makes the difference machine-checkable — `quote_verify` (§2.5) can refuse a price whose driving fact is a candidate.
 
@@ -1316,17 +1329,17 @@ This manifest is a **design source**. It is not a backlog, and a worker must nev
 
 ```
 wave 1 (no dependencies; dispatch together, merge before wave 2)
-  Q1 ─ proof severity classes + zero-price / total / qty×rate blockers
-  Q4 ─ delivery field gate: never computed, empty blocks authorize
-  Q5a─ raw-material basis must be dated; undated basis blocks send
-  V1 ─ vision gate: deny-all default + 5-per-cycle quota ledger + HITL override
+  PG1─ proof gates, ONE worker over verify_quote: severity classes, zero/total/qty×rate,
+       missing-MHR-is-a-failure, undated RM basis, stage-aware delivery check
+  V1 ─ vision gate: deny-all default, ingest never spends, 5-per-cycle ledger, override
   K8 ─ strip Honcho; local-first declared
   R1 ─ rule tree split (T0 <200 words)
   S0 ─ migration runner + WAL / busy_timeout / FK pragmas
   T0 ─ golden contract tests
 
 wave 2   Q2 claim-once HITL + external_effects · Q3 PDF hash binding · T1 turn ledger
-         S1 parties/materials/RM · S2 machines + temporal MHR
+         V1b needs-vision queue + spend action on the bench · S1 parties/materials/RM
+         S2 machines + temporal MHR
 wave 3   S3 routings · S4 quote revisions · S5 attested rate import · V2 per-customer consent
          Q5b 30-day comparison · T2–T5 SSE, reaper, reconciliation, concurrency
 wave 4   K1–K7 knowledge cards, identity cascade, hybrid retrieval, real embeddings, shop state
@@ -1334,6 +1347,8 @@ wave 5   M1–M6 machining features · O1–O2 metrics, backup · P1 network pos
 ```
 
 The ordering is deliberate. **Wave 1 is everything that stops a wrong or costly act and needs nothing built first**: the proof cannot currently refuse ₹0.00, a delivery date can be left blank, an undated material basis is invisible, and any drawing can be shipped to Gemini without a gate or a spend cap. Rules (R1) ride along because they are free and make every later worker smarter. Features (M) come last, because a feature built on today's quote-state model inherits §6.7.
+
+**One worker per file, not one worker per rule.** Every gate above lands in `verify_quote`, so they ship as a single chunk (**PG1**) rather than three parallel workers colliding in one function. Parallelism inside a wave is only safe across disjoint file sets — check that before dispatching, not after.
 
 **V1 before V2 on purpose:** consent lives on `customer_terms`, which does not exist until S1. Until it does, the safe interim is not "allow and remember" but **deny every customer** and let the owner authorize per drawing — the quota ledger and the override card are useful on day one, and S1 only relaxes the gate for customers the owner has attested.
 
@@ -1375,22 +1390,21 @@ A chunk that cannot state its rung-4 ID is not ready to dispatch.
 
 | ID | Title | Agent | Place | Depends | Manifest excerpt to paste | Acceptance |
 | -- | ----- | ----- | ----- | ------- | ------------------------- | ---------- |
-| **Q1** | Proof severity classes + zero/total/qty×rate blockers + missing-MHR-is-a-failure | workflows | cloud | — | §2.5, §6.1, §6.2, §6.9 | New tests: ₹0.00 line ⇒ `verdict='block'`; machine-without-rate ⇒ block; existing `test_quote_playbook.py` green |
+| **PG1** | **Proof gates — one worker, one pass over `verify_quote`.** Severity classes (BLOCKER/WARN, any BLOCKER stops); zero / negative / absent price, total ≤ 0, qty × rate mismatch; missing-MHR-is-a-failure; raw-material basis must carry a date; stage-aware delivery check (WARN at draft, BLOCKER at send) | workflows | cloud | — | §2.5, §6.1, §6.2, §6.9, §8.5, §8.7 | New tests: ₹0.00 line ⇒ `verdict='block'`; machine-without-rate ⇒ block; undated RM basis ⇒ block; no delivery ⇒ `stage='draft'` warns and `stage='send'` blocks; no code path computes a date; `test_quote_playbook.py` green |
 | **Q2** | Claim-once HITL + `external_effects` + Idempotency-Key | workflows | cloud | S0 | §1.5, §6.3 | 5 concurrent confirms ⇒ 1 effect, 4 "already handled"; fault-injection test leaves `needs_human` |
-| **Q3** | Bind proof to PDF sha256; refuse on drift at send | workflows | cloud | Q1 | §2.5, §6.8 | Mutating the PDF after verify blocks the send |
-| **Q4** | Delivery gate: never computed; empty `delivery_days` blocks authorize, build/verify still allowed | workflows | cloud | — | §2.5, §8.7, §3.5 | Test: quote with no delivery ⇒ authorize refused naming the field; no code path computes a date |
-| **Q5a** | Raw-material basis must carry a date; undated basis blocks send | workflows | cloud | — | §2.5, §8.5 | Test: RM line with no `basis_date` ⇒ `verdict='block'` |
-| **Q5b** | 30-day RM staleness comparison, re-evaluated at send | workflows | cloud | Q5a, S1 | §2.5, §4.4, §6.30 | Test: basis 31 days old ⇒ block; verified day 29 / authorized day 31 ⇒ block |
-| **V1** | Cloud-vision gate: deny-all default, `vision_quota_usage` ledger with atomic claim, 5-per-cycle cap on a 10:00 boundary, HITL override for one document, `disclosure_log` | workflows | cloud | — | §2.7, §4.3, §4B.4, §8.1 | Tests: 6th document ⇒ HITL card, no dispatch; concurrent claims ⇒ one unit; retry of a charged file ⇒ free; failure ⇒ no charge and no corpus write; provider stubbed |
+| **Q3** | Bind proof to PDF sha256; refuse on drift at send | workflows | cloud | PG1 | §2.5, §6.8 | Mutating the PDF after verify blocks the send |
+| **Q5b** | 30-day RM staleness comparison, re-evaluated at send | workflows | cloud | PG1, S1 | §2.5, §4.4, §6.30 | Test: basis 31 days old ⇒ block; verified day 29 / authorized day 31 ⇒ block |
+| **V1** | Cloud-vision gate: deny-all default, owner-only spend (ingest stops at the local extract and sets `needs_vision`), `vision_quota_usage` ledger with atomic claim, 5-per-cycle cap on a 10:00 boundary, page threshold of 4, HITL override for one document, `disclosure_log` | workflows | cloud | — | §2.7, §4.3, §4B.4, §8.1 | Tests: mail ingest of a new drawing ⇒ zero dispatches and `analysis_state='needs_vision'`; 6th owner-opened document ⇒ HITL card, no dispatch; concurrent claims ⇒ one unit; retry of a charged file ⇒ free; failure ⇒ no charge and no corpus write; 6-sheet pack ⇒ asks with a local sheet index; provider stubbed |
+| **V1b** | Bench affordance for the queue: `needs_vision` list, an explicit "analyse this drawing (spends 1 of 5)" action, and the used/total + reset-time counter | uiux | cloud | V1 | §2.7, §6.28, §8.1 | Headless check: the queue renders, the action names its cost, the counter reflects the ledger. No spend path exists that does not pass through an owner action |
 | **V2** | Per-customer consent rows + owner attestation UI path; NDA hard-deny | workflows | cloud | V1, S1 | §2.7, §4.3 | Unknown customer denies and asks; `nda=1` cannot be overridden |
 | **K8** | Strip Honcho: remove the module's cloud framing, rename `dual_write` → `memory.mirror`, mark `VISION_WORKBOOK` §2 superseded, assert local-first in the rule set | builder | cloud | — | §6.6, §8.6 | `rg -i honcho` returns nothing in `backend/`; memory doc states local-first |
-| **R1** | Split rules into the §2.3 tree; write T0 + the two domain rules; CI budget test | builder | cloud | — | §2.2–§2.9 | T0 <200 words; every T1 has `globs`; no non-T0 `alwaysApply: true` |
+| **R1** | Split rules into the §2.3 tree; write the always-on core plus the three domain rules (quote, g-code, drawing-vision); CI budget test | builder | cloud | — | §2.2–§2.9 | Core rule <200 words; every scoped rule has `globs`; no rule but the core sets `alwaysApply: true`; scoped rules ≤700 words |
 | **R2** | Trim `AGENTS.md` to a map; delete duplicated stack/HITL prose | builder | cloud | R1 | §2.1, §2.9 | One home per fact; no contradictions with `docs/CURRENT.md` |
 | **S0** | Migration runner, `schema_migrations`, WAL + `busy_timeout` + FK pragmas | builder | cloud | — | §1.7, §4.4 | Fresh DB and existing DB both migrate; concurrent write test passes |
 | **S1** | Parties + materials + suppliers + RM quotes (+ alias backfill from `client-names.md`) | workflows | cloud | S0 | §4.3, §4.5 | Customer-spelling proof check reads `customer_aliases` |
 | **S2** | Machines, `machine_hour_rates` (temporal, as-of), capabilities; import `mhr-demo.md` as `source_kind='demo'` | workflows | cloud | S0 | §4.1, §4.3 | As-of lookup test; missing or expired floor blocks send (attestation lands in S5) |
 | **S3** | Components, part revisions, routings, routing operations, outsource tables | workflows | cloud | S1, S2 | §4.3 | Round-trip test; `jobs` dual-read behind flag |
-| **S4** | Quotes / revisions / lines / proofs / events; migrate `memories`-based quote state | workflows | cloud | S1–S3, Q1 | §4.3, §4.5, §6.7 | Two quotes in one session no longer collide; >50 memory writes no longer lose facts |
+| **S4** | Quotes / revisions / lines / proofs / events; migrate `memories`-based quote state | workflows | cloud | S1–S3, PG1 | §4.3, §4.5, §6.7 | Two quotes in one session no longer collide; >50 memory writes no longer lose facts |
 | **S5** | Attested rates: `attested_by` / `attested_at` / `shipped_seed_value_minor`, idempotent importer for the owner-edited `files/mhr-demo.md`, fail-closed on malformed rows | workflows | cloud | S2 | §4.1, §4.5, §6.2, §8.2 | Unattested or shipped-seed value ⇒ BLOCKER; an owner-attested row prices a real quote; a bad row fails the import instead of landing silently |
 | **T0** | Golden contract tests for chat/confirm/pending/session | builder | cloud | — | §5.2 | Snapshot tests pass before and after T1–T4 |
 | **T1** | `turns` table + accept-then-work `/api/chat` + idempotency key | builder | cloud | S0, T0 | §1.2, §1.3 | POST returns `{turn_id}` <100 ms; result readable from ledger |
@@ -1450,7 +1464,7 @@ quote_send ok=True queued=True    speak: "Authorize to send the quote PDF."
 ```
 
 There is no total assertion, no `qty × rate` recomputation, no currency, no sanity band against historical ₹/kg or ₹/hr, and no check that an outsourced operation carries a price. "Never underquote" is the owner's hardest rule (`APP_FEATURES.md`, interview Q8) and the proof cannot enforce its most extreme violation.
-**Fix:** §2.5 BLOCKER list; positive total; arithmetic recomputation from `quote_lines`; outlier band from history with the band named in the check evidence. → **Q1**
+**Fix:** §2.5 BLOCKER list; positive total; arithmetic recomputation from `quote_lines`; outlier band from history with the band named in the check evidence. → **PG1**
 
 #### 6.2 The MHR floor is checked only when the data happens to be there *(reproduced)*
 
@@ -1462,7 +1476,7 @@ machine not in the demo table      -> check absent (silently skipped)
 ```
 
 Three of the four shapes of "we underquoted the machine time" produce **no check at all**, because `verify_quote` only compares when `machine and mhr_rate is not None` and only against machine types listed in `files/mhr-demo.md`. The real shop has machines that will never appear in a demo markdown table.
-**Fix:** invert the default — absent machine, absent rate, unlisted machine, or expired rate row is a BLOCKER; floors move to `machine_hour_rates` with as-of lookup. Per §8.2 the `demo` table stays in production, so the send gate is **attestation**, not storage: unattested, or still equal to the shipped seed value, blocks. → **Q1**, **S2**, **S5**
+**Fix:** invert the default — absent machine, absent rate, unlisted machine, or expired rate row is a BLOCKER; floors move to `machine_hour_rates` with as-of lookup. Per §8.2 the `demo` table stays in production, so the send gate is **attestation**, not storage: unattested, or still equal to the shipped seed value, blocks. → **PG1**, **S2**, **S5**
 
 #### 6.3 Two Authorizes send two emails *(reproduced)*
 
@@ -1526,7 +1540,7 @@ This is the most dangerous data-model flaw in the current system, because it sil
 #### 6.9 `stop` is arithmetic, not severity
 
 `stop = failed > 2`. Two catastrophic failures (no price + wrong customer) queue the send; three cosmetic ones block it. Severity is not a count.
-**Fix:** BLOCKER/WARN classes, any BLOCKER stops. → **Q1**
+**Fix:** BLOCKER/WARN classes, any BLOCKER stops. → **PG1**
 
 #### 6.10 Drawings reach a cloud model with no disclosure gate
 
@@ -1590,7 +1604,7 @@ One SQLite file holds quotes, mail, memory, and HITL history; `exports/` holds t
 #### 6.20 Time, units, and currency are inconsistent
 
 `db.utc_now()` coexists with naive `datetime.now()` (`quote.append_playbook_note`, activity timestamps); `tz` is `Asia/Kolkata` but no display-layer conversion is enforced; money has no currency field and lands in a spreadsheet cell as a float or an empty string; `cnc_suggest` **infers** inch-vs-mm by sniffing tokens. On a shop floor, a units mix-up is a scrap event, and an inch/mm inference is not a safety-grade decision.
-**Fix:** §4.4 conventions; units on every dimension with the original preserved; currency on every money field; UTC storage everywhere; units asserted in the quote proof. → **S0**, **S4**, **Q1**
+**Fix:** §4.4 conventions; units on every dimension with the original preserved; currency on every money field; UTC storage everywhere; units asserted in the quote proof. → **S0**, **S4**, **PG1**
 
 #### 6.21 No dedupe on mail → RFQ intake
 
@@ -1612,7 +1626,7 @@ Jarvis' own summaries, digests, and drafts are text. If they are indexed as corp
 #### 6.24 "Capacity full" is an outsource trigger with no capacity model
 
 The locked outsource rule includes "the shop is at capacity" (`APP_FEATURES` interview Q6), and quotes carry delivery days — but there is no load model, no shift calendar, and no WIP view.
-**Resolved by lock (§8.7), in the strict direction:** Jarvis never computes a date and never suggests one, so the absence of a capacity model is no longer a correctness risk — it is simply out of scope. "Capacity full" stays an owner-stated outsource reason recorded as `outsource_case='capacity'`, and the delivery field is the owner's typed number or nothing. → **Q4**
+**Resolved by lock (§8.7), in the strict direction:** Jarvis never computes a date and never suggests one, so the absence of a capacity model is no longer a correctness risk — it is simply out of scope. "Capacity full" stays an owner-stated outsource reason recorded as `outsource_case='capacity'`, and the delivery field is the owner's typed number or nothing. → **PG1**
 
 #### 6.25 Single-operator authority — now a deliberate choice, with one consequence to engineer
 
@@ -1638,21 +1652,18 @@ A customer can revise an RFQ, a PO, or a specification after a quote is sent. Th
 
 Each lock closes a hazard and opens a smaller one. These are the smaller ones, and they are cheaper to engineer now than to discover in a quoting morning.
 
-#### 6.28 An overnight mail ingest can spend the whole vision budget before 10 AM
+#### 6.28 An overnight mail ingest could have spent the whole vision budget before 10 AM
 
-The cap is global across sources by design (§8.1), and the cycle boundary is 10:00. So a night of inbound RFQs can charge all five units before the owner sits down, and the first drawing he uploads himself needs an override — the failure lands on him, at the worst moment, for work he did not initiate.
+The cap is global and the cycle boundary is 10:00, so a night of inbound RFQs could have charged all five units before the owner sat down — the cost landing on him, at the worst moment, for work he did not initiate.
 
-Three ways to spend the budget better; the first is a recommendation that needs an owner yes/no because it changes ingest behaviour:
+**Closed by lock (§8.1):** automated ingest no longer spends at all. It runs the free local extract, marks the drawing `analysis_state='needs_vision'`, and surfaces it on the Engineering bench; the unit is charged when the owner opens that RFQ and asks. Better than a reserve quota, because the spend now coincides with the moment the analysis has value — a drawing card is worthless until the owner confirms its facts anyway.
 
-1. **Automated ingest does not spend vision at all.** Mail ingest runs the free local extract, records the drawing as `analysis_state='needs_vision'`, and surfaces it in the Engineering bench. Vision is spent when the owner opens that RFQ — which is when it has value anyway, since the card is worthless until he confirms its facts. The counter then reflects deliberate work only.
-2. **A reserve**: `auto_ingest_reserve` units that automated sources may not touch. Default 0, matching the literal instruction.
-3. **Visibility**: the used/total counter on the HUD, and the cycle reset time, so the budget is never a surprise.
-**Fix:** ship 3 unconditionally in **V1**; hold 1 for the owner's decision; leave 2 as a setting.
+What the code must enforce: **only an owner-initiated open can charge a unit.** A watch, a retry loop, a background job, a Hermes tool call, or a mail re-sync must not, which is why `vision_quota_usage.spent_by` is constrained to owner-initiated values while `arrival` records how the drawing came in. The HUD carries used/total and the reset time. → **V1**, **V1b**
 
 #### 6.29 A document is one unit, but a 40-page pack is not one drawing
 
 Charging per `sha256` is what makes retries and page loops safe (§2.7). It also means a customer who sends a 40-sheet assembly pack gets the same unit as a single part sheet, and the per-page calls inside it cost real money.
-**Fix:** a page threshold (default 4) above which the tool asks before spending the unit, and extracts a sheet index locally first so the owner can point at the one sheet that matters. → **V1**
+**Approved (§8.1):** `vision_page_threshold`, default 4. Above it the tool extracts a sheet index locally, shows it, and asks which sheet matters before spending the unit. → **V1**
 
 #### 6.30 A hard 30-day block with no override needs a fast way to refresh the basis
 
@@ -1678,8 +1689,8 @@ The owner's edit surface is a file (§8.2), and editing a line in place destroys
 | G-F | Wrong-number rate on the RAG gold set is 0, and recall@8 ≥0.9 at 100 k chunks with search ≤150 ms |
 | G-G | T0 rule is <200 words; no non-T0 rule sets `alwaysApply`; every T1 rule has globs; CI enforces it |
 | G-H | A quoted job's actual cycle time, material, and outsource cost land back against the quote line that predicted them |
-| G-I | The sixth drawing in a cycle is not dispatched: it raises an override card naming customer, drawing, and used/total. Concurrent claims charge one unit; a retry of a charged document charges nothing; a failure charges nothing and ingests nothing |
-| G-J | A quote with an empty delivery field cannot be authorized, and no code path anywhere computes or suggests a date |
+| G-I | An overnight mail ingest dispatches nothing and queues the drawing as `needs_vision`; the sixth drawing the owner opens raises an override card naming customer, drawing, and used/total. Concurrent claims charge one unit; a retry of a charged document charges nothing; a failure charges nothing and ingests nothing; a pack over four sheets asks first |
+| G-J | A quote with an empty delivery field drafts and prices normally with a warning, cannot be authorized, and no code path anywhere computes or suggests a date |
 | G-K | A raw-material basis 31 days old blocks the send even when the proof passed on day 29 |
 | G-L | An unattested rate row, or one still equal to its shipped seed value, blocks the send; an owner-attested row prices a real quote and the HUD names its attestation date |
 | G-M | `rg -i honcho backend/` returns nothing, and every memory read and write is local (SQLite + LanceDB) |
@@ -1694,13 +1705,15 @@ The owner reviewed the proposal and locked the following. These are **binding on
 
 Default-deny per customer to protect NDA IP. For authorized customers, automated Gemini Vision analysis is capped at **5 drawings per 24-hour cycle running 10:00 → 10:00**. The quota is global: automated email ingests and the owner's own manual UI uploads draw on the same pool. Exceeding it pauses and requests an explicit manual override.
 
-Engineering reading: two independent gates (§2.7). Consent is a master-data fact and no override touches it; quota is a ledger with an atomic claim keyed on `(cycle_start, file_sha256)`, so one document is one unit regardless of pages or retries, and an override grants exactly one unit for one named document. Cache-and-local-extract first, so the cap binds only on genuinely new sheets. → **V1**, **V2**; edges in §6.28, §6.29.
+**Refined 2026-09-22:** automated email ingest uses the free local text extraction only and flags the drawing `needs_vision`; a vision unit is consumed later, when the owner explicitly opens that RFQ at his desk. The multi-page threshold check is approved.
+
+Engineering reading: three gates (§2.7). Consent is a master-data fact and no override touches it. The trigger gate means no background path — ingest, watch, retry, or tool call — can charge a unit; `vision_quota_usage.spent_by` is constrained to owner-initiated values, with `arrival` recording provenance separately. Quota is a ledger with an atomic claim keyed on `(cycle_start, file_sha256)`, so one document is one unit regardless of pages or retries; above four sheets the tool extracts a local sheet index and asks first; an override grants exactly one unit for one named document. → **V1**, **V1b**, **V2**; §6.28 is closed by this refinement and §6.29 is the page rule.
 
 ### 8.2 Rate data — keep the `demo` infrastructure, filled with real numbers
 
 Retain `source_kind='demo'`. The owner will manually update the seed values with actual shop rates so real quoting can proceed while the Master Data UI stays deferred.
 
-Engineering reading: "demo" stops meaning "unusable", so the send gate moves from storage to **attestation** — `attested_by` plus a value differing from `shipped_seed_value_minor`. The markdown file remains the edit surface, the importer never overwrites in place (§6.31), and the temporal columns keep as-of proof honest. → **S5**, **S2**, **Q1**.
+Engineering reading: "demo" stops meaning "unusable", so the send gate moves from storage to **attestation** — `attested_by` plus a value differing from `shipped_seed_value_minor`. The markdown file remains the edit surface, the importer never overwrites in place (§6.31), and the temporal columns keep as-of proof honest. → **S5**, **S2**, **PG1**.
 
 ### 8.3 Commercial authority — the owner alone, no second signature
 
@@ -1718,7 +1731,7 @@ Engineering reading: no `machine_telemetry` table, no adapters, no sensors in th
 
 A raw-material price basis older than 30 days blocks the quote send. Strict.
 
-Engineering reading: global `rm_basis_max_age_days = 30`, evaluated at send and not only at verify, applying to supplier quotes, invoices, and labelled estimates alike, with an estimate dated by its evidence rather than by the day it was written. No override exists, so the escape hatch is a fast basis-refresh path (§6.30). → **Q5a**, **Q5b**.
+Engineering reading: global `rm_basis_max_age_days = 30`, evaluated at send and not only at verify, applying to supplier quotes, invoices, and labelled estimates alike, with an estimate dated by its evidence rather than by the day it was written. No override exists, so the escape hatch is a fast basis-refresh path (§6.30). → **PG1**, **Q5b**.
 
 ### 8.6 Memory — strip Honcho, 100 % local-first
 
@@ -1730,19 +1743,19 @@ Engineering reading: small in code (one module, one docstring) and larger in doc
 
 Jarvis must not guess or calculate a delivery date. The lead-time field stays empty and a strict flag requires the owner's manual input before a quote can be authorized.
 
-Engineering reading: no capacity model, no vendor-lead-time arithmetic, no inference from past jobs — the capacity-aware-dates feature is removed from §3.5 outright. `delivery_days` is owner-typed or NULL; NULL is a BLOCKER **at authorize** while build and verify may proceed. → **Q4**.
+**Confirmed 2026-09-22:** Jarvis insists on a delivery time, but a missing date must not block creation of the quote draft. Blocking the final "Authorize to send" stage is correct; drafting must proceed so the owner can review the pricing first.
 
-**One reversal to confirm.** This overrides the earlier interview lock "delivery time does not hold the quote" (`work/APP_FEATURES.md`, 2026-09-22, Q7). The reading applied here is that the earlier rule meant Jarvis must not *wait on a supplier lead time*, while the new rule requires the owner's own number before authorising — so the block sits at authorize, not at build. Say so if that is not the intent.
+Engineering reading: no capacity model, no vendor-lead-time arithmetic, no inference from past jobs — the capacity-aware-dates feature is removed from §3.5 outright. The proof takes a stage: `verify_quote(stage='draft')` emits a WARN for the empty field, `stage='send'` makes it a BLOCKER, and the Authorize card carries the input inline so the number is typed at the moment of authorising. Jarvis asks once while drafting and never proposes a value. This reconciles interview Q7 — "delivery time does not hold the quote", which governs the draft — with the new rule, which governs the send. → **PG1**.
 
 ### 8.8 Still open — flagged, not decided
 
-Small, and each one changes a default rather than a design:
+Three left, each a default rather than a design, and none blocking any wave:
 
-1. **Should automated mail ingest spend vision units at all?** Recommendation: no — ingest extracts locally and marks the drawing `needs_vision`; the unit is spent when the owner opens the RFQ. Removes overnight starvation without touching the cap (§6.28).
-2. **Outsource-quote staleness.** The 30-day rule is locked for raw material. Heat-treat and plating prices drift too; currently a WARN. Raise to BLOCKER?
-3. **MHR attestation ageing.** A rate attested 18 months ago is stale in a different way. Currently a WARN at 180 days, never a block.
-4. **Page threshold for a multi-sheet pack** before a vision unit is spent — default 4 (§6.29).
-5. **`files/client-names.md`.** Real customer list, or keep the placeholder and accept that the spelling check passes for the wrong reason (§6.27)?
+1. **Outsource-quote staleness.** The 30-day rule is locked for raw material. Heat-treat and plating prices drift too; currently a WARN. Raise to BLOCKER?
+2. **MHR attestation ageing.** A rate attested 18 months ago is stale in a different way. Currently a WARN at 180 days, never a block.
+3. **`files/client-names.md`.** Real customer list, or keep the placeholder and accept that the spelling check passes for the wrong reason (§6.27)?
+
+Resolved 2026-09-22: automated ingest does not spend vision units (§8.1), the page threshold is approved at 4 (§6.29), the delivery check is stage-aware (§8.7), and the three proof gates ship as one chunk (§5.6 **PG1**).
 
 ## 9. Evidence appendix
 
@@ -1761,4 +1774,4 @@ Reproduction harness output (full): [`/opt/cursor/artifacts/blind_spot_evidence.
 | `jarvis_host='0.0.0.0'` + LAN-wide CORS regex, no auth on `/api/confirm` | §6.19 | Read from source |
 | `build_quote()` has no delivery field, no date on the RM basis, and no attestation — an undated estimate with a missing delivery date passes the proof | §8.2, §8.5, §8.7 | Reproduced (claim 6) |
 
-*End of manifest. The seven decisions in §8 are locked and binding; §8.8 lists five defaults still open, none of which block wave 1.*
+*End of manifest. The seven decisions in §8 are locked and binding, with §8.1 and §8.7 refined on 2026-09-22; §8.8 lists three defaults still open, none of which block any wave.*
