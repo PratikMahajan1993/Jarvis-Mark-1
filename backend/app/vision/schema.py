@@ -41,5 +41,15 @@ CREATE TABLE IF NOT EXISTS drawing_analysis_state (
 """
 
 
+def _ensure_drawing_display_columns(conn: sqlite3.Connection) -> None:
+    rows = conn.execute("PRAGMA table_info(drawing_analysis_state)").fetchall()
+    names = {str(row[1]) for row in rows}
+    if "display_name" not in names:
+        conn.execute("ALTER TABLE drawing_analysis_state ADD COLUMN display_name TEXT")
+    if "path" not in names:
+        conn.execute("ALTER TABLE drawing_analysis_state ADD COLUMN path TEXT")
+
+
 def ensure_vision_schema(conn: sqlite3.Connection) -> None:
     conn.executescript(_DDL)
+    _ensure_drawing_display_columns(conn)

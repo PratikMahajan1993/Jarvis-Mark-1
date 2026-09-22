@@ -11,6 +11,7 @@ from .. import db
 from ..config import settings
 from ..hermes.hitl import request_human_approval
 from .ledger import (
+    VISION_CAP,
     claim_unit,
     current_cycle_start,
     mark_dispatched,
@@ -74,18 +75,28 @@ def local_sheet_index(path: Path) -> dict[str, Any]:
     }
 
 
-def set_analysis_state(file_hash: str, state: str) -> None:
+def set_analysis_state(
+    file_hash: str,
+    state: str,
+    *,
+    display_name: str | None = None,
+    path: str | None = None,
+) -> None:
     with db.connect() as conn:
         ensure_vision_schema(conn)
         conn.execute(
             """
-            INSERT INTO drawing_analysis_state (file_sha256, analysis_state, updated_at)
-            VALUES (?, ?, ?)
+            INSERT INTO drawing_analysis_state (
+              file_sha256, analysis_state, updated_at, display_name, path
+            )
+            VALUES (?, ?, ?, ?, ?)
             ON CONFLICT(file_sha256) DO UPDATE SET
               analysis_state = excluded.analysis_state,
-              updated_at = excluded.updated_at
+              updated_at = excluded.updated_at,
+              display_name = COALESCE(excluded.display_name, drawing_analysis_state.display_name),
+              path = COALESCE(excluded.path, drawing_analysis_state.path)
             """,
-            (file_hash, state, db.utc_now()),
+            (file_hash, state, db.utc_now(), display_name, path),
         )
 
 
@@ -99,13 +110,80 @@ def get_analysis_state(file_hash: str) -> str | None:
         return str(row["analysis_state"]) if row else None
 
 
+def list_needs_vision_bench_items() -> list[dict[str, Any]]:
+    with db.connect() as conn:
+        ensure_vision_schema(conn)
+        rows = conn.execute(
+            """
+            SELECT file_sha256, display_name, path
+            FROM drawing_analysis_state
+            WHERE analysis_state = 'needs_vision'
+            ORDER BY updated_at ASC
+            """
+        ).fetchall()
+    items: list[dict[str, Any]] = []
+    for row in rows:
+        digest = str(row["file_sha256"])
+        name = row["display_name"]
+        display = str(name).strip() if name else digest[:12]
+        item: dict[str, Any] = {"file_sha256": digest, "display_name": display}
+        if row["path"]:
+            item["path"] = str(row["path"])
+        items.append(item)
+    return items
+
+
+def bench_analyse_drawing(file_sha256: str) -> dict[str, Any]:
+    """Owner bench spend path — resolves queued row and dispatches vision."""
+    with db.connect() as conn:
+        ensure_vision_schema(conn)
+        row = conn.execute(
+            """
+            SELECT analysis_state, path
+            FROM drawing_analysis_state
+            WHERE file_sha256 = ?
+            """,
+            (file_sha256,),
+        ).fetchone()
+    if not row:
+        return {"ok": False, "enabled": True, "error": "Drawing not queued for vision."}
+    path_val = row["path"]
+    if not path_val:
+        return {"ok": False, "enabled": True, "error": "Queued drawing has no path."}
+    return dispatch_drawing_vision(
+        str(path_val),
+        owner_spend=True,
+        spent_by="owner_bench",
+        arrival="mail",
+    )
+
+
+def vision_bench_get_payload() -> dict[str, Any]:
+    from .ledger import current_cycle_used, next_cycle_reset_at
+
+    if not settings.vision_bench_enabled:
+        return {"enabled": False, "items": [], "used": 0, "total": VISION_CAP, "reset_at": ""}
+    return {
+        "enabled": True,
+        "items": list_needs_vision_bench_items(),
+        "used": current_cycle_used(),
+        "total": VISION_CAP,
+        "reset_at": next_cycle_reset_at(),
+    }
+
+
 def on_mail_drawing_saved(path: str | Path, *, customer_id: str | None = None) -> dict[str, Any]:
     """Mail ingest: local only, never spends a vision unit."""
     file_path = Path(path)
     if not file_path.is_file():
         return {"ok": False, "error": f"Drawing not found: {path}"}
     digest = file_sha256(file_path)
-    set_analysis_state(digest, "needs_vision")
+    set_analysis_state(
+        digest,
+        "needs_vision",
+        display_name=file_path.name,
+        path=str(file_path.resolve()),
+    )
     return {
         "ok": True,
         "file_sha256": digest,

@@ -32,6 +32,23 @@ def current_cycle_start(*, now: datetime | None = None) -> str:
     return boundary_today.isoformat()
 
 
+def next_cycle_reset_at(*, now: datetime | None = None) -> str:
+    """ISO timestamp of the next 10:00 local boundary after the current cycle opened."""
+    tz = ZoneInfo(settings.tz or "Asia/Kolkata")
+    cycle_iso = current_cycle_start(now=now)
+    opened = datetime.fromisoformat(cycle_iso)
+    if opened.tzinfo is None:
+        opened = opened.replace(tzinfo=tz)
+    return (opened + timedelta(days=1)).isoformat()
+
+
+def current_cycle_used(*, now: datetime | None = None) -> int:
+    cycle = current_cycle_start(now=now)
+    with db.connect() as conn:
+        ensure_vision_schema(conn)
+        return _count_charged_units(conn, cycle)
+
+
 def _count_charged_units(conn: sqlite3.Connection, cycle_start: str) -> int:
     row = conn.execute(
         """

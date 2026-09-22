@@ -647,6 +647,31 @@ def api_drawing_download(filename: str) -> FileResponse:
     return FileResponse(path, media_type=media)
 
 
+class VisionBenchAnalyse(BaseModel):
+    file_sha256: str
+
+
+@app.get("/api/vision/bench")
+def api_vision_bench() -> dict:
+    from .vision.gate import vision_bench_get_payload
+
+    return vision_bench_get_payload()
+
+
+@app.post("/api/vision/bench/analyse")
+def api_vision_bench_analyse(payload: VisionBenchAnalyse) -> dict:
+    if not settings.vision_bench_enabled:
+        return {"enabled": False, "ok": False}
+    from .vision.gate import bench_analyse_drawing
+
+    digest = (payload.file_sha256 or "").strip()
+    if not digest:
+        raise HTTPException(400, "file_sha256 required")
+    out = bench_analyse_drawing(digest)
+    out["enabled"] = True
+    return out
+
+
 @app.post("/api/drawings/marked")
 def api_drawing_marked(payload: MarkedDrawingSave) -> dict:
     raw = payload.image_base64.strip()

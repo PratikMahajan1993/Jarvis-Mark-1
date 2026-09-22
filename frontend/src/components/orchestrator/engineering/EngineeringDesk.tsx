@@ -11,6 +11,7 @@ import { DrawingViewer } from "@/components/DrawingViewer";
 import GradientText from "@/components/react-bits/GradientText";
 import SpotlightCard from "@/components/react-bits/SpotlightCard";
 import { QuoteStack } from "./QuoteStack";
+import { VisionBenchQueue } from "./VisionBenchQueue";
 
 const BENCH_BG = "#060a0e";
 
@@ -143,6 +144,7 @@ export function EngineeringDesk({
             {voiceVisible !== false ? (
               <CompactVoice text={voice} dimmed={dimmed} />
             ) : null}
+            <VisionBenchQueue />
             <QuoteStack scene={scene} />
           </div>
         </div>

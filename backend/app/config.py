@@ -83,6 +83,9 @@ class Settings(BaseSettings):
     # Master data (parties/materials/suppliers); default off — dual-read with client-names.md.
     masterdata_enabled: bool = False
 
+    # Engineering bench vision queue (needs_vision list + owner analyse action); default off.
+    vision_bench_enabled: bool = False
+
     @field_validator("data_dir", "exports_dir", mode="after")
     @classmethod
     def _anchor_data_paths(cls, value: Path) -> Path:
