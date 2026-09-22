@@ -715,6 +715,13 @@ class VisionConsentPost(BaseModel):
     attested_by: str
 
 
+@app.get("/api/knowledge/card")
+def api_knowledge_card(entity_type: str = "", entity_id: str = "") -> dict:
+    from .knowledge.cards import knowledge_card_api_payload
+
+    return knowledge_card_api_payload(entity_type, entity_id)
+
+
 @app.get("/api/masterdata/vision-consent")
 def api_masterdata_vision_consent_get(customer_id: str | None = None) -> dict:
     from .vision.gate import vision_consent_get_payload
