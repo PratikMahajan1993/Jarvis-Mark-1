@@ -1,0 +1,14 @@
+ISO-10303-21;
+HEADER;
+FILE_DESCRIPTION(('Jarvis M4 hole fixture'),'2;1');
+FILE_NAME('hole_d10.step','2026-03-23',(''),(''),'Jarvis test','','');
+FILE_SCHEMA(('AUTOMOTIVE_DESIGN'));
+ENDSEC;
+DATA;
+#10 = CARTESIAN_POINT('Origin', (0.0, 0.0, 0.0));
+#11 = CARTESIAN_POINT('Axis hint', (0.0, 0.0, 10.0));
+#12 = CIRCLE('Hole mouth', #10, 5.0);
+#13 = CYLINDRICAL_SURFACE('D10 hole wall', #10, 5.0);
+#14 = PLANE('Unclassified reference plane', #10);
+ENDSEC;
+END-ISO-10303-21;
