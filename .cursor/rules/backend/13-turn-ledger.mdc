@@ -1,0 +1,37 @@
+---
+description: Server turn ledger — legal states, transitions, leases, idempotency, client timeout ≠ cancel. Use when editing turns, agent, or main.
+globs: backend/app/turns/**, backend/app/agent.py, backend/app/main.py
+alwaysApply: false
+---
+
+# Turn ledger
+
+## States (server is truth)
+
+| State | Meaning |
+| ----- | ------- |
+| `QUEUED` | Accepted, not yet running |
+| `RUNNING` | Worker holds lease + heartbeat |
+| `AWAITING_HITL` | Pending action queued; waiting Authorize/Reject |
+| `EXECUTING` | HITL approved; external effect in flight |
+| `DONE` | Terminal success (speech optional) |
+| `FAILED` / `ABANDONED` | Terminal error or expired HITL |
+
+Illegal transitions are rejected — do not skip `AWAITING_HITL` for external sends.
+
+## Leases and heartbeats
+
+- `RUNNING` requires a fresh lease; stale lease → reaper marks failure with **stage** preserved for Retry copy.
+- Reaper window is bounded (≤~15 s visibility in HUD); do not infinite-spin without ledger update.
+
+## Idempotency
+
+- Confirm and turn-creating POSTs accept idempotency keys; duplicates return the original outcome payload.
+- **Client fetch timeout is not cancellation** — turn keeps running until explicit `POST /api/turns/{id}/cancel`.
+
+## HUD projection
+
+- FSM in `orchestratorFsm.ts` maps ledger snapshots via a pure reducer (`RECONCILE` / `hydrate`) — see `frontend/20-hud-shell`.
+- Reconcile on mount, focus, SSE reconnect, and after fetch failures (lost `AWAITING_HITL` must reopen the panel).
+
+Persist turn rows before returning HTTP 200 to the client; never optimistic-externalize from chat memory alone.

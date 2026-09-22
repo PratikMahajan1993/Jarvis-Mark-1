@@ -1,0 +1,31 @@
+---
+description: Schema discipline — migrations, money, units, UTC, provenance on priced rows. Use when editing db, schemas, migrations, masterdata.
+globs: backend/app/db.py, backend/app/schemas.py, backend/migrations/**, backend/app/masterdata/**
+alwaysApply: false
+---
+
+# Data schema
+
+## Migrations only
+
+- Schema changes ship as numbered SQL under `backend/migrations/` and a row in `schema_migrations`.
+- **No ad-hoc `ALTER` in `init_db()`** — no new `PRAGMA table_info` patch blocks for production tables.
+- Forward-only: backfills belong in migration scripts, not request handlers.
+
+## Types and storage
+
+- **Money:** integer minor units + ISO currency code on every monetary column; never float dollars in SQL.
+- **Dimensions:** numeric value + unit column (mm, in, kg, …); never bare floats without unit.
+- **Timestamps:** store UTC ISO-8601 via `db.utc_now()`; render with `settings.tz`. Naive `datetime.now()` in writes is banned.
+
+## Provenance on priced data
+
+- Every quotable or billable row carries **`source_kind`** and **`source_ref`** (or successor ids like `rate_source_id` per domain quote rule).
+- Demo/seed rows are stored but **not sendable** until attested (see `domain/32-master-data`).
+
+## Master data edits
+
+- Temporal rates: always query **as-of** a business date with `effective_from` / `effective_to`.
+- **No hard deletes** on authoritative rows — supersede with a new row and end-date the old.
+
+`db.py` owns connection pragmas and helpers; Pydantic shapes live in `schemas.py` — keep them aligned after migrations.

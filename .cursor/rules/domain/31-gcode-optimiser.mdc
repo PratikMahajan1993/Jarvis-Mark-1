@@ -1,0 +1,65 @@
+---
+description: Guardrails for G-code drafting, optimisation, and cycle-time simulation — control dialects, safety envelope, no machine transmission, HITL promote. Use when touching CNC program code.
+globs: backend/app/cnc_suggest.py, backend/app/machining/**, backend/app/hermes/playbooks/gcode/**, backend/tests/test_cnc_suggest.py
+alwaysApply: false
+---
+
+# G-code — draft, verify, never transmit
+
+A wrong block crashes a spindle into a fixture. This module is allowed to be
+useless (refuse) and is never allowed to be confidently wrong.
+
+## Hard boundaries
+
+- Jarvis **never transmits** a program to a control, DNC share, or machine network.
+  Output is a file under `<repo>/exports/nc/` plus a diff for the owner.
+- Every generated program is `DRAFT` and carries `(NOT PROVEN ON THE MACHINE)` in
+  its header until an owner Authorize promotes it. Promotion is versioned and
+  append-only; a proven program is never overwritten in place.
+- Missing trusted geometry → refuse with the list of what is missing. Never
+  interpolate a dimension, a stock size, or a datum.
+- No program is generated for a machine with no `machines` row: dialect, control
+  model, axis travels, rapid rates, spindle limits, and tooling come from master
+  data, not from the model.
+
+## Dialect discipline (FANUC / Mitsubishi)
+
+- Emit only for the control recorded on the machine (`machines.control_make`,
+  `control_model`, e.g. FANUC 0i-TF / 31i, Mitsubishi M80 / M800). Dialects differ
+  in canned-cycle argument form, subprogram call and nesting, macro variable
+  ranges, and retract behaviour — when the recorded control is absent or the
+  construct is not verified for it, emit long-hand motion or refuse.
+- Unit code is always explicit (`G20`/`G21`), never inherited. Plane, absolute
+  mode, feed mode (`G94`/`G95`), and work offset are declared in the header.
+- M-codes come from a per-control **whitelist**. A blocklist of a few G-codes
+  (today's `_BANNED_WORDS`) is not a safety model and must not be treated as one.
+
+## Deterministic verification before any promote (`program_verify`)
+
+Fails closed on: unresolved modal state; motion outside `machines` travel limits;
+rapid below the clearance plane or into stock; feed or speed outside the
+tool/material envelope from master data; tool called without an offset;
+unbalanced cycle start/cancel; missing safe retract before tool change or program
+end; spindle direction or coolant contradictions; subprogram or macro call that
+is not present; unit/scale mismatch versus the drawing; arc without a valid
+centre/radius. Every failure names the block number.
+
+## Optimisation is bounded
+
+- Optimise only: air-move reduction, approach/retract distances, pass depth and
+  step-over within the tool envelope, tool-change ordering, sequencing across
+  setups, canned cycle selection where verified for the control.
+- Never optimise by raising feed or speed above the tooling table, removing a
+  clearance move, skipping a spring/finish pass, loosening a tolerance-driven
+  step-over, or merging operations that the routing separates.
+- Report savings as an estimate with its simulation basis, and store both estimate
+  and later measured cycle time so the model of this machine improves.
+
+## Cycle-time simulation
+
+- Integrate motion with per-axis rapid rates, accel/decel and corner deceleration
+  from `machines`, expanded canned cycles, dwells, tool changes, and load/unload
+  from the routing. Naive length ÷ feed is not an estimate and must not be quoted.
+- Calibrate against measured times per machine and material; report the
+  correction factor and its sample count. Uncalibrated estimates are labelled and
+  flow into the quote as `is_estimate`.

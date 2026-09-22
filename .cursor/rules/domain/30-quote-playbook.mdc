@@ -1,0 +1,78 @@
+---
+description: Hard rules for the shop-quote workflow — price provenance, MHR floors, proof severity, HITL send. Use when touching quote code, the quote playbook, or quote tests.
+globs: backend/app/quote.py, backend/app/hermes/playbooks/quote/**, backend/app/masterdata/rates.py, backend/tests/test_quote_playbook.py
+alwaysApply: false
+---
+
+# Quote workflow — non-negotiables
+
+Underquoting is the failure the owner has actually suffered — a price corrected after
+send, an assumed material, a forgotten outsource, material billed to a labour-only
+customer. Fail closed.
+
+## Provenance (no exceptions)
+
+- Every money-bearing line carries `rate_source_id` → a `supplier_rm_quotes`,
+  `machine_hour_rates`, `outsource_quotes`, or `owner_input` row. No source, no line.
+- An estimate is labelled: `is_estimate = 1` plus a basis naming historical
+  transactions or market trend. An unlabelled estimate is a bug.
+- Sendability follows **attestation, not storage.** `source_kind='demo'` is a
+  supported production source while the Master Data UI is deferred, but a rate row
+  is quotable only when `attested_by` is set and its value differs from the shipped
+  seed. An unattested row, or one still holding the shipped seed number, is a BLOCKER.
+- The model never derives a price from prose, memory, or "similar jobs".
+
+## Manufacturing physics the code must respect
+
+- Machining cost = Σ(operation time × MHR) + setup + tooling. Setup is per batch: per
+  piece on a 100-off overquotes, omitted on a 1-off underquotes.
+- Cycle time comes from `cycletime` estimates or measured `routing_operations`
+  actuals, never a guess; estimates carry a confidence band and sample count.
+- Material cost = nested blank mass or length × rate, including saw kerf, facing
+  allowance, and grip remnant. Never finished-part mass.
+- Scope drives material: labour-only orders never carry a raw-material line;
+  with-material orders always do. Default is per customer; this order's mail or
+  the owner's word overrides it; neither present → ask.
+- Outsource (heat treat, plating, grinding, no suitable machine, the customer asked,
+  or capacity full) is a priced line with a vendor quote and a recorded case. Never
+  a guessed amount.
+- Tolerance and finish drive process from a table, not judgement; unreadable → ask.
+- Units and currency travel with every number; money is integer minor units.
+
+## MHR floor and freshness
+
+- Floors live in `machine_hour_rates` with `effective_from/effective_to`, read
+  **as of** the quote date, keyed by machine or machine type.
+- Quoted rate ≥ floor. Above the floor is the owner's call; below is a BLOCKER.
+- **Missing data is a failure, not a skip.** No machine, no rate, machine absent
+  from the rate table, or expired rate row → BLOCKER. Never silently omit the check.
+- Raw-material basis older than **30 days** is a BLOCKER (`rm_basis_max_age_days`) —
+  supplier quote, invoice, or estimate alike, dated by its evidence and measured at
+  **send**: proved day 29, authorized day 31 must fail. Outsource age is a WARN.
+
+## Proof (`quote_verify`)
+
+- Checks are classed: `BLOCKER` or `WARN`. Any BLOCKER ⇒ `stop: true`; counting
+  failures is not a severity model.
+- Severity is per **stage**: `verify_quote(stage='draft'|'send')`. A draft exists so
+  the owner can review pricing, so it never fails on a field he fills at the end.
+- BLOCKERs include: zero/negative/absent unit price, total ≤ 0, qty × rate
+  mismatch, missing rate source, missing or expired MHR floor basis, unattested or
+  shipped-seed rate value, raw-material basis older than 30 days, scope↔material
+  contradiction, missing outsource price on an outsourced operation, unlabelled
+  estimate, a price driven by an unconfirmed drawing fact, missing drawing revision,
+  attachment hash mismatch, and an empty delivery field **at `stage='send'`**.
+- Delivery is the one stage-dependent check: **WARN at draft, BLOCKER at send.** Ask
+  once while drafting and again on the Authorize card, which carries the field inline.
+- Proof runs against the stored `quote_revision`, not chat memory. The verified PDF
+  is bound by sha256; `quote_send` re-hashes and refuses on drift.
+
+## HITL
+
+- `quote_send` queues an Authorize card and never sets `sent: true`.
+- The Authorize card shows total, currency, scope, rate sources, estimate flags, and
+  whether identical content was already delivered.
+- **Delivery is never computed** — no capacity model, no vendor-lead-time sum, no
+  inference from past jobs. Owner-typed or empty; never a suggestion.
+- Corrections go to the playbook `notes.md` via `quote_playbook_note`, then the
+  broken step re-runs. Fix the folder, not the chat.

@@ -27,10 +27,4 @@ alwaysApply: false
 
 **Headless testing of `Particles`:** default headless Chrome cannot create a WebGL context for it and the HUD falls into Next's dev error overlay ("unable to create webgl context"). Launch Chrome with `--enable-unsafe-swiftshader` (e.g. `google-chrome --headless=new --enable-unsafe-swiftshader ...`) and it renders correctly — this works fine on a cloud VM with no GPU. This is a launch-flag fix, not a reason to treat the HUD as desk-only.
 
-## Hard layout rules
-
-- Scrollable SpotlightCard: max-height + `overflow-y-auto` on **`bodyClassName`**; outer stays viewport-locked for the glow.
-- Flex columns with scrollable children: pin chips (`WeatherCard`) with **`shrink-0`**.
-- Idle suggested tasks: title + description only; expand actions on hover/focus.
-
 When adding a bit, read skill `jarvis-react-bits` and match existing props/colors (`#7dffe0` accent).

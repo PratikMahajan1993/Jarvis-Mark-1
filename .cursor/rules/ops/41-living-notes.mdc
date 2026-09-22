@@ -1,6 +1,6 @@
 ---
 description: Keep work/ living notes updated when the owner states new architecture, UI/UX, or features.
-alwaysApply: true
+alwaysApply: false
 ---
 
 # Living notes

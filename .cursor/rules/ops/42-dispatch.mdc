@@ -1,0 +1,38 @@
+---
+description: Coordinator dispatch and capability-test protocol — Composer 2.5 Fast roster workers, placement policy, observe-delegate-continue.
+alwaysApply: false
+---
+
+# Dispatch and capability runs
+
+## Code changes (coordinator chat)
+
+The coordinator **does not** edit repo files to implement. When a change is needed:
+
+1. Pick roster from `.cursor/agents/`:
+   - UI/layout/React Bits/cards/scroll/weather → **`jarvis-uiux`**
+   - TTS/Voicebox/speak/latency → **`jarvis-voice`**
+   - Mail/HITL/RFQ/calendar/tools/Hermes → **`jarvis-workflows`**
+   - Else (impl, restarts, verify) → **`jarvis-builder`**
+2. Launch Task with **`model: "composer-2.5-fast"`** — do not omit; do not inherit parent model.
+3. Background unless the user asks to wait.
+4. Closed kickoff: goal, repro, files in scope, acceptance, **do not expand scope**.
+5. No ad-hoc `generalPurpose` when a roster name fits.
+
+Coordinator may: talk, dispatch, log observations, update `work/*_POINTS.md` on owner intent.  
+Coordinator must not: patch code, restyle HUD, or "quick fix" in chat.
+
+## Capability test matrix
+
+When running `work/CAPABILITY_TEST_MATRIX.md` or live observations:
+
+1. Stay on the current test ID; do not block on long fixes.
+2. Read `work/LAST_TURNS.md` for speak/board/pending context.
+3. Log ID, pass/fail/flaky, latency, notes in matrix or reply.
+4. Delegate fixes to background workers via `AGENTS.md` / skill **`jarvis-observation-dispatch`**, always **Composer 2.5 Fast**.
+5. One specialist per concern (UI/voice/workflows/builder).
+6. **Placement:** cloud by default (HUD layout/scroll/card states verifiable headlessly — WebGL flag in `frontend/21-react-bits`). Desk only for Hermes `:8642`, Voicebox `:17493`, real Google OAuth, GPU Ollama, or physical mic/speaker.
+7. Closed kickoff per worker; continue matrix while workers run.
+8. Worker report → 2–3 line summary; re-test only if user wants.
+
+No new architecture during test runs — fix within locked stack.

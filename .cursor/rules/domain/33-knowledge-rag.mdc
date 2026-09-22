@@ -1,0 +1,38 @@
+---
+description: Knowledge planes — cards, SQL ledger, local corpus; routing and ingest bans. Use when editing memory/ or knowledge/.
+globs: backend/app/memory/**, backend/app/knowledge/**
+alwaysApply: false
+---
+
+# Knowledge and RAG
+
+## Local-only memory (§4B.1)
+
+- Ledger mirror, entity cards, and vectors live **100 % local**: SQLite + LanceDB under `<repo>/data/memory/`.
+- **No cloud memory service** — do not add hosted vector DBs or sync prose to third-party memory APIs.
+
+## Three planes — never collapse
+
+| Question type | Store | Rule |
+| ------------- | ----- | ---- |
+| "What is the number?" | SQL master data / ledger | Authoritative; cite row id |
+| "What do we know about X?" | Entity cards / confirmed facts | Only owner-confirmed facts are quotable |
+| "Where is it written?" | Corpus chunks (BM25 + vector) | Citations only — **never** the source of a number |
+
+Routing: number → SQL; know-about → card; where-written → retrieval; absent → **ASK**, never interpolate.
+
+## Ingest bans
+
+- Do **not** ingest Jarvis' own chat prose, tool error strings, or failed vision stubs as drawing or mail content.
+- Vision error text is not a substitute for extracted drawing facts.
+
+## Embeddings
+
+- Record **embedding model id and dimension** per stored vector row; mixed dims in one index is invalid.
+- Hash-of-words fallback (if present) must be labelled — not silently equivalent to ONNX embeddings.
+
+## Writes
+
+- Ingest runs off the hot request path (outbox/async where implemented); search reads must not block on unbounded ingest.
+
+Skill `jarvis-architecture` / manifest §4B carries long retrieval procedures; this file states break-if-wrong constraints only.
