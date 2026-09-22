@@ -219,25 +219,67 @@ def build_quote(
     ]
     title = f"Quote — {part_name or 'Component'}"
     artifact = documents.create_spreadsheet(title, columns, rows)
-    db.add_memory(session_id, "last_quote", artifact["id"])
-    db.add_memory(session_id, "last_quote_name", artifact["name"])
-    db.add_memory(session_id, "last_quote_rows", json.dumps(rows))
-    db.add_memory(session_id, "last_quote_columns", json.dumps(columns))
-    db.add_memory(session_id, "last_quote_material", material or str(items[0].get("material") or ""))
-    db.add_memory(session_id, "last_quote_customer", customer)
-    db.add_memory(session_id, "last_quote_part_name", part_name or "Component")
-    if (scope or "").strip():
-        db.add_memory(session_id, "last_quote_scope", scope.strip().lower())
-    if (rm_source or "").strip():
-        db.add_memory(session_id, "last_quote_rm_source", rm_source.strip().lower())
-    if (rm_source_note or "").strip():
-        db.add_memory(session_id, "last_quote_rm_source_note", rm_source_note.strip())
-    if rm_price is not None and str(rm_price).strip():
-        db.add_memory(session_id, "last_quote_rm_price", str(rm_price).strip())
-    if (machine or "").strip():
-        db.add_memory(session_id, "last_quote_machine", machine.strip())
-    if machining_rate is not None and str(machining_rate).strip():
-        db.add_memory(session_id, "last_quote_machining_rate", str(machining_rate).strip())
+    if settings.masterdata_enabled:
+        from .masterdata.quotes import persist_built_quote
+
+        eff_scope = scope
+        eff_rm_source = rm_source
+        eff_rm_source_note = rm_source_note
+        eff_rm_price = rm_price
+        eff_machine = machine
+        eff_machining_rate = machining_rate
+        if not (eff_scope or "").strip():
+            eff_scope = _latest_memory(session_id, "last_quote_scope")
+        if not (eff_rm_source or "").strip():
+            eff_rm_source = _latest_memory(session_id, "last_quote_rm_source")
+        if not (eff_rm_source_note or "").strip():
+            eff_rm_source_note = _latest_memory(session_id, "last_quote_rm_source_note")
+        if eff_rm_price is None or not str(eff_rm_price).strip():
+            eff_rm_price = _latest_memory(session_id, "last_quote_rm_price")
+        if not (eff_machine or "").strip():
+            eff_machine = _latest_memory(session_id, "last_quote_machine")
+        if eff_machining_rate is None or not str(eff_machining_rate).strip():
+            eff_machining_rate = _latest_memory(session_id, "last_quote_machining_rate")
+        if not (customer or "").strip():
+            customer = _latest_memory(session_id, "last_quote_customer")
+
+        with db.connect() as conn:
+            revision_id = persist_built_quote(
+                conn,
+                session_id=session_id,
+                artifact_id=artifact["id"],
+                rows=rows,
+                customer=customer,
+                part_name=part_name or "Component",
+                material=material or str(items[0].get("material") or ""),
+                scope=eff_scope,
+                rm_source=eff_rm_source,
+                rm_source_note=eff_rm_source_note,
+                rm_price=eff_rm_price,
+                machine=eff_machine,
+                machining_rate=eff_machining_rate,
+            )
+        db.add_memory(session_id, "last_quote_revision_id", revision_id)
+    else:
+        db.add_memory(session_id, "last_quote", artifact["id"])
+        db.add_memory(session_id, "last_quote_name", artifact["name"])
+        db.add_memory(session_id, "last_quote_rows", json.dumps(rows))
+        db.add_memory(session_id, "last_quote_columns", json.dumps(columns))
+        db.add_memory(session_id, "last_quote_material", material or str(items[0].get("material") or ""))
+        db.add_memory(session_id, "last_quote_customer", customer)
+        db.add_memory(session_id, "last_quote_part_name", part_name or "Component")
+        if (scope or "").strip():
+            db.add_memory(session_id, "last_quote_scope", scope.strip().lower())
+        if (rm_source or "").strip():
+            db.add_memory(session_id, "last_quote_rm_source", rm_source.strip().lower())
+        if (rm_source_note or "").strip():
+            db.add_memory(session_id, "last_quote_rm_source_note", rm_source_note.strip())
+        if rm_price is not None and str(rm_price).strip():
+            db.add_memory(session_id, "last_quote_rm_price", str(rm_price).strip())
+        if (machine or "").strip():
+            db.add_memory(session_id, "last_quote_machine", machine.strip())
+        if machining_rate is not None and str(machining_rate).strip():
+            db.add_memory(session_id, "last_quote_machining_rate", str(machining_rate).strip())
     # Best-effort Google Sheet mirror when shop sheets connector works
     sheet_ref = ""
     try:
@@ -262,6 +304,12 @@ def build_quote(
 
 
 def _load_quote_rows(session_id: str) -> list[list[Any]]:
+    if settings.masterdata_enabled:
+        from .masterdata.quotes import load_session_revision_facts
+
+        facts = load_session_revision_facts(session_id)
+        if facts and facts.get("rows"):
+            return list(facts["rows"])
     raw = _latest_memory(session_id, "last_quote_rows")
     if raw:
         try:
@@ -275,7 +323,16 @@ def _load_quote_rows(session_id: str) -> list[list[Any]]:
 
 def quote_to_pdf(*, session_id: str, part_name: str = "", rows: list[list[Any]] | None = None) -> dict[str, Any]:
     effective_rows = rows if rows is not None else _load_quote_rows(session_id)
-    part = part_name or _latest_memory(session_id, "last_quote_part_name") or "Component"
+    part = part_name or "Component"
+    if not part_name:
+        if settings.masterdata_enabled:
+            from .masterdata.quotes import load_session_revision_facts
+
+            facts = load_session_revision_facts(session_id)
+            if facts and facts.get("part_name"):
+                part = str(facts["part_name"])
+        if part == "Component":
+            part = _latest_memory(session_id, "last_quote_part_name") or "Component"
     body_lines = [f"Quotation: {part}", ""]
     for row in effective_rows:
         body_lines.append(" | ".join(str(c) for c in row))
@@ -377,11 +434,37 @@ def verify_quote(*, session_id: str, stage: str = "draft") -> dict[str, Any]:
     stage_norm = _normalize_stage(stage)
     checks: list[dict[str, Any]] = []
 
+    revision_facts: dict[str, Any] | None = None
+    if settings.masterdata_enabled:
+        from .masterdata.quotes import load_session_revision_facts
+
+        revision_facts = load_session_revision_facts(session_id)
+
+    def _fact(key: str) -> str:
+        if revision_facts is not None and key in revision_facts:
+            val = revision_facts.get(key)
+            if val is None:
+                return ""
+            if key == "delivery_days" and isinstance(val, int):
+                return str(val)
+            return str(val)
+        return _latest_memory(session_id, key)
+
     # 1. Line items / rows exist
-    artifact_id = _latest_memory(session_id, "last_quote")
-    rows_raw = _latest_memory(session_id, "last_quote_rows")
+    artifact_id = (
+        str(revision_facts.get("artifact_id") or "")
+        if revision_facts
+        else _latest_memory(session_id, "last_quote")
+    )
+    rows_raw = (
+        str(revision_facts.get("rows_raw") or "")
+        if revision_facts
+        else _latest_memory(session_id, "last_quote_rows")
+    )
     rows: list[list[Any]] = []
-    if rows_raw:
+    if revision_facts and revision_facts.get("rows"):
+        rows = list(revision_facts["rows"])
+    elif rows_raw:
         try:
             parsed = json.loads(rows_raw)
             if isinstance(parsed, list):
@@ -474,7 +557,7 @@ def verify_quote(*, session_id: str, stage: str = "draft") -> dict[str, Any]:
             )
 
     # 3. Material grade present
-    material = _latest_memory(session_id, "last_quote_material")
+    material = _fact("last_quote_material") if not revision_facts else _fact("material")
     if not material and rows:
         for row in rows:
             if len(row) > 1 and not _is_tbd(str(row[1])):
@@ -530,7 +613,7 @@ def verify_quote(*, session_id: str, stage: str = "draft") -> dict[str, Any]:
         checks.append(_check("send_hitl", True, "not queued — must not claim emailed", "pending_actions"))
 
     # 7. Customer spelling — master data or client-names.md
-    customer = _latest_memory(session_id, "last_quote_customer")
+    customer = _fact("last_quote_customer") if not revision_facts else _fact("customer")
     if settings.masterdata_enabled:
         from .masterdata import customer_name_is_known, sync_client_names_if_enabled
 
@@ -581,8 +664,14 @@ def verify_quote(*, session_id: str, stage: str = "draft") -> dict[str, Any]:
                     )
                 )
 
-    scope = _latest_memory(session_id, "last_quote_scope").strip().lower()
-    rm_mem = _parse_numeric(_latest_memory(session_id, "last_quote_rm_price"))
+    scope = (
+        _fact("scope").strip().lower()
+        if revision_facts
+        else _latest_memory(session_id, "last_quote_scope").strip().lower()
+    )
+    rm_mem = _parse_numeric(
+        _fact("rm_price") if revision_facts else _latest_memory(session_id, "last_quote_rm_price")
+    )
     rm_row_price = _rm_price_from_rows(rows)
     rm_present = (rm_mem is not None and rm_mem > 0) or rm_row_price is not None
 
@@ -647,9 +736,17 @@ def verify_quote(*, session_id: str, stage: str = "draft") -> dict[str, Any]:
                 )
             )
 
-    rm_source = _latest_memory(session_id, "last_quote_rm_source").strip().lower()
+    rm_source = (
+        _fact("rm_source").strip().lower()
+        if revision_facts
+        else _latest_memory(session_id, "last_quote_rm_source").strip().lower()
+    )
     if rm_source == "estimate":
-        note = _latest_memory(session_id, "last_quote_rm_source_note").strip()
+        note = (
+            _fact("rm_source_note").strip()
+            if revision_facts
+            else _latest_memory(session_id, "last_quote_rm_source_note").strip()
+        )
         if note:
             checks.append(
                 _check("rm_estimate_source", True, note[:120], "last_quote_rm_source_note")
@@ -664,8 +761,16 @@ def verify_quote(*, session_id: str, stage: str = "draft") -> dict[str, Any]:
                 )
             )
 
-    machine = _latest_memory(session_id, "last_quote_machine").strip()
-    mhr_rate = _parse_numeric(_latest_memory(session_id, "last_quote_machining_rate"))
+    machine = (
+        _fact("machine").strip()
+        if revision_facts
+        else _latest_memory(session_id, "last_quote_machine").strip()
+    )
+    mhr_rate = _parse_numeric(
+        _fact("machining_rate")
+        if revision_facts
+        else _latest_memory(session_id, "last_quote_machining_rate")
+    )
     if machine or mhr_rate is not None:
         if not machine:
             checks.append(
@@ -788,6 +893,8 @@ def verify_quote(*, session_id: str, stage: str = "draft") -> dict[str, Any]:
                     )
 
     delivery_missing = _delivery_empty(session_id)
+    if revision_facts and revision_facts.get("delivery_days") is not None:
+        delivery_missing = False
     if delivery_missing:
         delivery_sev = "BLOCKER" if stage_norm == "send" else "WARN"
         checks.append(
@@ -800,7 +907,10 @@ def verify_quote(*, session_id: str, stage: str = "draft") -> dict[str, Any]:
             )
         )
     else:
-        delivery_val = _latest_memory(session_id, "last_quote_delivery_days").strip()
+        if revision_facts and revision_facts.get("delivery_days") is not None:
+            delivery_val = str(revision_facts["delivery_days"])
+        else:
+            delivery_val = _latest_memory(session_id, "last_quote_delivery_days").strip()
         checks.append(
             _check(
                 "delivery_days",
