@@ -11,7 +11,7 @@ from typing import Any, Literal
 
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, RedirectResponse, Response
+from fastapi.responses import FileResponse, RedirectResponse, Response, StreamingResponse
 from pydantic import BaseModel
 
 from . import db
@@ -282,6 +282,31 @@ def api_turns_recent(limit: int = 20) -> dict:
     from .turn_log import log_paths, recent_turns
 
     return {"items": recent_turns(limit=limit), "paths": log_paths()}
+
+
+@app.get("/api/turns/{turn_id}/events")
+async def api_turn_events(turn_id: str, request: Request) -> StreamingResponse:
+    from .turns import get_turn
+    from .turns.events import parse_last_event_id, stream_turn_events
+
+    if not get_turn(turn_id):
+        raise HTTPException(status_code=404, detail="turn not found")
+
+    last_id = parse_last_event_id(request.headers.get("Last-Event-ID"))
+
+    async def _body():
+        async for chunk in stream_turn_events(turn_id, last_id):
+            yield chunk
+
+    return StreamingResponse(
+        _body(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @app.get("/api/turns/{turn_id}")
