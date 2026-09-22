@@ -68,6 +68,7 @@ import {
 } from "./hudWorkspace";
 import { HudChrome, HudPresence } from "./hudMorph";
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
+import { TurnStageLine } from "./TurnStageLine";
 
 const AMBIENT_SESSION = "default";
 const FOCUS_STORAGE_KEY = "jarvis.activeConversationId";
@@ -189,6 +190,7 @@ export function OrchestratorShell() {
   const [googleConnectOpen, setGoogleConnectOpen] = useState(false);
   const [workspace, setWorkspaceState] = useState<HudWorkspace>("monitor");
   const [workspacePinned, setWorkspacePinned] = useState(false);
+  const [ledgerTurnId, setLedgerTurnId] = useState<string | null>(null);
 
   // Mirrors `state` synchronously (a render behind `state` itself) so
   // imperative callbacks can guard re-entrancy (e.g. a second send() firing
@@ -715,7 +717,18 @@ export function OrchestratorShell() {
 
       try {
         const result = await api.chat(text, sessionRef.current);
-        applyResponse(result);
+        if (
+          result &&
+          typeof result === "object" &&
+          "turn_id" in result &&
+          typeof (result as { turn_id?: string }).turn_id === "string" &&
+          !("speak" in result)
+        ) {
+          setLedgerTurnId((result as { turn_id: string }).turn_id);
+          return;
+        }
+        setLedgerTurnId(null);
+        applyResponse(result as ChatResponse);
         void refreshDesk(activeConversationId);
       } catch (err) {
         clearAgents();
@@ -724,10 +737,32 @@ export function OrchestratorShell() {
         liveLog("error", { message: msg }, { sessionId: sessionRef.current });
         showVoice("Connection fault. Awaiting instruction.");
         pushLog("SYS", "Request failed.");
+        setLedgerTurnId(null);
         applyEvent({ type: "RESET" });
       }
     },
     [activeConversationId, applyEvent, applyResponse, clearAgents, decide, pushLog, refreshDesk, setWorkspaceExplicit, showVoice],
+  );
+
+  const onLedgerTurnComplete = useCallback(
+    (output: ChatResponse) => {
+      setLedgerTurnId(null);
+      applyResponse(output);
+      void refreshDesk(activeConversationId);
+    },
+    [activeConversationId, applyResponse, refreshDesk],
+  );
+
+  const onLedgerTurnFailed = useCallback(
+    (message: string) => {
+      setLedgerTurnId(null);
+      clearAgents();
+      setError(message);
+      showVoice("Connection fault. Awaiting instruction.");
+      pushLog("SYS", "Turn failed.");
+      applyEvent({ type: "RESET" });
+    },
+    [applyEvent, clearAgents, pushLog, showVoice],
   );
 
   useEffect(() => {
@@ -1104,6 +1139,11 @@ export function OrchestratorShell() {
               </p>
             </div>
           ) : null}
+          <TurnStageLine
+            turnId={ledgerTurnId}
+            onComplete={onLedgerTurnComplete}
+            onFailed={onLedgerTurnFailed}
+          />
           {error ? (
             <p className="mt-4 max-w-lg text-center font-mono text-xs text-red-300/80">{error}</p>
           ) : null}

@@ -13,7 +13,7 @@ import type {
 } from "./types";
 import type { CanvasBoard, CanvasCamera, CanvasFile, CanvasItem } from "./canvas/types";
 
-function apiBase(): string {
+export function apiBase(): string {
   const fallback = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
   if (typeof window === "undefined") return fallback;
   try {
@@ -66,10 +66,18 @@ export const api = {
       }),
     }),
   chat: (message: string, sessionId = "default") =>
-    json<ChatResponse>("/api/chat", {
+    json<ChatResponse | { turn_id: string; state: string }>("/api/chat", {
       method: "POST",
       body: JSON.stringify({ message, session_id: sessionId }),
     }),
+  getTurn: (turnId: string) =>
+    json<{
+      id: string;
+      state: string;
+      stage?: string;
+      output?: ChatResponse | null;
+      error?: string;
+    }>(`/api/turns/${encodeURIComponent(turnId)}`),
   confirm: (actionId: string, approved: boolean, sessionId = "default") =>
     json<ChatResponse>("/api/confirm", {
       method: "POST",
