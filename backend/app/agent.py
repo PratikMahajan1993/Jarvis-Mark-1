@@ -1729,3 +1729,93 @@ def resolve_pending(action_id: str, approved: bool, session_id: str) -> ChatResp
         more=remaining,
         agents=_agents_payload(approved_pending),
     )
+
+
+async def run_ledger_chat_turn(turn_id: str) -> None:
+    """Run chat brain work for an accepted ledger turn; writes DONE or FAILED on the row."""
+    import time
+
+    from .hud_state import remember_hud
+    from .turns import store as turns_store
+
+    turn = turns_store.get_turn(turn_id)
+    if not turn:
+        return
+
+    message = str(turn.get("input") or "").strip()
+    session_id = str(turn.get("session_id") or "default")
+    route_label = ""
+    t0 = time.perf_counter()
+
+    try:
+        from .live_log import record as live_record
+
+        live_record(
+            source="api",
+            kind="chat_in",
+            session_id=session_id,
+            fields={"message": message, "turn_id": turn_id},
+        )
+    except Exception:
+        pass
+
+    try:
+        from .semantic_router import classify_intent, handle_ui_command, stamp_route, try_obvious_casual
+
+        classification = try_obvious_casual(message) or await classify_intent(message)
+        route_label = getattr(classification, "intent", "") or ""
+
+        if classification.intent == "ui_command":
+            result = handle_ui_command(message, session_id, classification)
+        else:
+            result = run_agent(message, session_id, route=classification)
+            result = stamp_route(result, classification)
+
+        data = result.model_dump() if hasattr(result, "model_dump") else dict(result)
+        remember_hud(session_id, data)
+        try:
+            from .turn_log import record_turn
+
+            record_turn(session_id=session_id, user=message, response=data, source="chat")
+        except Exception:
+            pass
+        try:
+            from .live_log import chat_out_fields, record as live_record
+
+            live_record(
+                source="api",
+                kind="chat_out",
+                session_id=session_id,
+                latency_ms=int((time.perf_counter() - t0) * 1000),
+                fields={**chat_out_fields(data), "turn_id": turn_id},
+            )
+        except Exception:
+            pass
+        speak = str(data.get("speak") or "").strip()
+        if speak:
+            try:
+                from .voicebox import prefetch_tts
+
+                prefetch_tts(speak)
+            except Exception:
+                pass
+
+        turns_store.finish_turn(
+            turn_id,
+            output_json=json.dumps(data),
+            route=route_label,
+        )
+    except Exception as exc:
+        turns_store.fail_turn(turn_id, str(exc))
+        try:
+            from .live_log import record as live_record
+
+            live_record(
+                source="api",
+                kind="chat_out",
+                session_id=session_id,
+                latency_ms=int((time.perf_counter() - t0) * 1000),
+                fields={"turn_id": turn_id, "error": str(exc)[:400]},
+            )
+        except Exception:
+            pass

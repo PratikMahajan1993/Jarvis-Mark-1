@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Literal
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, RedirectResponse, Response
 from pydantic import BaseModel
@@ -283,6 +283,16 @@ def api_turns_recent(limit: int = 20) -> dict:
     return {"items": recent_turns(limit=limit), "paths": log_paths()}
 
 
+@app.get("/api/turns/{turn_id}")
+def api_turn_get(turn_id: str) -> dict:
+    from .turns import get_turn, turn_row_to_api
+
+    row = get_turn(turn_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="turn not found")
+    return turn_row_to_api(row)
+
+
 @app.get("/api/google/status")
 def api_google_status() -> dict:
     return google_auth.status()
@@ -363,7 +373,22 @@ def api_mail_attachments_reply(payload: MailReplyAttachmentAction) -> dict:
 
 
 @app.post("/api/chat")
-async def api_chat(payload: ChatRequest) -> dict:
+async def api_chat(payload: ChatRequest, request: Request) -> dict:
+    if settings.turn_ledger_enabled:
+        from .turns.accept import accept_chat_turn
+        from .turns.worker import schedule_turn
+
+        message = payload.message.strip()
+        idempotency_key = (request.headers.get("Idempotency-Key") or "").strip() or uuid.uuid4().hex
+        row, is_new = accept_chat_turn(
+            session_id=payload.session_id,
+            message=message,
+            idempotency_key=idempotency_key,
+        )
+        if is_new:
+            schedule_turn(row["id"])
+        return {"turn_id": row["id"], "state": row["state"]}
+
     from .semantic_router import classify_intent, handle_ui_command, stamp_route, try_obvious_casual
 
     t0 = time.perf_counter()
