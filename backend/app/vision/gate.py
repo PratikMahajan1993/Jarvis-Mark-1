@@ -192,6 +192,142 @@ def on_mail_drawing_saved(path: str | Path, *, customer_id: str | None = None) -
     }
 
 
+def _customer_vision_consent_error(customer_id: str | None) -> str | None:
+    """Gate 1 — deny unless attested customer_terms row allows cloud vision."""
+    if not customer_id or not str(customer_id).strip():
+        return (
+            "Cloud vision requires a known customer. "
+            "Attest vision consent for this customer in master data."
+        )
+    cid = str(customer_id).strip()
+    with db.connect() as conn:
+        cust = conn.execute("SELECT id FROM customers WHERE id = ?", (cid,)).fetchone()
+        if not cust:
+            return (
+                "Customer is unknown or unresolved. "
+                "Attest vision consent for this customer in master data before cloud vision."
+            )
+        row = conn.execute(
+            """
+            SELECT allow_cloud_vision, nda, vision_consent_by
+            FROM customer_terms
+            WHERE customer_id = ?
+            """,
+            (cid,),
+        ).fetchone()
+        if not row:
+            return (
+                "No vision consent on file for this customer. "
+                "Attest allow_cloud_vision and NDA status for this customer."
+            )
+        if int(row["nda"]):
+            return (
+                "This customer has an NDA on file. "
+                "Cloud vision is not permitted and cannot be overridden by quota spend."
+            )
+        if not int(row["allow_cloud_vision"]):
+            return (
+                "Cloud vision is not allowed for this customer. "
+                "Set allow_cloud_vision via owner attestation in master data."
+            )
+        consent_by = row["vision_consent_by"]
+        if not consent_by or not str(consent_by).strip():
+            return (
+                "Vision consent is not attested. "
+                "Owner attestation (vision_consent_by) is required before cloud vision."
+            )
+    return None
+
+
+def attest_customer_vision(
+    customer_id: str,
+    *,
+    allow: bool,
+    nda: bool,
+    attested_by: str,
+) -> dict[str, Any]:
+    """Only writer for customer_terms vision consent fields."""
+    cid = (customer_id or "").strip()
+    who = (attested_by or "").strip()
+    if not cid:
+        return {"ok": False, "error": "customer_id required"}
+    if not who:
+        return {"ok": False, "error": "attested_by required"}
+    now = db.utc_now()
+    allow_i = 1 if allow else 0
+    nda_i = 1 if nda else 0
+    with db.connect() as conn:
+        cust = conn.execute("SELECT id FROM customers WHERE id = ?", (cid,)).fetchone()
+        if not cust:
+            return {"ok": False, "error": f"Unknown customer id: {cid}"}
+        existing = conn.execute(
+            "SELECT customer_id FROM customer_terms WHERE customer_id = ?",
+            (cid,),
+        ).fetchone()
+        if existing:
+            conn.execute(
+                """
+                UPDATE customer_terms
+                SET allow_cloud_vision = ?,
+                    nda = ?,
+                    vision_consent_by = ?,
+                    vision_consent_at = ?
+                WHERE customer_id = ?
+                """,
+                (allow_i, nda_i, who, now, cid),
+            )
+        else:
+            conn.execute(
+                """
+                INSERT INTO customer_terms (
+                  customer_id, default_scope, nda, allow_cloud_vision,
+                  vision_consent_by, vision_consent_at
+                ) VALUES (?, 'ask', ?, ?, ?, ?)
+                """,
+                (cid, nda_i, allow_i, who, now),
+            )
+    return {
+        "ok": True,
+        "customer_id": cid,
+        "allow_cloud_vision": bool(allow),
+        "nda": bool(nda),
+        "vision_consent_by": who,
+        "vision_consent_at": now,
+    }
+
+
+def vision_consent_get_payload(customer_id: str | None = None) -> dict[str, Any]:
+    if not settings.masterdata_enabled:
+        return {"enabled": False}
+    out: dict[str, Any] = {"enabled": True}
+    cid = (customer_id or "").strip()
+    if not cid:
+        return out
+    out["customer_id"] = cid
+    with db.connect() as conn:
+        row = conn.execute(
+            """
+            SELECT allow_cloud_vision, nda, vision_consent_by, vision_consent_at
+            FROM customer_terms
+            WHERE customer_id = ?
+            """,
+            (cid,),
+        ).fetchone()
+    if not row:
+        out["allow_cloud_vision"] = False
+        out["nda"] = False
+        out["vision_consent_by"] = ""
+        out["vision_consent_at"] = ""
+        out["attested"] = False
+        return out
+    out["allow_cloud_vision"] = bool(int(row["allow_cloud_vision"]))
+    out["nda"] = bool(int(row["nda"]))
+    out["vision_consent_by"] = str(row["vision_consent_by"] or "")
+    out["vision_consent_at"] = str(row["vision_consent_at"] or "")
+    out["attested"] = bool(out["vision_consent_by"])
+    return out
+
+
 def _queue_cap_override(
     *,
     session_id: str,
@@ -274,6 +410,25 @@ def dispatch_drawing_vision(
             "sheet_index": index,
             "error": f"Pack has {pages} sheets (threshold {threshold}). Review the sheet index before spending a unit.",
         }
+
+    if settings.masterdata_enabled and owner_spend:
+        consent_err = _customer_vision_consent_error(customer_id)
+        if consent_err:
+            set_analysis_state(
+                digest,
+                "needs_vision",
+                display_name=file_path.name,
+                path=str(file_path.resolve()),
+            )
+            return {
+                "ok": False,
+                "analysis_state": "needs_vision",
+                "path": str(file_path),
+                "name": file_path.name,
+                "file_sha256": digest,
+                "customer_id": customer_id,
+                "error": consent_err,
+            }
 
     claim_id: str | None = None
     reused = False

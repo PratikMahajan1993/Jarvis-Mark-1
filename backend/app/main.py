@@ -651,6 +651,36 @@ class VisionBenchAnalyse(BaseModel):
     file_sha256: str
 
 
+class VisionConsentPost(BaseModel):
+    customer_id: str
+    allow: bool
+    nda: bool = False
+    attested_by: str
+
+
+@app.get("/api/masterdata/vision-consent")
+def api_masterdata_vision_consent_get(customer_id: str | None = None) -> dict:
+    from .vision.gate import vision_consent_get_payload
+
+    return vision_consent_get_payload(customer_id)
+
+
+@app.post("/api/masterdata/vision-consent")
+def api_masterdata_vision_consent_post(payload: VisionConsentPost) -> dict:
+    if not settings.masterdata_enabled:
+        return {"enabled": False, "ok": False}
+    from .vision.gate import attest_customer_vision
+
+    out = attest_customer_vision(
+        payload.customer_id,
+        allow=payload.allow,
+        nda=payload.nda,
+        attested_by=payload.attested_by,
+    )
+    out["enabled"] = True
+    return out
+
+
 @app.get("/api/vision/bench")
 def api_vision_bench() -> dict:
     from .vision.gate import vision_bench_get_payload
