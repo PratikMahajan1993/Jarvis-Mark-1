@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sqlite3
 import statistics
 import threading
 import uuid
@@ -105,6 +106,83 @@ def record_hermes_latency(
         pass
 
 
+def _table_exists(conn: sqlite3.Connection, name: str) -> bool:
+    row = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+        (name,),
+    ).fetchone()
+    return row is not None
+
+
+def load_durable_metrics(conn: sqlite3.Connection) -> dict[str, Any]:
+    """SQLite-backed metric series (survives process restart)."""
+    out: dict[str, Any] = {}
+
+    if _table_exists(conn, "turns"):
+        rows = conn.execute(
+            "SELECT stage, COUNT(*) AS n FROM turns GROUP BY stage"
+        ).fetchall()
+        out["stage_counts"] = {str(row["stage"]): int(row["n"]) for row in rows}
+    else:
+        out["stage_counts"] = {}
+
+    if _table_exists(conn, "quote_proofs"):
+        total_row = conn.execute("SELECT COUNT(*) AS n FROM quote_proofs").fetchone()
+        total = int(total_row["n"]) if total_row else 0
+        if total == 0:
+            out["proof_block_rate"] = {"ask": True, "reason": "no proof rows"}
+        else:
+            blocked_row = conn.execute(
+                """
+                SELECT COUNT(*) AS n FROM quote_proofs
+                WHERE blockers > 0 OR LOWER(verdict) = 'block'
+                """
+            ).fetchone()
+            blocked = int(blocked_row["n"]) if blocked_row else 0
+            out["proof_block_rate"] = blocked / total
+    else:
+        out["proof_block_rate"] = {"ask": True, "reason": "no proof rows"}
+
+    if not _table_exists(conn, "external_effects"):
+        out["duplicate_external_effect_count"] = 0
+    else:
+        total_row = conn.execute("SELECT COUNT(*) AS n FROM external_effects").fetchone()
+        total = int(total_row["n"]) if total_row else 0
+        if total == 0:
+            out["duplicate_external_effect_count"] = 0
+        else:
+            dup_row = conn.execute(
+                """
+                SELECT COALESCE(SUM(c - 1), 0) AS n FROM (
+                    SELECT COUNT(*) AS c
+                    FROM external_effects
+                    GROUP BY provider, request_hash
+                    HAVING COUNT(*) > 1
+                )
+                """
+            ).fetchone()
+            out["duplicate_external_effect_count"] = int(dup_row["n"] or 0)
+
+    if _table_exists(conn, "rag_index_state"):
+        row = conn.execute(
+            "SELECT pending, embedded FROM rag_index_state WHERE id = 1"
+        ).fetchone()
+        if row is None:
+            out["index_lag"] = {"ask": True}
+        else:
+            pending = int(row["pending"])
+            embedded = int(row["embedded"])
+            out["index_lag"] = {
+                "pending": pending,
+                "embedded": embedded,
+                "lag": max(0, pending - embedded),
+            }
+    else:
+        out["index_lag"] = {"ask": True}
+
+    return out
+
+
 def metrics_snapshot() -> dict[str, Any]:
     with _lock:
         samples = list(_latency_samples)
@@ -125,6 +203,8 @@ def metrics_snapshot() -> dict[str, Any]:
         }
 
     recent_missions = db.list_mission_steps(limit=40)
+    with db.connect() as conn:
+        durable = load_durable_metrics(conn)
     return {
         "hermes_latency": {
             "casual": _stats(casual),
@@ -136,4 +216,5 @@ def metrics_snapshot() -> dict[str, Any]:
             "casual_warm_ms": 5000,
             "simple_tool_ms": 15000,
         },
+        **durable,
     }
