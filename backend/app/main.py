@@ -722,6 +722,35 @@ def api_knowledge_card(entity_type: str = "", entity_id: str = "") -> dict:
     return knowledge_card_api_payload(entity_type, entity_id)
 
 
+class KnowledgeFactConfirm(BaseModel):
+    confirmed_by: str = ""
+    value: str = ""
+
+
+@app.post("/api/knowledge/facts/{fact_id}/confirm")
+def api_knowledge_fact_confirm(fact_id: str, payload: KnowledgeFactConfirm) -> dict:
+    if not settings.knowledge_cards_enabled:
+        return {"enabled": False}
+    if not (payload.confirmed_by or "").strip():
+        raise HTTPException(400, "confirmed_by required")
+    from .knowledge.confirm import confirm_fact
+
+    out = confirm_fact(fact_id, payload.confirmed_by, payload.value)
+    out["enabled"] = True
+    return out
+
+
+@app.post("/api/knowledge/facts/{fact_id}/reject")
+def api_knowledge_fact_reject(fact_id: str) -> dict:
+    if not settings.knowledge_cards_enabled:
+        return {"enabled": False}
+    from .knowledge.confirm import reject_fact
+
+    out = reject_fact(fact_id)
+    out["enabled"] = True
+    return out
+
+
 @app.get("/api/masterdata/vision-consent")
 def api_masterdata_vision_consent_get(customer_id: str | None = None) -> dict:
     from .vision.gate import vision_consent_get_payload
