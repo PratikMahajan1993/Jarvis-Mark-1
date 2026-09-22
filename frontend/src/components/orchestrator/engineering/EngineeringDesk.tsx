@@ -14,6 +14,8 @@ import { QuoteStack } from "./QuoteStack";
 import { CustomerVisionConsent } from "./CustomerVisionConsent";
 import { VisionBenchQueue } from "./VisionBenchQueue";
 import { FactConfirmChips } from "./FactConfirmChips";
+import { VarianceCard } from "./VarianceCard";
+import { ToolChangeField } from "./ToolChangeField";
 
 const BENCH_BG = "#060a0e";
 
@@ -153,6 +155,8 @@ export function EngineeringDesk({
             <CustomerVisionConsent />
             <VisionBenchQueue />
             <FactConfirmChips entityType={entityType} entityId={entityId} />
+            <VarianceCard />
+            <ToolChangeField />
             <QuoteStack scene={scene} />
           </div>
         </div>
