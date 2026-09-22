@@ -305,6 +305,7 @@ def test_post_chat_ui_command_contract(api_client: TestClient):
     )
     assert resp.status_code == 200
     data = resp.json()
+    assert "turn_id" not in data
     _assert_chat_body(data)
     _assert_type(data["route_intent"], str)
     _assert_type(data["target_agent"], str)

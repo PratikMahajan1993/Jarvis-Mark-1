@@ -77,6 +77,9 @@ class Settings(BaseSettings):
     voicebox_profile: str = "Mark"
     voicebox_timeout_sec: float = 45.0
 
+    # Turn ledger (accept-then-work); dark until HUD reconciles against server rows.
+    turn_ledger_enabled: bool = False
+
     @field_validator("data_dir", "exports_dir", mode="after")
     @classmethod
     def _anchor_data_paths(cls, value: Path) -> Path:
