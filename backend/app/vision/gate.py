@@ -372,6 +372,9 @@ def dispatch_drawing_vision(
     arrival: str = "mail",
     spent_by: str = "owner_bench",
     provider_call: ProviderFn | None = None,
+    fingerprint_text: str | None = None,
+    drawing_no: str | None = None,
+    revision: str | None = None,
 ) -> dict[str, Any]:
     """
     Gate cloud vision. Default deny: no owner_spend ⇒ needs_vision only.
@@ -428,6 +431,76 @@ def dispatch_drawing_vision(
                 "file_sha256": digest,
                 "customer_id": customer_id,
                 "error": consent_err,
+            }
+
+    if settings.knowledge_cards_enabled and owner_spend:
+        from ..knowledge.identity import format_revision_change_summary, resolve_drawing_identity
+
+        identity = resolve_drawing_identity(
+            drawing_sha256=digest,
+            fingerprint_text=fingerprint_text,
+            customer_id=customer_id,
+            drawing_no=drawing_no,
+            revision=revision,
+        )
+        base = {
+            "path": str(file_path),
+            "name": file_path.name,
+            "file_sha256": digest,
+            "identity": identity.to_dict(),
+        }
+        if identity.kind == "exact":
+            set_analysis_state(
+                digest,
+                "vision_done",
+                display_name=file_path.name,
+                path=str(file_path.resolve()),
+            )
+            from ..knowledge.cards import what_do_you_know
+
+            recall = what_do_you_know("part_revision", identity.part_revision_id or "")
+            return {
+                **base,
+                "ok": True,
+                "identity_kind": "exact",
+                "part_revision_id": identity.part_revision_id,
+                "summary": recall,
+                "analysis_state": "vision_done",
+                "recalled": True,
+            }
+        if identity.kind == "propose":
+            set_analysis_state(
+                digest,
+                "needs_vision",
+                display_name=file_path.name,
+                path=str(file_path.resolve()),
+            )
+            return {
+                **base,
+                "ok": False,
+                "identity_kind": "propose",
+                "proposed_part_revision_id": identity.matched_part_revision_id,
+                "analysis_state": "needs_vision",
+                "error": "Near-duplicate drawing — confirm whether this is the same sheet.",
+            }
+        if identity.kind == "revision_change":
+            summary = format_revision_change_summary(identity)
+            set_analysis_state(
+                digest,
+                "needs_vision",
+                display_name=file_path.name,
+                path=str(file_path.resolve()),
+            )
+            return {
+                **base,
+                "ok": False,
+                "identity_kind": "revision_change",
+                "part_revision_id": identity.part_revision_id,
+                "prior_part_revision_id": identity.prior_part_revision_id,
+                "changed_fields": identity.changed_fields,
+                "change_summary": summary,
+                "summary": summary,
+                "analysis_state": "needs_vision",
             }
 
     claim_id: str | None = None
