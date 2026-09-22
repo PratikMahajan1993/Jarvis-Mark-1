@@ -138,6 +138,13 @@ Persistent memory so Jarvis knows who you are, how you work, and what’s in fli
 
 ### Decision
 
+> **SUPERSEDED 2026-09-22 — local-first, no cloud memory.** The owner locked: strip Honcho
+> entirely; memory and knowledge run 100 % local on SQLite + LanceDB. The destination below was
+> already local; what changed is that there is no cloud stage and no dual-write phase. Current
+> lock: [`ARCHITECTURE_POINTS.md`](ARCHITECTURE_POINTS.md) · design:
+> [`OPUS_ARCHITECTURE_MANIFEST.md`](OPUS_ARCHITECTURE_MANIFEST.md) §4B, §8.6. The paragraphs below
+> are kept as the record of how the decision was reached.
+
 > **Decision:** Accepted — **dual-write memory, local-first destination.**  
 > **Now:** Keep **Honcho cloud** as the live dialectic / Hermes memory provider.  
 > **Also now:** Implement **local vector DB + structured store**; continuously mirror/update **profile summaries, preferences, people/jobs facts, and other durable docs** into the local DB so a later cutover does not start from zero.  
@@ -610,7 +617,7 @@ Because Jarvis will autonomously coordinate multi-step background jobs across mu
 | 2026-09-14 | 0 — North star       | Accepted | Foundation priority: memory + latency. Office-day story locked as target narrative.                             |
 | 2026-09-14 | 1 — Product identity | Accepted | Thin Jarvis shell; Hermes primary brain; Gemini overflow; Jarvis-branded HUD; pause-for-Authorize.              |
 | 2026-09-14 | 8 — HITL & safety    | Accepted | Per-action Authorize for external/destructive; auto-allow local prep/RAG/read-only browse; short voice phrases. |
-| 2026-09-14 | 2 — Memory           | Accepted | Dual-write: Honcho cloud live now; local vector/structured DB mirrored for later cutover.                       |
+| 2026-09-14 | 2 — Memory           | Accepted | Dual-write: Honcho cloud live now; local vector/structured DB mirrored for later cutover. **Superseded 2026-09-22: 100 % local, Honcho stripped.** |
 | 2026-09-14 | 5 — Offline RAG      | Accepted | Embedded vector DB (LanceDB/sqlite-vec); local embeddings; auto ingest; RAG via Jarvis MCP.                     |
 | 2026-09-14 | 7 — Hermes-first     | Accepted | Hermes owns intent/planning; Jarvis guarantees only; tiny deny-list; safe MCP; SOUL+skills.                     |
 | 2026-09-14 | 6 — Orchestrator     | Accepted | Soft Hermes-invented teams; parallel jobs; subagents/skills first; light HUD labels.                            |
