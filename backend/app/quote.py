@@ -529,27 +529,57 @@ def verify_quote(*, session_id: str, stage: str = "draft") -> dict[str, Any]:
     else:
         checks.append(_check("send_hitl", True, "not queued — must not claim emailed", "pending_actions"))
 
-    # 7. Customer spelling vs client-names.md
+    # 7. Customer spelling — master data or client-names.md
     customer = _latest_memory(session_id, "last_quote_customer")
-    ref_names = _reference_client_names()
-    if not ref_names:
-        checks.append(_check("customer_spelling", True, "no reference names", "client-names.md"))
-    elif not customer.strip():
-        checks.append(_check("customer_spelling", False, "Customer name empty", "last_quote_customer"))
-    else:
-        norm = customer.strip().lower()
-        match = any(norm == n.lower() or norm in n.lower() or n.lower() in norm for n in ref_names)
-        if match:
-            checks.append(_check("customer_spelling", True, f"'{customer}' matches reference list", "client-names.md"))
+    if settings.masterdata_enabled:
+        from .masterdata import customer_name_is_known, sync_client_names_if_enabled
+
+        if not customer.strip():
+            checks.append(_check("customer_spelling", False, "Customer name empty", "last_quote_customer"))
         else:
-            checks.append(
-                _check(
-                    "customer_spelling",
-                    False,
-                    f"'{customer}' not in client-names.md",
-                    "client-names.md",
+            with db.connect() as conn:
+                sync_client_names_if_enabled(conn)
+                known = customer_name_is_known(conn, customer)
+            if known:
+                checks.append(
+                    _check(
+                        "customer_spelling",
+                        True,
+                        f"'{customer}' matches master data",
+                        "customer_aliases",
+                    )
                 )
-            )
+            else:
+                checks.append(
+                    _check(
+                        "customer_spelling",
+                        False,
+                        f"'{customer}' not in customer_aliases",
+                        "customer_aliases",
+                    )
+                )
+    else:
+        ref_names = _reference_client_names()
+        if not ref_names:
+            checks.append(_check("customer_spelling", True, "no reference names", "client-names.md"))
+        elif not customer.strip():
+            checks.append(_check("customer_spelling", False, "Customer name empty", "last_quote_customer"))
+        else:
+            norm = customer.strip().lower()
+            match = any(norm == n.lower() or norm in n.lower() or n.lower() in norm for n in ref_names)
+            if match:
+                checks.append(
+                    _check("customer_spelling", True, f"'{customer}' matches reference list", "client-names.md")
+                )
+            else:
+                checks.append(
+                    _check(
+                        "customer_spelling",
+                        False,
+                        f"'{customer}' not in client-names.md",
+                        "client-names.md",
+                    )
+                )
 
     scope = _latest_memory(session_id, "last_quote_scope").strip().lower()
     rm_mem = _parse_numeric(_latest_memory(session_id, "last_quote_rm_price"))

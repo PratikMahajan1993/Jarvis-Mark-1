@@ -80,6 +80,9 @@ class Settings(BaseSettings):
     # Turn ledger (accept-then-work); dark until HUD reconciles against server rows.
     turn_ledger_enabled: bool = False
 
+    # Master data (parties/materials/suppliers); default off — dual-read with client-names.md.
+    masterdata_enabled: bool = False
+
     @field_validator("data_dir", "exports_dir", mode="after")
     @classmethod
     def _anchor_data_paths(cls, value: Path) -> Path:
