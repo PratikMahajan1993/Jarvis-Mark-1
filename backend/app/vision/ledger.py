@@ -85,7 +85,6 @@ def claim_unit(
     Atomically claim one quota unit for this document in the cycle.
     Returns {"ok": True, "claim_id", "reused": bool} or {"ok": False, "reason": "cap"|"exists"}.
     """
-    ensure_vision_schema(conn)
     existing = _get_usage_row(conn, cycle_start, file_sha256)
     if existing:
         state = str(existing["state"])

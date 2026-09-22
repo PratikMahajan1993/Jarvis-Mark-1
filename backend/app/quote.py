@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import sqlite3
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any
@@ -478,6 +479,36 @@ def _finalize_verify(checks: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def _masterdata_customer_spelling_known(conn: sqlite3.Connection, customer: str) -> bool:
+    """Owner-confirmed names/aliases only — not auto-provisioned quote_build rows."""
+    norm = (customer or "").strip()
+    if not norm:
+        return False
+    row = conn.execute(
+        """
+        SELECT 1 FROM customer_aliases
+        WHERE alias = ? COLLATE NOCASE AND COALESCE(source, '') != 'quote_build'
+        LIMIT 1
+        """,
+        (norm,),
+    ).fetchone()
+    if row:
+        return True
+    row = conn.execute(
+        """
+        SELECT 1 FROM customers c
+        WHERE c.name = ? COLLATE NOCASE
+          AND EXISTS (
+            SELECT 1 FROM customer_aliases a
+            WHERE a.customer_id = c.id AND COALESCE(a.source, '') != 'quote_build'
+          )
+        LIMIT 1
+        """,
+        (norm,),
+    ).fetchone()
+    return row is not None
+
+
 def _reference_client_names() -> list[str]:
     path = CLIENT_NAMES_PATH
     if not path.is_file():
@@ -680,14 +711,14 @@ def verify_quote(*, session_id: str, stage: str = "draft") -> dict[str, Any]:
     # 7. Customer spelling — master data or client-names.md
     customer = _fact("last_quote_customer") if not revision_facts else _fact("customer")
     if settings.masterdata_enabled:
-        from .masterdata import customer_name_is_known, sync_client_names_if_enabled
+        from .masterdata import sync_client_names_if_enabled
 
         if not customer.strip():
             checks.append(_check("customer_spelling", False, "Customer name empty", "last_quote_customer"))
         else:
             with db.connect() as conn:
                 sync_client_names_if_enabled(conn)
-                known = customer_name_is_known(conn, customer)
+                known = _masterdata_customer_spelling_known(conn, customer)
             if known:
                 checks.append(
                     _check(

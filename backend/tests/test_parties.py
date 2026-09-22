@@ -30,7 +30,7 @@ def setup_module(_module=None):
 def _send_ready(session: str, *, customer: str) -> None:
     db.add_memory(session, "last_quote_drawing", "fixture-drawing.pdf")
     db.add_memory(session, "last_quote_delivery_days", "10")
-    db.add_memory(session, "last_quote_rm_basis_date", "2026-01-15")
+    db.add_memory(session, "last_quote_rm_basis_date", "2026-09-13")
     build_quote(
         session_id=session,
         part_name="Bracket",

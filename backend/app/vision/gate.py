@@ -433,8 +433,8 @@ def dispatch_drawing_vision(
     claim_id: str | None = None
     reused = False
     with db.connect() as conn:
-        conn.execute("BEGIN IMMEDIATE")
         ensure_vision_schema(conn)
+        conn.execute("BEGIN IMMEDIATE")
         claim = claim_unit(
             conn,
             cycle_start=cycle,

@@ -130,7 +130,7 @@ def reaper_pass(
     return handled
 
 
-def start_reaper_daemon() -> threading.Event:
+def start_reaper_daemon() -> tuple[threading.Event, threading.Thread]:
     """Background poll loop; tests call reaper_pass() directly."""
     stop = threading.Event()
 
@@ -145,5 +145,6 @@ def start_reaper_daemon() -> threading.Event:
             if stop.wait(REAPER_POLL_SEC):
                 break
 
-    threading.Thread(target=_loop, daemon=True, name="turn-reaper").start()
-    return stop
+    thread = threading.Thread(target=_loop, daemon=True, name="turn-reaper")
+    thread.start()
+    return stop, thread

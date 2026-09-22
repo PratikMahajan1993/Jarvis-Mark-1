@@ -310,7 +310,7 @@ def test_quote_build_tool_with_material_rm_price_passes_verify():
     assert mems.get("last_quote_rm_price") == "4200"
 
     db.add_memory(session, "last_quote_drawing", "fixture-drawing.pdf")
-    db.add_memory(session, "last_quote_rm_basis_date", "2026-03-01")
+    db.add_memory(session, "last_quote_rm_basis_date", "2026-09-13")
     quote_to_pdf(session_id=session, part_name="Bracket")
     verify = verify_quote(session_id=session)
     by_id = {c["id"]: c for c in verify["checks"]}
