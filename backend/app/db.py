@@ -119,6 +119,13 @@ def init_db() -> None:
 
     seed_demo_job()
 
+    from .backup import run_integrity_check
+
+    with connect() as conn:
+        status = run_integrity_check(conn)
+        if status != "ok":
+            raise RuntimeError(f"database integrity_check failed: {status}")
+
 
 def add_message(session_id: str, role: str, content: str) -> None:
     with connect() as conn:
