@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import binascii
+import json
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -444,10 +445,42 @@ async def api_chat(payload: ChatRequest, request: Request) -> dict:
 
 
 @app.post("/api/confirm")
-def api_confirm(payload: ConfirmRequest) -> dict:
+def api_confirm(payload: ConfirmRequest, request: Request) -> dict:
     t0 = time.perf_counter()
+    idempotency_key = (request.headers.get("Idempotency-Key") or "").strip()
+    if idempotency_key:
+        with db.connect() as conn:
+            row = conn.execute(
+                "SELECT response_json FROM confirm_idempotency WHERE idempotency_key = ?",
+                (idempotency_key,),
+            ).fetchone()
+        if row:
+            return json.loads(row["response_json"])
+
     result = resolve_pending(payload.action_id, payload.approved, payload.session_id)
     data = result.model_dump()
+    if idempotency_key:
+        with db.connect() as conn:
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO confirm_idempotency
+                (idempotency_key, action_id, approved, response_json, created_at)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    idempotency_key,
+                    payload.action_id,
+                    1 if payload.approved else 0,
+                    json.dumps(data),
+                    db.utc_now(),
+                ),
+            )
+            row = conn.execute(
+                "SELECT response_json FROM confirm_idempotency WHERE idempotency_key = ?",
+                (idempotency_key,),
+            ).fetchone()
+        if row:
+            data = json.loads(row["response_json"])
     remember_hud(payload.session_id, data)
     try:
         from .turn_log import record_turn
