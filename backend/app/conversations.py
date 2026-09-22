@@ -255,7 +255,7 @@ def prime_drawing(conversation_id: str) -> dict[str, Any]:
     _seed_working_set(row)
     row = db.get_conversation(conversation_id) or row
     with _BRAIN:
-        speak, grounding, model, saw = _see_drawing(row)
+        speak, grounding, model, saw = _see_drawing(row, owner_spend=False)
     row = db.get_conversation(conversation_id) or row
     focus = dict(row.get("focus") or {})
     focus["grounding"] = grounding
@@ -327,7 +327,15 @@ def chat_drawing(session_id: str, message: str) -> ChatResponse:
     )
 
 
-def _see_drawing(row: dict[str, Any]) -> tuple[str, str, str, bool]:
+def _see_drawing(row: dict[str, Any], *, owner_spend: bool = False) -> tuple[str, str, str, bool]:
+    if not owner_spend:
+        caption = _pdf_caption(row)
+        speak = (
+            "The drawing is on the bench locally. Cloud vision waits until you explicitly spend a unit."
+        )
+        if caption:
+            speak = "The drawing is in focus from local text. Cloud vision waits for your explicit request."
+        return speak[:240], (caption or "")[:1200], "local", bool(caption)
     prompt = (
         "Look at this engineering drawing. "
         "Reply JSON only: "
@@ -389,7 +397,9 @@ def _chat_drawing_media(
     last: OllamaError | None = None
     for media, kind in _media_variants(row):
         try:
-            response = _chat_with_fallback(history, message, media, system, preferred)
+            response = _chat_with_fallback(
+                history, message, media, system, preferred, owner_spend=False
+            )
             if kind == "image/png":
                 _mark_raster(row)
             return response
@@ -403,18 +413,39 @@ def _chat_drawing_media(
     raise OllamaError("Gemini did not answer.")
 
 
+def _media_has_drawing_bytes(media: list[dict[str, Any]]) -> bool:
+    for part in media:
+        if part.get("inline_data") or part.get("file_data"):
+            return True
+    return False
+
+
 def _chat_with_fallback(
     history: list[dict[str, str]],
     message: str,
     media: list[dict[str, Any]],
     system: str,
     preferred: str,
+    *,
+    owner_spend: bool = False,
 ) -> dict[str, Any]:
     from . import gemini_client
 
+    effective_media = media
+    if _media_has_drawing_bytes(media) and not owner_spend:
+        effective_media = [
+            {
+                "text": (
+                    "(Drawing bytes withheld — cloud vision requires an explicit owner spend. "
+                    "Answer from local context and conversation only.)"
+                )
+            }
+        ]
+        system = system + "\nYou do not have the drawing image; do not invent dimensions."
+
     models = [preferred or settings.gemini_model]
     drawing_model = (settings.gemini_drawing_model or "").strip()
-    if drawing_model and drawing_model not in models:
+    if drawing_model and drawing_model not in models and owner_spend:
         models.append(drawing_model)
     last: OllamaError | None = None
     for model in models:
@@ -422,7 +453,7 @@ def _chat_with_fallback(
             return gemini_client.chat_multimodal(
                 history,
                 message,
-                media,
+                effective_media,
                 system=system,
                 model=model,
                 timeout=180,

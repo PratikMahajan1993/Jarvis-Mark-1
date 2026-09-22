@@ -529,6 +529,11 @@ def _spawn_from_mail(session_id: str, mail: dict[str, Any]) -> dict[str, Any] | 
             break
     if not focus:
         return None
+    local_path = str(focus.get("local_path") or "")
+    if local_path:
+        from .vision.gate import on_mail_drawing_saved
+
+        on_mail_drawing_saved(local_path)
     return convs.spawn_drawing(focus)
 
 

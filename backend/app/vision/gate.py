@@ -1,0 +1,332 @@
+"""Vision dispatch gate — deny-all unless owner_spend."""
+
+from __future__ import annotations
+
+import hashlib
+import mimetypes
+from pathlib import Path
+from typing import Any, Callable
+
+from .. import db
+from ..config import settings
+from ..hermes.hitl import request_human_approval
+from .ledger import (
+    claim_unit,
+    current_cycle_start,
+    mark_dispatched,
+    release_claim,
+    vision_page_threshold,
+    write_disclosure,
+)
+from .schema import ensure_vision_schema
+
+ProviderFn = Callable[[], dict[str, Any]]
+
+
+def file_sha256(path: Path) -> str:
+    h = hashlib.sha256()
+    h.update(path.read_bytes())
+    return h.hexdigest()
+
+
+def page_count(path: Path) -> int:
+    if path.suffix.lower() == ".pdf":
+        try:
+            from pypdf import PdfReader
+
+            reader = PdfReader(str(path))
+            return max(1, len(reader.pages))
+        except Exception:
+            return 1
+    return 1
+
+
+def local_sheet_index(path: Path) -> dict[str, Any]:
+    """Local-only sheet index for multi-page packs (no cloud)."""
+    pages = page_count(path)
+    sheets: list[dict[str, Any]] = []
+    unresolved = False
+    if path.suffix.lower() == ".pdf":
+        try:
+            from pypdf import PdfReader
+
+            reader = PdfReader(str(path))
+            for idx, page in enumerate(reader.pages, start=1):
+                text = (page.extract_text() or "").strip()
+                label = ""
+                if text:
+                    first = " ".join(text.split())[:80]
+                    label = first
+                else:
+                    unresolved = True
+                sheets.append({"page": idx, "label": label or "(no local text)"})
+        except Exception:
+            unresolved = True
+    else:
+        unresolved = True
+    if not sheets:
+        sheets = [{"page": n, "label": "(index unresolved)"} for n in range(1, pages + 1)]
+        unresolved = True
+    return {
+        "page_count": pages,
+        "sheets": sheets,
+        "index_unresolved": unresolved,
+    }
+
+
+def set_analysis_state(file_hash: str, state: str) -> None:
+    with db.connect() as conn:
+        ensure_vision_schema(conn)
+        conn.execute(
+            """
+            INSERT INTO drawing_analysis_state (file_sha256, analysis_state, updated_at)
+            VALUES (?, ?, ?)
+            ON CONFLICT(file_sha256) DO UPDATE SET
+              analysis_state = excluded.analysis_state,
+              updated_at = excluded.updated_at
+            """,
+            (file_hash, state, db.utc_now()),
+        )
+
+
+def get_analysis_state(file_hash: str) -> str | None:
+    with db.connect() as conn:
+        ensure_vision_schema(conn)
+        row = conn.execute(
+            "SELECT analysis_state FROM drawing_analysis_state WHERE file_sha256 = ?",
+            (file_hash,),
+        ).fetchone()
+        return str(row["analysis_state"]) if row else None
+
+
+def on_mail_drawing_saved(path: str | Path, *, customer_id: str | None = None) -> dict[str, Any]:
+    """Mail ingest: local only, never spends a vision unit."""
+    file_path = Path(path)
+    if not file_path.is_file():
+        return {"ok": False, "error": f"Drawing not found: {path}"}
+    digest = file_sha256(file_path)
+    set_analysis_state(digest, "needs_vision")
+    return {
+        "ok": True,
+        "file_sha256": digest,
+        "analysis_state": "needs_vision",
+        "customer_id": customer_id,
+    }
+
+
+def _queue_cap_override(
+    *,
+    session_id: str,
+    path: Path,
+    file_hash: str,
+    customer_id: str | None,
+    cycle_start: str,
+    used: int,
+) -> dict[str, Any]:
+    title = f"Vision quota — {path.name}"
+    summary = (
+        f"Drawing {path.name} would use vision unit {used + 1}/{5} this cycle "
+        f"(cycle from {cycle_start}). Authorize one override for this document only."
+    )
+    pending = request_human_approval(
+        session_id=session_id or "default",
+        kind="vision_quota_override",
+        title=title,
+        summary=summary,
+        payload={
+            "file_sha256": file_hash,
+            "filename": path.name,
+            "path": str(path),
+            "customer_id": customer_id,
+            "cycle_start": cycle_start,
+            "used": used,
+            "cap": 5,
+        },
+        tool_name="vision_quota_override",
+    )
+    return pending
+
+
+def dispatch_drawing_vision(
+    path: str | Path,
+    *,
+    owner_spend: bool = False,
+    prompt: str = "",
+    session_id: str = "",
+    turn_id: str | None = None,
+    customer_id: str | None = None,
+    arrival: str = "mail",
+    spent_by: str = "owner_bench",
+    provider_call: ProviderFn | None = None,
+) -> dict[str, Any]:
+    """
+    Gate cloud vision. Default deny: no owner_spend ⇒ needs_vision only.
+    provider_call must perform the cloud request when invoked; stub in tests.
+    """
+    file_path = Path(path)
+    if not file_path.is_file():
+        return {"ok": False, "error": f"Drawing not found: {path}"}
+
+    digest = file_sha256(file_path)
+    pages = page_count(file_path)
+    cycle = current_cycle_start()
+
+    if not owner_spend:
+        set_analysis_state(digest, "needs_vision")
+        return {
+            "ok": False,
+            "analysis_state": "needs_vision",
+            "path": str(file_path),
+            "name": file_path.name,
+            "file_sha256": digest,
+            "error": "Cloud vision requires owner_spend.",
+        }
+
+    threshold = vision_page_threshold()
+    if pages > threshold:
+        index = local_sheet_index(file_path)
+        set_analysis_state(digest, "needs_vision")
+        return {
+            "ok": False,
+            "analysis_state": "needs_vision",
+            "path": str(file_path),
+            "name": file_path.name,
+            "file_sha256": digest,
+            "page_count": pages,
+            "sheet_index": index,
+            "error": f"Pack has {pages} sheets (threshold {threshold}). Review the sheet index before spending a unit.",
+        }
+
+    claim_id: str | None = None
+    reused = False
+    with db.connect() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        ensure_vision_schema(conn)
+        claim = claim_unit(
+            conn,
+            cycle_start=cycle,
+            file_sha256=digest,
+            customer_id=customer_id,
+            spent_by=spent_by,
+            arrival=arrival,
+            pages=pages,
+            turn_id=turn_id,
+        )
+        if not claim.get("ok"):
+            reason = claim.get("reason")
+            if reason == "cap":
+                used = conn.execute(
+                    """
+                    SELECT COUNT(*) AS n FROM vision_quota_usage
+                    WHERE cycle_start = ? AND state IN ('claimed', 'dispatched', 'override')
+                    """,
+                    (cycle,),
+                ).fetchone()
+                used_n = int(used["n"] if used else 5)
+                conn.commit()
+                pending = _queue_cap_override(
+                    session_id=session_id,
+                    path=file_path,
+                    file_hash=digest,
+                    customer_id=customer_id,
+                    cycle_start=cycle,
+                    used=used_n,
+                )
+                set_analysis_state(digest, "needs_vision")
+                return {
+                    "ok": False,
+                    "analysis_state": "needs_vision",
+                    "path": str(file_path),
+                    "name": file_path.name,
+                    "file_sha256": digest,
+                    "pending": pending,
+                    "quota": {"used": used_n, "cap": 5},
+                    "error": "Vision quota exhausted for this cycle.",
+                }
+            conn.commit()
+            set_analysis_state(digest, "needs_vision")
+            return {
+                "ok": False,
+                "analysis_state": "needs_vision",
+                "path": str(file_path),
+                "name": file_path.name,
+                "file_sha256": digest,
+                "error": "Could not claim vision unit.",
+            }
+        claim_id = str(claim["claim_id"])
+        reused = bool(claim.get("reused"))
+        conn.commit()
+
+    if provider_call is None:
+        from .. import gemini_client
+
+        mime = mimetypes.guess_type(file_path.name)[0] or "application/octet-stream"
+        raw = file_path.read_bytes()
+        import base64
+
+        b64 = base64.b64encode(raw).decode("ascii")
+        media = [{"inline_data": {"mime_type": mime, "data": b64}}]
+        ask = prompt or (
+            "You are helping a machining firm quote a part. "
+            "List visible dimensions, material if shown, title block, and call out unreadable values. "
+            "Do not invent numbers. Reply in concise bullet points."
+        )
+        model = settings.gemini_drawing_model or settings.gemini_model
+
+        def _default_provider() -> dict[str, Any]:
+            result = gemini_client.chat_multimodal(
+                [],
+                ask,
+                media,
+                system="Precision machining quotation assistant. Never invent dimensions.",
+                model=model,
+                timeout=180,
+            )
+            return {"content": str(result.get("content") or ""), "provider": model}
+
+        provider_call = _default_provider
+
+    try:
+        result = provider_call()
+        text = str(result.get("content") or "")
+        provider_name = str(result.get("provider") or settings.gemini_drawing_model or "gemini")
+        nbytes = file_path.stat().st_size
+        with db.connect() as conn:
+            write_disclosure(
+                conn,
+                file_sha256=digest,
+                customer_id=customer_id,
+                provider=provider_name,
+                purpose="drawing_quote_analysis",
+                nbytes=nbytes,
+                turn_id=turn_id,
+                cycle_start=cycle,
+                authorized_by=spent_by,
+            )
+            if claim_id and not reused:
+                mark_dispatched(conn, claim_id)
+            elif claim_id:
+                mark_dispatched(conn, claim_id)
+        set_analysis_state(digest, "vision_done")
+        return {
+            "ok": True,
+            "summary": text,
+            "path": str(file_path),
+            "name": file_path.name,
+            "file_sha256": digest,
+            "analysis_state": "vision_done",
+            "reused_unit": reused,
+        }
+    except Exception as exc:
+        if claim_id:
+            with db.connect() as conn:
+                release_claim(conn, claim_id)
+        set_analysis_state(digest, "needs_vision")
+        return {
+            "ok": False,
+            "error": str(exc),
+            "path": str(file_path),
+            "name": file_path.name,
+            "file_sha256": digest,
+            "analysis_state": "needs_vision",
+        }

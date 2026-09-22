@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import base64
 import json
-import mimetypes
 import re
 from datetime import datetime
 from pathlib import Path
@@ -50,48 +48,40 @@ def _parse_numeric(value: Any) -> float | None:
         return None
 
 
-def analyze_drawing_vision(path: str, *, prompt: str = "", session_id: str = "") -> dict[str, Any]:
-    """Send drawing bytes to Gemini vision for dimensional notes."""
-    from . import gemini_client
+def analyze_drawing_vision(
+    path: str,
+    *,
+    prompt: str = "",
+    session_id: str = "",
+    owner_spend: bool = False,
+    customer_id: str | None = None,
+    turn_id: str | None = None,
+) -> dict[str, Any]:
+    """Cloud vision for dimensional notes — gated; default deny (owner_spend=False)."""
+    from .vision.gate import dispatch_drawing_vision
 
-    file_path = Path(path)
-    if not file_path.is_file():
-        return {"ok": False, "error": f"Drawing not found: {path}"}
-    raw = file_path.read_bytes()
-    mime = mimetypes.guess_type(file_path.name)[0] or "application/octet-stream"
-    if mime == "application/pdf":
-        # Prefer image pages when possible; still send PDF bytes as inline data
-        pass
-    b64 = base64.b64encode(raw).decode("ascii")
-    media = [{"inline_data": {"mime_type": mime, "data": b64}}]
-    ask = prompt or (
-        "You are helping a machining firm quote a part. "
-        "List visible dimensions, material if shown, title block, and call out unreadable values. "
-        "Do not invent numbers. Reply in concise bullet points."
+    out = dispatch_drawing_vision(
+        path,
+        owner_spend=owner_spend,
+        prompt=prompt,
+        session_id=session_id,
+        turn_id=turn_id,
+        customer_id=customer_id,
+        arrival="owner_bench",
+        spent_by="owner_bench",
     )
-    try:
-        result = gemini_client.chat_multimodal(
-            [],
-            ask,
-            media,
-            system="Precision machining quotation assistant. Never invent dimensions.",
-            model=settings.gemini_drawing_model or settings.gemini_model,
-            timeout=180,
+    if out.get("ok") and out.get("summary"):
+        file_path = Path(path)
+        ingest_drawing_summary(
+            file_path.name,
+            str(out["summary"])[:2000],
+            meta={"path": str(file_path)},
         )
-        text = str(result.get("content") or "")
-        ingest_drawing_summary(file_path.name, text[:2000], meta={"path": str(file_path)})
-        out = {"ok": True, "summary": text, "path": str(file_path), "name": file_path.name}
-    except Exception as exc:
-        # Offline / no key: deterministic stub from filename for dry-run
-        stub = (
-            f"Vision unavailable ({exc}). "
-            f"File {file_path.name} queued for manual dimensional review."
-        )
-        ingest_drawing_summary(file_path.name, stub, meta={"path": str(file_path), "stub": True})
-        out = {"ok": False, "error": str(exc), "summary": stub, "path": str(file_path), "name": file_path.name}
     if session_id:
-        db.add_memory(session_id, "last_quote_drawing", file_path.name)
-        db.add_memory(session_id, "last_quote_drawing_path", str(file_path))
+        file_path = Path(path)
+        if file_path.is_file():
+            db.add_memory(session_id, "last_quote_drawing", file_path.name)
+            db.add_memory(session_id, "last_quote_drawing_path", str(file_path))
     return out
 
 
