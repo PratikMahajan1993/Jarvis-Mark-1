@@ -32,7 +32,23 @@ def setup_module(_module=None):
     db.init_db()
 
 
-def _seed_master() -> None:
+def _resolve_master_ids(conn) -> tuple[str, str, str]:
+    machine_id = conn.execute(
+        "SELECT id FROM machines WHERE name = ?",
+        ("Ace Designers turning cell",),
+    ).fetchone()["id"]
+    material_id = conn.execute(
+        "SELECT id FROM materials WHERE grade = ?",
+        ("En1A",),
+    ).fetchone()["id"]
+    tool_id = conn.execute(
+        "SELECT id FROM tools WHERE geometry = ?",
+        ("DNMG 15 04 08",),
+    ).fetchone()["id"]
+    return machine_id, material_id, tool_id
+
+
+def _seed_master() -> tuple[str, str, str]:
     with db.connect() as conn:
         conn.execute(
             """
@@ -57,10 +73,11 @@ def _seed_master() -> None:
             """,
             (TOOL_ID,),
         )
+        return _resolve_master_ids(conn)
 
 
 def _seed_active_instance(*, pieces_since_fit: int = 0) -> str:
-    _seed_master()
+    machine_id, material_id, tool_id = _seed_master()
     with db.connect() as conn:
         conn.execute("DELETE FROM toolwatch_predictions")
         conn.execute("DELETE FROM tool_life_events")
@@ -74,9 +91,9 @@ def _seed_active_instance(*, pieces_since_fit: int = 0) -> str:
             """,
             (
                 INSTANCE_A,
-                TOOL_ID,
-                MATERIAL_ID,
-                MACHINE_ID,
+                tool_id,
+                material_id,
+                machine_id,
                 db.utc_now(),
                 pieces_since_fit,
             ),
@@ -89,6 +106,7 @@ def _record_prior_life(pieces: int) -> None:
     global _HIST_SEQ
     _HIST_SEQ += 1
     with db.connect() as conn:
+        machine_id, material_id, tool_id = _resolve_master_ids(conn)
         inst_id = f"ti_hist_{_HIST_SEQ}"
         conn.execute(
             """
@@ -99,9 +117,9 @@ def _record_prior_life(pieces: int) -> None:
             """,
             (
                 inst_id,
-                TOOL_ID,
-                MATERIAL_ID,
-                MACHINE_ID,
+                tool_id,
+                material_id,
+                machine_id,
                 db.utc_now(),
                 db.utc_now(),
             ),
@@ -117,7 +135,7 @@ def _record_prior_life(pieces: int) -> None:
 
 
 def test_parse_two_forty_and_open_job_machine():
-    _seed_master()
+    machine_id, _, _ = _seed_master()
     utterance = "changed the insert on the turning cell, two forty pieces, edge chipped"
     parsed = toolwatch.parse_tool_change_utterance(
         utterance,
@@ -126,7 +144,7 @@ def test_parse_two_forty_and_open_job_machine():
     assert parsed.get("ok") is True
     assert parsed["pieces_made"] == 240
     assert parsed["reason"].casefold() == "edge chipped"
-    assert parsed["machine_id"] == MACHINE_ID
+    assert parsed["machine_id"] == machine_id
 
 
 def test_capture_ask_when_pieces_missing():

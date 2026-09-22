@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import sys
-import tempfile
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -11,16 +10,6 @@ from fastapi.testclient import TestClient
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
-
-from app.config import settings
-
-_TMP = Path(tempfile.mkdtemp(prefix="jarvis-w5-routes-"))
-settings.data_dir = _TMP / "data"
-settings.data_dir.mkdir(parents=True, exist_ok=True)
-settings.exports_dir = _TMP / "exports"
-settings.exports_dir.mkdir(parents=True, exist_ok=True)
-settings.canvas_dir = _TMP / "data" / "canvas"
-settings.canvas_dir.mkdir(parents=True, exist_ok=True)
 
 from app import db  # noqa: E402
 from app import quote_variance  # noqa: E402
@@ -78,7 +67,23 @@ def setup_module(_module=None):
         )
 
 
-def _seed_toolwatch_master() -> None:
+def _resolve_toolwatch_master_ids(conn) -> tuple[str, str, str]:
+    machine_id = conn.execute(
+        "SELECT id FROM machines WHERE name = ?",
+        ("Ace Designers turning cell",),
+    ).fetchone()["id"]
+    material_id = conn.execute(
+        "SELECT id FROM materials WHERE grade = ?",
+        ("En1A",),
+    ).fetchone()["id"]
+    tool_id = conn.execute(
+        "SELECT id FROM tools WHERE geometry = ?",
+        ("DNMG 15 04 08",),
+    ).fetchone()["id"]
+    return machine_id, material_id, tool_id
+
+
+def _seed_toolwatch_master() -> tuple[str, str, str]:
     with db.connect() as conn:
         conn.execute(
             """
@@ -103,10 +108,11 @@ def _seed_toolwatch_master() -> None:
             """,
             (TOOL_ID,),
         )
+        return _resolve_toolwatch_master_ids(conn)
 
 
 def _seed_active_tool_instance() -> str:
-    _seed_toolwatch_master()
+    machine_id, material_id, tool_id = _seed_toolwatch_master()
     with db.connect() as conn:
         conn.execute("DELETE FROM toolwatch_predictions")
         conn.execute("DELETE FROM tool_life_events")
@@ -120,9 +126,9 @@ def _seed_active_tool_instance() -> str:
             """,
             (
                 INSTANCE_A,
-                TOOL_ID,
-                MATERIAL_ID,
-                MACHINE_ID,
+                tool_id,
+                material_id,
+                machine_id,
                 db.utc_now(),
             ),
         )
