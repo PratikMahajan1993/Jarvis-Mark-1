@@ -680,6 +680,32 @@ def api_office_refresh(session_id: str = "default") -> dict:
     return refresh_suggested_tasks(session_id)
 
 
+@app.get("/api/quote-variance/erosion")
+def api_quote_variance_erosion(limit: int = 20) -> dict:
+    from .quote_variance import rank_margin_erosion
+
+    return {"items": rank_margin_erosion(limit)}
+
+
+class ToolwatchCaptureRequest(BaseModel):
+    utterance: str
+    open_job_machine: str = ""
+    tool_instance_id: str = ""
+
+
+@app.post("/api/toolwatch/capture")
+def api_toolwatch_capture(body: ToolwatchCaptureRequest) -> dict:
+    if not (body.utterance or "").strip():
+        return {"ask": True}
+    from .toolwatch import capture_tool_change_from_utterance
+
+    return capture_tool_change_from_utterance(
+        body.utterance,
+        open_job_machine=body.open_job_machine,
+        tool_instance_id=body.tool_instance_id,
+    )
+
+
 @app.get("/api/glance")
 def api_glance() -> dict:
     from .rfq import glance_critical
