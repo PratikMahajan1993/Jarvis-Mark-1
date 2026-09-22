@@ -1043,7 +1043,7 @@ def _run_casual_gemini(message: str, session_id: str, prefs: dict[str, Any]) -> 
 def run_agent(message: str, session_id: str = "default", route=None) -> ChatResponse:
     from .conversations import brain_lock
 
-    with brain_lock():
+    with brain_lock(session_id):
         return _run_agent(message, session_id, route=route)
 
 

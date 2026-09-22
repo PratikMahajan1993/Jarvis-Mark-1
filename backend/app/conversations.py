@@ -5,8 +5,9 @@ import json
 import re
 import threading
 import uuid
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 from . import db
 from .agents import agent_status_payload
@@ -44,7 +45,36 @@ def kind_label(category: str) -> str:
     return "Note"
 
 
-_BRAIN = threading.Lock()
+_BRAIN_SEMAPHORE = threading.Semaphore(3)
+_SESSION_LOCKS_GUARD = threading.Lock()
+_SESSION_LOCKS: dict[str, threading.Lock] = {}
+_DEFAULT_BRAIN_SESSION = COMMAND_SESSION
+
+
+def _session_brain_lock(session_id: str) -> threading.Lock:
+    with _SESSION_LOCKS_GUARD:
+        lock = _SESSION_LOCKS.get(session_id)
+        if lock is None:
+            lock = threading.Lock()
+            _SESSION_LOCKS[session_id] = lock
+        return lock
+
+
+@contextmanager
+def brain_lock(session_id: str | None = None) -> Iterator[None]:
+    """One brain turn per session; at most 3 brain turns process-wide."""
+    sid = (session_id or _DEFAULT_BRAIN_SESSION).strip() or _DEFAULT_BRAIN_SESSION
+    session_lock = _session_brain_lock(sid)
+    session_lock.acquire()
+    try:
+        _BRAIN_SEMAPHORE.acquire()
+        try:
+            yield
+        finally:
+            _BRAIN_SEMAPHORE.release()
+    finally:
+        session_lock.release()
+
 
 _DRAWING_SYSTEM = (
     "You are Jarvis, Tony's aide. This conversation is about one engineering drawing. "
@@ -53,10 +83,6 @@ _DRAWING_SYSTEM = (
     "Answer in one or two spoken sentences unless they ask for more. "
     "Do not mention tools, JSON, or that you are a model."
 )
-
-
-def brain_lock() -> threading.Lock:
-    return _BRAIN
 
 
 def is_drawing_session(session_id: str) -> bool:
@@ -254,7 +280,7 @@ def prime_drawing(conversation_id: str) -> dict[str, Any]:
     db.update_conversation(conversation_id, status="warming", minimized=False)
     _seed_working_set(row)
     row = db.get_conversation(conversation_id) or row
-    with _BRAIN:
+    with brain_lock(row["session_id"]):
         speak, grounding, model, saw = _see_drawing(row, owner_spend=False)
     row = db.get_conversation(conversation_id) or row
     focus = dict(row.get("focus") or {})
