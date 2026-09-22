@@ -33,6 +33,7 @@ def _clean_vision_and_terms():
         conn.execute("DELETE FROM vision_quota_usage")
         conn.execute("DELETE FROM disclosure_log")
         conn.execute("DELETE FROM drawing_analysis_state")
+        conn.execute("DELETE FROM quote_actuals")
         conn.execute("DELETE FROM quote_lines")
         conn.execute("DELETE FROM quote_proofs")
         conn.execute("DELETE FROM quote_events")

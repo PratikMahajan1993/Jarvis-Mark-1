@@ -36,11 +36,14 @@ def test_extract_email_fixes_comma_typo():
 
 
 def test_llm_fill_compose_uses_seed_address(monkeypatch=None):
-    with patch(
-        "app.mail_compose.brain_chat",
-        return_value={
-            "content": '{"to":"ops@example.com","subject":"Shop clear","body":"The shop is clear this afternoon.","speak":"Draft ready."}'
-        },
+    with (
+        patch("app.hermes.bridge.hermes_gateway_reachable", return_value=False),
+        patch(
+            "app.mail_compose.brain_chat",
+            return_value={
+                "content": '{"to":"ops@example.com","subject":"Shop clear","body":"The shop is clear this afternoon.","speak":"Draft ready."}'
+            },
+        ),
     ):
         filled = llm_fill_compose(
             user_message="Draft an email to ops@example.com saying the shop is clear this afternoon",
@@ -57,11 +60,14 @@ def test_start_email_compose_queues_pending():
     for row in db.list_pending(session):
         db.set_pending_status(row["id"], "rejected")
     intent = classify("Draft an email to ops@example.com saying hello from the floor")
-    with patch(
-        "app.mail_compose.brain_chat",
-        return_value={
-            "content": '{"to":"ops@example.com","subject":"Hello from the floor","body":"Hello from the floor.","speak":"Draft ready for ops@example.com."}'
-        },
+    with (
+        patch("app.hermes.bridge.hermes_gateway_reachable", return_value=False),
+        patch(
+            "app.mail_compose.brain_chat",
+            return_value={
+                "content": '{"to":"ops@example.com","subject":"Hello from the floor","body":"Hello from the floor.","speak":"Draft ready for ops@example.com."}'
+            },
+        ),
     ):
         result = start_email_compose(session, "Draft an email to ops@example.com saying hello from the floor", intent)
     assert result.pending
@@ -70,11 +76,14 @@ def test_start_email_compose_queues_pending():
 
 
 def test_address_only_draft_asks_for_body_not_subject():
-    with patch(
-        "app.mail_compose.brain_chat",
-        return_value={
-            "content": '{"to":"pratik.281293@gmail.com","subject":"to pratik.281293@gmail.com","body":"","speak":"I need the subject, body."}'
-        },
+    with (
+        patch("app.hermes.bridge.hermes_gateway_reachable", return_value=False),
+        patch(
+            "app.mail_compose.brain_chat",
+            return_value={
+                "content": '{"to":"pratik.281293@gmail.com","subject":"to pratik.281293@gmail.com","body":"","speak":"I need the subject, body."}'
+            },
+        ),
     ):
         filled = llm_fill_compose(
             user_message="Draft an email to pratik.281293@gmail.com",
@@ -89,11 +98,14 @@ def test_address_only_draft_asks_for_body_not_subject():
 
 
 def test_follow_up_body_derives_subject():
-    with patch(
-        "app.mail_compose.brain_chat",
-        return_value={
-            "content": '{"to":"pratik.281293@gmail.com","subject":"","body":"Please share current copper prices urgently.","speak":"Draft ready."}'
-        },
+    with (
+        patch("app.hermes.bridge.hermes_gateway_reachable", return_value=False),
+        patch(
+            "app.mail_compose.brain_chat",
+            return_value={
+                "content": '{"to":"pratik.281293@gmail.com","subject":"","body":"Please share current copper prices urgently.","speak":"Draft ready."}'
+            },
+        ),
     ):
         filled = llm_fill_compose(
             user_message="Please share current copper prices urgently",

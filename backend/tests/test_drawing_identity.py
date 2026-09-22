@@ -39,6 +39,12 @@ def _clean_tables():
         conn.execute("DELETE FROM routings")
         conn.execute("DELETE FROM part_revisions")
         conn.execute("DELETE FROM components")
+        conn.execute("DELETE FROM quote_actuals")
+        conn.execute("DELETE FROM quote_lines")
+        conn.execute("DELETE FROM quote_proofs")
+        conn.execute("DELETE FROM quote_events")
+        conn.execute("DELETE FROM quote_revisions")
+        conn.execute("DELETE FROM quotes")
         conn.execute("DELETE FROM customers")
     prev = settings.knowledge_cards_enabled
     settings.knowledge_cards_enabled = True
