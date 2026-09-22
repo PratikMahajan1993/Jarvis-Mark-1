@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
-import { api } from "@/lib/api";
+import { api, apiBase } from "@/lib/api";
 import { liveLog } from "@/lib/liveLog";
 import type { ChatResponse, Conversation, PendingAction, Preferences, Scene } from "@/lib/types";
 import {
@@ -17,11 +17,13 @@ import {
 } from "@/lib/orchestrator";
 import {
   INITIAL_JARVIS_STATE,
+  failureLineForTurn,
   isBusy,
   jarvisReducer,
   listenAllowed,
   type JarvisEvent,
   type JarvisState,
+  type ServerTurn,
 } from "@/lib/orchestratorFsm";
 import {
   canListen,
@@ -388,6 +390,54 @@ export function OrchestratorShell() {
     },
     [applyEvent, clearAgents, clearVoice, pushLog, setAgentStates, showVoice],
   );
+
+  const reconcileOpenTurn = useCallback(async () => {
+    try {
+      const sessionId = sessionRef.current;
+      const resp = await fetch(
+        `${apiBase()}/api/turns/open?session_id=${encodeURIComponent(sessionId)}`,
+      );
+      if (!resp.ok) return;
+      const data = (await resp.json()) as { enabled?: boolean; turns?: ServerTurn[] };
+      if (!data.enabled) return;
+      const turn = (Array.isArray(data.turns) ? data.turns : [])[0] ?? null;
+      applyEvent({ type: "RECONCILE", turn });
+      if (!turn) {
+        setLedgerTurnId(null);
+        await loadSessionSurface(sessionId, { announce: false });
+        return;
+      }
+      const st = String(turn.state || "").toUpperCase();
+      if (st === "FAILED" || st === "ABANDONED") {
+        setLedgerTurnId(null);
+        clearAgents();
+        const line = failureLineForTurn(turn);
+        setError(line);
+        showVoice(line);
+        return;
+      }
+      if (st === "QUEUED" || st === "RUNNING") {
+        setLedgerTurnId(turn.id);
+        showVoice("Orchestrating…");
+        return;
+      }
+      if (st === "EXECUTING") {
+        setLedgerTurnId(turn.id);
+        showVoice("Working…");
+        return;
+      }
+      if (st === "AWAITING_HITL" && turn.pending_action) {
+        setLedgerTurnId(null);
+        const action = turn.pending_action;
+        if (action.kind === "email_compose") clearVoice();
+        const agentId = agentForPending(action);
+        setAgentStates([agentId], "waiting");
+        pushLog(agentCode(agentId), "Pending authorization restored.");
+      }
+    } catch {
+      /* failed fetch leaves the current screen alone */
+    }
+  }, [applyEvent, clearAgents, clearVoice, loadSessionSurface, pushLog, setAgentStates, showVoice]);
 
   const focusAmbient = useCallback(async () => {
     sessionRef.current = AMBIENT_SESSION;
@@ -922,6 +972,7 @@ export function OrchestratorShell() {
             if (w) setWeatherLine(w);
           })
           .catch(() => null);
+        await reconcileOpenTurn();
       } catch {
         /* offline bootstrap is fine for UI shell */
       }
@@ -931,7 +982,15 @@ export function OrchestratorShell() {
       stopListening();
       silence();
     };
-  }, [loadSessionSurface]);
+  }, [loadSessionSurface, reconcileOpenTurn]);
+
+  useEffect(() => {
+    const onFocus = () => {
+      void reconcileOpenTurn();
+    };
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [reconcileOpenTurn]);
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
