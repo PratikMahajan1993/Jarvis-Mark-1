@@ -1,0 +1,31 @@
+---
+description: Backend Python layout — module ownership, config source, import discipline, timeouts. Use when editing backend/app code.
+globs: backend/app/**/*.py
+alwaysApply: false
+---
+
+# API Python
+
+## Module ownership (one home per concern)
+
+| Area | Owns |
+| ---- | ---- |
+| `main.py` | Routes, middleware, lifespan |
+| `agent.py` / `brain.py` | Turn orchestration, model routing |
+| `tools/` | Tool registry and side-effect-free reads |
+| `connectors/` | Gmail, calendar, Drive, Sheets, search |
+| `hermes/` | Gateway bridge, MCP, playbooks |
+| `quote.py`, `rfq.py`, `cnc_suggest.py` | Shop workflows (see domain rules) |
+| `memory/` | Local RAG store (SQLite + LanceDB under `data/memory/`) |
+| `db.py`, `schemas.py` | Schema and migrations (see `12-data-schema`) |
+| `config.py` | **`Settings` only** — no parallel env readers |
+
+## Conventions
+
+- **Config:** read paths, keys, and ports from `settings` (`app.config`); anchor relative dirs via repo root, not process CWD.
+- **Lazy imports:** import heavy connectors and model clients inside the function that needs them; avoid new top-level import cycles.
+- **No new JSON state files** for durable data — SQLite tables or documented exports only.
+- **External I/O:** every HTTP/RPC call to Hermes, Gemini, Ollama, Voicebox, or Google APIs must use an explicit timeout; no unbounded `wait`.
+- **Extend, don't fork:** new features hook existing modules; no parallel stack under `backend/`.
+
+Skills carry long procedures; this file states only break-if-wrong constraints.

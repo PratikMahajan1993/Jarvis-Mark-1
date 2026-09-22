@@ -1,0 +1,24 @@
+---
+description: Jarvis repo-wide facts — stack, ports, data paths, who owns numbers, what needs Authorize
+alwaysApply: true
+---
+
+# Jarvis core
+
+- HUD: Next.js `frontend/` on :3000. API: FastAPI `backend/app/` on 127.0.0.1:8000.
+- Brain: Hermes gateway :8642 for shop work; Gemini for casual and vision; Ollama last.
+- TTS: Voicebox :17493, `POST /generate` only (never `/speak`).
+- Data: `<repo>/data/jarvis.db`. Written files: `<repo>/exports/` only.
+- One shell: `OrchestratorShell`. Turn state is a server ledger projected by
+  `frontend/src/lib/orchestratorFsm.ts`. Workspaces (`casual|monitor|engineering`)
+  are a separate layer and never collapse into turn state.
+- Tools own mail, calendar, files, and every number. The model never invents a
+  price, rate, dimension, mail, or calendar fact. No source → ask.
+- Authorize (HITL) before any external or destructive act: send mail, calendar
+  write, quote send, sheet write, CNC promote, broad memory wipe. Queue it; never
+  claim it was done.
+- Jobs are Hermes playbooks under `backend/app/hermes/playbooks/`, not new agents.
+- Never commit `.env`, `data/`, `exports/`, tokens, or customer drawings.
+
+Scoped rules in `.cursor/rules/` and skills in `.cursor/skills/` carry the detail.
+Architecture: `docs/CURRENT.md` (as-built), `work/OPUS_ARCHITECTURE_MANIFEST.md` (target).

@@ -1,0 +1,52 @@
+---
+description: Gates on sending a customer drawing to a cloud vision model — per-customer consent, the 5-per-cycle quota, owner override, and the local-extract-first rule. Use when touching drawing analysis.
+globs: backend/app/quote.py, backend/app/vision/**, backend/app/knowledge/**, backend/tests/test_vision_gate.py
+alwaysApply: false
+---
+
+# Drawing vision — two gates, never one
+
+A customer drawing is confidential contractual material, and its title block names
+the customer and part. Cloud analysis also costs money per call. Both are bounded.
+
+## Gate 1 — consent (cannot be overridden)
+
+- Default is **deny**. A drawing goes to a cloud model only when its customer's
+  `customer_terms.allow_cloud_vision = 1` and `nda = 0`, attested by the owner.
+- Unknown or unresolved customer ⇒ deny and ask. Never infer consent from a past job,
+  a sibling part, or a similar customer name.
+- No quota override, urgency, or owner instruction grants consent inside a turn; the
+  consent row is the only source. Changing it is a deliberate master-data edit.
+
+## Gate 2 — quota (owner-overridable, once, per drawing)
+
+- Cap: **5 drawings per cycle**, where a cycle runs 10:00 → 10:00 local time.
+- One **document** (one sha256) is one unit, however many pages or calls it needs.
+  Above `vision_page_threshold` (default 4) the tool asks first, after extracting a
+  local sheet index, so a 40-sheet pack never silently spends the unit.
+- **Only the owner spends a unit.** Automated mail ingest must never dispatch to a
+  cloud model: it runs the free local extract, sets `analysis_state='needs_vision'`,
+  and surfaces the drawing on the bench. The unit is charged when the owner opens
+  that RFQ and asks for the analysis. A background job, a watch, a retry loop, or a
+  Hermes tool call cannot charge a unit on its own.
+- The counter is global across everything the owner initiates — bench-triggered
+  analysis and manual UI upload draw on one pool.
+- **Claim before dispatch.** Insert the usage row inside the same transaction that
+  checks the count, keyed unique on `(cycle_start, file_sha256)`. Two concurrent
+  ingests must not both see the fourth unit free.
+- A re-analysis of a document already charged this cycle is free. A failed attempt
+  does not charge, but three consecutive failures on one document stop and ask.
+- Over cap ⇒ a HITL card naming the drawing, the customer, and the used/total count.
+  Authorize grants **one** extra unit for that document and is logged. It never
+  raises the cap and never bypasses Gate 1.
+
+## Cache and local extract come first
+
+- Identity cascade before anything else: an exact-hash or confirmed-fingerprint hit is
+  answered from the knowledge card with **zero** calls. Vision runs only when the card
+  is missing, the revision changed, the bytes changed, extraction failed, or the owner
+  asks for a fresh look.
+- Try the free local path first — PDF text, title block, dimension tokens — and send to
+  the cloud only what that path could not resolve.
+- Every dispatch writes `disclosure_log` (file hash, customer, provider, purpose, bytes,
+  turn, cycle, authorized_by). A failure never ingests its error text as drawing content.

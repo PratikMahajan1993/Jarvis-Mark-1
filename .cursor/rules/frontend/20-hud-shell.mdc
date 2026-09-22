@@ -1,0 +1,33 @@
+---
+description: Orchestrator HUD — pure FSM reducer, server ledger truth, workspace orthogonality, HITL copy. Use when editing orchestrator components or FSM.
+globs: frontend/src/components/orchestrator/**, frontend/src/lib/orchestratorFsm.ts
+alwaysApply: false
+---
+
+# HUD shell
+
+## FSM
+
+- `frontend/src/lib/orchestratorFsm.ts` is a **pure reducer** — one event (e.g. `RECONCILE`) maps `ServerTurn` → client mode; no scattered server fields in components.
+- Add selectors/helpers beside the reducer; unit-test mapping (`hydrate`) without React.
+
+## Ledger vs workspace
+
+- **Server turn ledger** is the source of truth for THINKING / HITL / EXECUTING / terminal states.
+- **Workspaces** (`casual|monitor|engineering`) are a separate layer — never store workspace inside turn state or collapse the two models.
+- Primary shell: **`OrchestratorShell`** (not legacy HudShell for the desk).
+
+## Reconciliation
+
+- On mount, tab focus, SSE reconnect, and failed fetches: compare client belief to ledger snapshot.
+- **`IDLE` + ledger `AWAITING_HITL`** must open the HITL panel (lost-turn case).
+- **`AWAITING_HITL` + action already claimed/executed** → close panel; never offer Authorize twice.
+- Client abort of fetch ≠ server cancel — user must explicitly cancel the turn.
+
+## Product constraints
+
+- Max **3** expanded Open notes (`MAX_EXPANDED = 3`).
+- HITL primary actions: **Authorize / Reject** (legacy "Shall I" strings may remain in places).
+- Right column: `WeatherCard` **`shrink-0`** + scrollable tasks; mail boards scroll on SpotlightCard **`bodyClassName`**, not the outer card.
+
+Full reconciliation matrix: skill `jarvis-architecture` / manifest §1.4.
