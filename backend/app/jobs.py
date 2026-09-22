@@ -21,6 +21,7 @@ import uuid
 from typing import Any, TypedDict
 
 from . import db
+from .config import settings
 
 RFQ_STATUSES = frozenset({"intake", "reasoned", "pending", "sent", "dismissed"})
 DEMO_JOB_ID = "ace-pinion-blank"
@@ -241,6 +242,12 @@ def create_job(
 def get_job(job_id: str) -> Job | None:
     if not job_id:
         return None
+    if settings.masterdata_enabled:
+        from .masterdata import routings as md_routings
+
+        projected = md_routings.job_for_component_id(job_id)
+        if projected is not None:
+            return _job_row(projected)
     with db.connect() as conn:
         row = conn.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
     return _job_row(row) if row else None
@@ -249,7 +256,19 @@ def get_job(job_id: str) -> Job | None:
 def list_jobs() -> list[Job]:
     with db.connect() as conn:
         rows = conn.execute("SELECT * FROM jobs ORDER BY created_at DESC").fetchall()
-    return [_job_row(row) for row in rows]
+    legacy = [_job_row(row) for row in rows]
+    if not settings.masterdata_enabled:
+        return legacy
+    from .masterdata import routings as md_routings
+
+    with db.connect() as conn:
+        projected = md_routings.list_jobs_from_masterdata(conn)
+    seen = {job["id"] for job in legacy}
+    for job in projected:
+        if job["id"] not in seen:
+            legacy.append(_job_row(job))
+            seen.add(job["id"])
+    return legacy
 
 
 def search_similar(material: str, geometry_notes: str = "", limit: int = 5) -> list[Job]:
