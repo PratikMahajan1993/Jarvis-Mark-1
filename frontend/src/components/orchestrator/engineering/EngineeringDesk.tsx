@@ -13,6 +13,7 @@ import SpotlightCard from "@/components/react-bits/SpotlightCard";
 import { QuoteStack } from "./QuoteStack";
 import { CustomerVisionConsent } from "./CustomerVisionConsent";
 import { VisionBenchQueue } from "./VisionBenchQueue";
+import { FactConfirmChips } from "./FactConfirmChips";
 
 const BENCH_BG = "#060a0e";
 
@@ -66,6 +67,8 @@ export function EngineeringDesk({
   voice,
   voiceVisible,
   dimmed,
+  entityType = "",
+  entityId = "",
 }: {
   scene: Scene;
   focusTitle: string;
@@ -73,6 +76,8 @@ export function EngineeringDesk({
   voice: string;
   voiceVisible?: boolean;
   dimmed?: boolean;
+  entityType?: string;
+  entityId?: string;
 }) {
   const drawing = useMemo(() => pickDrawingAttachment(scene, focus), [scene, focus]);
   const jobTitle = (scene.title || "").trim() || focusTitle;
@@ -147,6 +152,7 @@ export function EngineeringDesk({
             ) : null}
             <CustomerVisionConsent />
             <VisionBenchQueue />
+            <FactConfirmChips entityType={entityType} entityId={entityId} />
             <QuoteStack scene={scene} />
           </div>
         </div>
