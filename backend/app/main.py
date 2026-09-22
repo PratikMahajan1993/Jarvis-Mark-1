@@ -288,6 +288,28 @@ def api_turns_recent(limit: int = 20) -> dict:
     return {"items": recent_turns(limit=limit), "paths": log_paths()}
 
 
+@app.get("/api/turns/open")
+def api_turns_open(session_id: str = "default") -> dict:
+    from .config import settings
+    from . import db
+    from .turns import list_open_turns, turn_row_to_api
+
+    if not settings.turn_ledger_enabled:
+        return {"enabled": False, "turns": []}
+
+    items: list[dict] = []
+    for row in list_open_turns(session_id):
+        api_row = turn_row_to_api(row)
+        pid = row.get("pending_action_id")
+        if pid:
+            pending = db.get_pending(str(pid))
+            if pending:
+                api_row["pending_action"] = pending
+                api_row["pending_status"] = pending.get("status") or "pending"
+        items.append(api_row)
+    return {"enabled": True, "turns": items}
+
+
 @app.get("/api/turns/{turn_id}/events")
 async def api_turn_events(turn_id: str, request: Request) -> StreamingResponse:
     from .turns import get_turn

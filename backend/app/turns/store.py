@@ -9,8 +9,18 @@ from .. import db
 
 STATE_QUEUED = "QUEUED"
 STATE_RUNNING = "RUNNING"
+STATE_AWAITING_HITL = "AWAITING_HITL"
+STATE_EXECUTING = "EXECUTING"
 STATE_DONE = "DONE"
 STATE_FAILED = "FAILED"
+STATE_ABANDONED = "ABANDONED"
+
+OPEN_STATES = (
+    STATE_QUEUED,
+    STATE_RUNNING,
+    STATE_AWAITING_HITL,
+    STATE_EXECUTING,
+)
 
 
 def new_turn_id() -> str:
@@ -97,6 +107,21 @@ def fail_turn(turn_id: str, error: str) -> None:
             """,
             (STATE_FAILED, (error or "unknown error")[:2000], now, turn_id),
         )
+
+
+def list_open_turns(session_id: str) -> list[dict[str, Any]]:
+    """Open ledger rows for reconciliation (newest updated first)."""
+    placeholders = ",".join("?" for _ in OPEN_STATES)
+    with db.connect() as conn:
+        rows = conn.execute(
+            f"""
+            SELECT * FROM turns
+            WHERE session_id = ? AND state IN ({placeholders})
+            ORDER BY updated_at DESC, created_at DESC
+            """,
+            (session_id, *OPEN_STATES),
+        ).fetchall()
+    return [dict(row) for row in rows]
 
 
 def turn_row_to_api(row: dict[str, Any]) -> dict[str, Any]:

@@ -17,10 +17,26 @@ import type { PendingAction } from "./types";
 export type JarvisState =
   | { mode: "IDLE" }
   | { mode: "LISTENING" }
-  | { mode: "THINKING"; message: string }
+  | { mode: "THINKING"; message: string; stage?: string }
   | { mode: "SPEAKING"; text: string }
   | { mode: "AWAITING_HITL"; action: PendingAction; listening: boolean; resolving: boolean }
   | { mode: "EXECUTING"; actionId: string };
+
+export type ServerTurn = {
+  id: string;
+  state: string;
+  stage?: string;
+  input?: string;
+  error?: string;
+  pending_action_id?: string | null;
+  pending_action?: PendingAction | null;
+  pending_status?: string | null;
+  output?: {
+    speak?: string;
+    reply?: string;
+    pending?: PendingAction[];
+  } | null;
+};
 
 export type JarvisEvent =
   | { type: "SEND"; text: string }
@@ -33,13 +49,150 @@ export type JarvisEvent =
   | { type: "HITL_LISTEN_STOP" }
   | { type: "DECIDE_APPROVE"; actionId: string }
   | { type: "DECIDE_REJECT"; actionId: string }
-  | { type: "RESET" };
+  | { type: "RESET" }
+  | { type: "RECONCILE"; turn: ServerTurn | null };
 
 export const INITIAL_JARVIS_STATE: JarvisState = { mode: "IDLE" };
 
 function needsDictatedFill(action: PendingAction): boolean {
   const missing = action.payload?.missing;
   return action.kind === "email_compose" && Array.isArray(missing) && missing.length > 0;
+}
+
+function pendingStillOpen(turn: ServerTurn): boolean {
+  const status = String(
+    turn.pending_status || (turn.pending_action as { status?: string } | undefined)?.status || "pending",
+  ).toLowerCase();
+  return status === "pending";
+}
+
+function stageFromTurn(turn: ServerTurn): string {
+  return String(turn.stage || "").trim();
+}
+
+/** User-visible failure copy for FAILED / ABANDONED ledger rows (names the stage). */
+export function failureLineForTurn(turn: ServerTurn): string {
+  const stage = stageFromTurn(turn);
+  if (stage) {
+    return `The brain dropped that at ${stage}. Retry?`;
+  }
+  const err = String(turn.error || "");
+  const match = err.match(/FAILED\(([^)]+)\)/i);
+  const fromErr = match?.[1]?.trim();
+  if (fromErr) {
+    return `The brain dropped that at ${fromErr}. Retry?`;
+  }
+  return "The brain dropped that. Retry?";
+}
+
+/** Pure ledger snapshot → event (nominal mapping from IDLE; duplicated in backend tests). */
+export function hydrate(turn: ServerTurn | null): JarvisEvent {
+  if (!turn) return { type: "RESET" };
+  const st = String(turn.state || "").toUpperCase();
+  if (st === "QUEUED" || st === "RUNNING") {
+    const text = String(turn.input || "").trim() || "Working…";
+    return { type: "SEND", text };
+  }
+  if (st === "AWAITING_HITL") {
+    const action = turn.pending_action;
+    if (action && pendingStillOpen(turn)) {
+      return { type: "AWAIT_HITL", action };
+    }
+    return { type: "RESET" };
+  }
+  if (st === "EXECUTING") {
+    const actionId = String(turn.pending_action_id || turn.pending_action?.id || "").trim();
+    if (actionId) {
+      return { type: "RECONCILE", turn: { ...turn, state: "EXECUTING", pending_action_id: actionId } };
+    }
+    return { type: "RESET" };
+  }
+  if (st === "FAILED" || st === "ABANDONED") {
+    return { type: "RESET" };
+  }
+  if (st === "DONE") {
+    return { type: "RESET" };
+  }
+  return { type: "RESET" };
+}
+
+function applyHydrateToState(_state: JarvisState, event: JarvisEvent): JarvisState {
+  switch (event.type) {
+    case "RESET":
+      return { mode: "IDLE" };
+    case "SEND": {
+      const text = event.text.trim();
+      if (!text) return { mode: "IDLE" };
+      return { mode: "THINKING", message: text };
+    }
+    case "AWAIT_HITL":
+      return { mode: "AWAITING_HITL", action: event.action, listening: false, resolving: false };
+    case "RECONCILE": {
+      if (!event.turn) return { mode: "IDLE" };
+      const execId = String(event.turn.pending_action_id || "").trim();
+      if (String(event.turn.state || "").toUpperCase() === "EXECUTING" && execId) {
+        return { mode: "EXECUTING", actionId: execId };
+      }
+      return { mode: "IDLE" };
+    }
+    default:
+      return { mode: "IDLE" };
+  }
+}
+
+function reconcileLedgerState(state: JarvisState, turn: ServerTurn | null): JarvisState {
+  if (!turn) {
+    return state.mode === "IDLE" ? state : { mode: "IDLE" };
+  }
+
+  const st = String(turn.state || "").toUpperCase();
+  const stage = stageFromTurn(turn);
+
+  if (st === "AWAITING_HITL") {
+    const action = turn.pending_action;
+    if (!action || !pendingStillOpen(turn)) {
+      return state.mode === "IDLE" ? state : { mode: "IDLE" };
+    }
+    if (
+      state.mode === "AWAITING_HITL" &&
+      state.action.id === action.id &&
+      !state.listening &&
+      !state.resolving
+    ) {
+      return state;
+    }
+    return { mode: "AWAITING_HITL", action, listening: false, resolving: false };
+  }
+
+  if (st === "EXECUTING") {
+    const actionId = String(turn.pending_action_id || turn.pending_action?.id || "").trim();
+    if (!actionId) {
+      return state.mode === "IDLE" ? state : { mode: "IDLE" };
+    }
+    if (state.mode === "EXECUTING" && state.actionId === actionId) return state;
+    return { mode: "EXECUTING", actionId };
+  }
+
+  if (st === "QUEUED" || st === "RUNNING") {
+    const fromTurn = String(turn.input || "").trim();
+    const message =
+      (state.mode === "THINKING" ? state.message : fromTurn) || fromTurn || "Working…";
+    if (state.mode === "THINKING") {
+      if (state.message === message && state.stage === stage) return state;
+      return { mode: "THINKING", message, stage: stage || state.stage };
+    }
+    return { mode: "THINKING", message, stage };
+  }
+
+  if (st === "FAILED" || st === "ABANDONED") {
+    return state.mode === "IDLE" ? state : { mode: "IDLE" };
+  }
+
+  if (st === "DONE") {
+    return state.mode === "IDLE" ? state : { mode: "IDLE" };
+  }
+
+  return state;
 }
 
 /**
@@ -51,6 +204,9 @@ function needsDictatedFill(action: PendingAction): boolean {
  */
 export function transition(state: JarvisState, event: JarvisEvent): JarvisState {
   switch (event.type) {
+    case "RECONCILE":
+      return reconcileLedgerState(state, event.turn);
+
     case "RESET":
       return state.mode === "IDLE" ? state : { mode: "IDLE" };
 
@@ -125,6 +281,11 @@ export function transition(state: JarvisState, event: JarvisEvent): JarvisState 
     default:
       return state;
   }
+}
+
+/** Apply hydrate() as if the client started from IDLE (used by tests and tooling). */
+export function stateFromHydrate(turn: ServerTurn | null): JarvisState {
+  return applyHydrateToState(INITIAL_JARVIS_STATE, hydrate(turn));
 }
 
 export function jarvisReducer(state: JarvisState, event: JarvisEvent): JarvisState {
