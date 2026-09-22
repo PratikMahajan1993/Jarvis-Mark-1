@@ -9,9 +9,7 @@ import uuid
 from typing import Any
 
 from .. import db
-from ..memory.embeddings import DIM, embed_text, tokenize
-
-EMBEDDING_MODEL = "hash-v1"
+from ..memory.embeddings import DIM, resolve_embedder, tokenize
 
 _HEADING = re.compile(r"^#{1,6}\s+\S", re.M)
 
@@ -106,11 +104,15 @@ def ingest_text(
             (doc_id, doc_uri, doc_sha, doc_kind, ns, authored_by, now),
         )
 
+        resolved = resolve_embedder()
+        embedding_model = resolved.model_name
+        embed_fn = resolved.embed
+
         written = 0
         for ordinal, (section, chunk_text) in enumerate(sections):
             if not chunk_text.strip():
                 continue
-            vec = embed_text(chunk_text)
+            vec = embed_fn(chunk_text)
             chunk_id = uuid.uuid4().hex
             conn.execute(
                 """
@@ -127,7 +129,7 @@ def ingest_text(
                     chunk_text,
                     _sha256_text(chunk_text),
                     len(tokenize(chunk_text)),
-                    EMBEDDING_MODEL,
+                    embedding_model,
                     DIM,
                     pack_vector(vec),
                     now,
@@ -144,17 +146,31 @@ def ingest_text(
                 )
             written += 1
 
-        conn.execute(
-            """
-            UPDATE rag_index_state
-            SET pending = pending + ?,
-                embedded = embedded + ?,
-                model = ?,
-                updated_at = ?
-            WHERE id = 1
-            """,
-            (written, written, EMBEDDING_MODEL, now),
-        )
+        if resolved.fallback_error:
+            conn.execute(
+                """
+                UPDATE rag_index_state
+                SET pending = pending + ?,
+                    embedded = embedded + ?,
+                    model = ?,
+                    last_error = ?,
+                    updated_at = ?
+                WHERE id = 1
+                """,
+                (written, written, embedding_model, resolved.fallback_error, now),
+            )
+        else:
+            conn.execute(
+                """
+                UPDATE rag_index_state
+                SET pending = pending + ?,
+                    embedded = embedded + ?,
+                    model = ?,
+                    updated_at = ?
+                WHERE id = 1
+                """,
+                (written, written, embedding_model, now),
+            )
 
     return {
         "document_id": doc_id,

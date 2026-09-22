@@ -89,6 +89,9 @@ class Settings(BaseSettings):
     # Entity knowledge cards (confirmed facts per entity); default off.
     knowledge_cards_enabled: bool = False
 
+    # Local ONNX embedder (bge-small-en-v1.5); default off — ingest stays on hash-v1.
+    real_embeddings_enabled: bool = False
+
     @field_validator("data_dir", "exports_dir", mode="after")
     @classmethod
     def _anchor_data_paths(cls, value: Path) -> Path:
