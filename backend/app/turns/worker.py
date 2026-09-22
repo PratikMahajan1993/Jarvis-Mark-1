@@ -16,6 +16,9 @@ async def run_turn_worker(
     if not store.mark_running(turn_id):
         return
 
+    from .reaper import refresh_running_lease
+
+    refresh_running_lease(turn_id)
     events.append_turn_event(turn_id, store.STATE_RUNNING, "router")
     hb_task = asyncio.create_task(
         events.heartbeat_while_running(turn_id, interval_sec=heartbeat_interval_sec)

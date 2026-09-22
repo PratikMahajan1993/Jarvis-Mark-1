@@ -52,8 +52,12 @@ from .watch import ack_watch, resume_watches, watch_payload
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    from .turns.reaper import start_reaper_daemon
+
+    _reaper_stop = start_reaper_daemon()
     startup()
     yield
+    _reaper_stop.set()
 
 
 app = FastAPI(title="Jarvis Command Center", version="0.1.0", lifespan=lifespan)

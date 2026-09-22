@@ -24,13 +24,16 @@ def append_turn_event(turn_id: str, state: str, stage: str) -> int:
         )
         event_id = int(cur.lastrowid or 0)
         if state == store.STATE_RUNNING:
+            from .reaper import lease_expires_at_from
+
+            expires = lease_expires_at_from(now)
             conn.execute(
                 """
                 UPDATE turns
-                SET heartbeat_at = ?, stage = ?, updated_at = ?
+                SET heartbeat_at = ?, lease_expires_at = ?, stage = ?, updated_at = ?
                 WHERE id = ?
                 """,
-                (now, stage, now, turn_id),
+                (now, expires, stage, now, turn_id),
             )
         elif state in _TERMINAL:
             conn.execute(
