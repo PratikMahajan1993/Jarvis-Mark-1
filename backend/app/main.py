@@ -11,7 +11,7 @@ from typing import Any, Literal
 
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, RedirectResponse, Response, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response, StreamingResponse
 from pydantic import BaseModel
 
 from . import db
@@ -67,10 +67,41 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Jarvis Command Center", version="0.1.0", lifespan=lifespan)
+
+_LOCAL_CLIENT_HOSTS = frozenset({"127.0.0.1", "::1", "localhost", "testclient"})
+_MUTATING_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+
+
+def _lan_allowlist_hosts() -> set[str]:
+    return {item.strip() for item in settings.jarvis_lan_allowlist.split(",") if item.strip()}
+
+
+def _bearer_token_matches(request: Request) -> bool:
+    token = (settings.jarvis_api_token or "").strip()
+    if not token:
+        return False
+    auth = (request.headers.get("Authorization") or "").strip()
+    if not auth.lower().startswith("bearer "):
+        return False
+    return auth[7:].strip() == token
+
+
+@app.middleware("http")
+async def mutating_local_auth_middleware(request: Request, call_next):
+    if request.method not in _MUTATING_METHODS:
+        return await call_next(request)
+    client_host = (request.client.host if request.client else "").strip().lower()
+    if client_host in _LOCAL_CLIENT_HOSTS:
+        return await call_next(request)
+    if client_host in _lan_allowlist_hosts() and _bearer_token_matches(request):
+        return await call_next(request)
+    return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.origin_list or ["http://localhost:3000"],
-    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1|(\d{1,3}\.){3}\d{1,3})(:\d+)?",
+    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

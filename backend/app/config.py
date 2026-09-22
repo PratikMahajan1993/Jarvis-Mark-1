@@ -35,8 +35,10 @@ class Settings(BaseSettings):
     gemini_api_key: str = ""
     gemini_model: str = "gemini-3.6-flash"
     gemini_drawing_model: str = "gemini-3.1-pro"
-    jarvis_host: str = "0.0.0.0"
+    jarvis_host: str = "127.0.0.1"
     jarvis_port: int = 8000
+    jarvis_api_token: str = ""
+    jarvis_lan_allowlist: str = ""
     cors_origins: str = "http://localhost:3000"
     data_dir: Path = REPO_ROOT / "data"
     exports_dir: Path = REPO_ROOT / "exports"

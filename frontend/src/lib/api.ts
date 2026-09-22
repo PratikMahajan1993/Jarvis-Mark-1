@@ -17,16 +17,18 @@ export function apiBase(): string {
   const fallback = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
   if (typeof window === "undefined") return fallback;
   try {
-    const configured = new URL(fallback, window.location.origin);
-    const pageHost = window.location.hostname;
-    const loopback = configured.hostname === "localhost" || configured.hostname === "127.0.0.1";
-    if (loopback && pageHost !== "localhost" && pageHost !== "127.0.0.1") {
-      return `${window.location.protocol}//${pageHost}:8000`;
-    }
-    return configured.origin;
+    return new URL(fallback, window.location.origin).origin;
   } catch {
     return fallback;
   }
+}
+
+function mutatingAuthHeaders(method?: string): Record<string, string> {
+  const verb = (method || "GET").toUpperCase();
+  if (verb === "GET" || verb === "HEAD" || verb === "OPTIONS") return {};
+  const token = (process.env.NEXT_PUBLIC_JARVIS_API_TOKEN || "").trim();
+  if (!token) return {};
+  return { Authorization: `Bearer ${token}` };
 }
 
 async function json<T>(path: string, init?: RequestInit): Promise<T> {
@@ -34,6 +36,7 @@ async function json<T>(path: string, init?: RequestInit): Promise<T> {
     ...init,
     headers: {
       "Content-Type": "application/json",
+      ...mutatingAuthHeaders(init?.method),
       ...(init?.headers || {}),
     },
   });
@@ -184,7 +187,11 @@ export const api = {
   uploadInbox: async (file: File) => {
     const body = new FormData();
     body.append("file", file);
-    const response = await fetch(`${apiBase()}/api/inbox`, { method: "POST", body });
+    const response = await fetch(`${apiBase()}/api/inbox`, {
+      method: "POST",
+      body,
+      headers: mutatingAuthHeaders("POST"),
+    });
     if (!response.ok) throw new Error(await response.text());
     return response.json() as Promise<{ id: string; name: string; preview: string }>;
   },
@@ -198,7 +205,11 @@ export const api = {
     upload: async (file: File) => {
       const body = new FormData();
       body.append("file", file);
-      const response = await fetch(`${apiBase()}/api/canvas/files`, { method: "POST", body });
+      const response = await fetch(`${apiBase()}/api/canvas/files`, {
+        method: "POST",
+        body,
+        headers: mutatingAuthHeaders("POST"),
+      });
       if (!response.ok) throw new Error(await response.text());
       return response.json() as Promise<CanvasFile>;
     },
