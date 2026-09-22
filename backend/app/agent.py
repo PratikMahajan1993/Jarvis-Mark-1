@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import re
-from typing import Any
+import sqlite3
+import uuid
+from typing import Any, Callable
 from zoneinfo import ZoneInfo
 
 from . import db
@@ -1423,14 +1426,233 @@ def _run_agent_legacy(
     )
 
 
+_EXTERNAL_PROVIDERS: dict[str, str] = {
+    "email_send": "gmail",
+    "email_compose": "gmail",
+    "quote_send": "gmail",
+    "email_forward": "gmail",
+    "handoff_gemini": "gmail",
+    "calendar_create": "gcal",
+    "sheets_write": "sheets",
+}
+
+# Tests may set this to raise after the fake provider accepts and before status is saved.
+_POST_EXTERNAL_PROVIDER_HOOK: Callable[[str], None] | None = None
+
+
+class HitlPostProviderCrash(Exception):
+    """Provider accepted; crash before durable completion (recovery → needs_human)."""
+
+
+def _provider_for_kind(kind: str) -> str | None:
+    return _EXTERNAL_PROVIDERS.get(kind)
+
+
+def _request_hash_for_action(kind: str, payload: dict[str, Any]) -> str:
+    if kind in {"email_send", "email_compose", "quote_send"}:
+        material = {
+            "to": str(payload.get("to") or "").strip().lower(),
+            "subject": str(payload.get("subject") or "").strip(),
+            "body": str(payload.get("body") or "").strip(),
+            "source_id": str(payload.get("source_id") or ""),
+            "thread_id": str(payload.get("thread_id") or ""),
+            "attachments": sorted(str(p) for p in (payload.get("attachment_paths") or [])),
+        }
+    elif kind == "email_forward":
+        material = {
+            "to": str(payload.get("to") or "").strip().lower(),
+            "source_id": str(payload.get("source_id") or ""),
+            "note": str(payload.get("note") or "").strip(),
+        }
+    elif kind == "calendar_create":
+        material = {
+            "title": str(payload.get("title") or ""),
+            "start_at": str(payload.get("start_at") or ""),
+            "end_at": str(payload.get("end_at") or ""),
+            "location": str(payload.get("location") or ""),
+            "notes": str(payload.get("notes") or ""),
+        }
+    elif kind == "sheets_write":
+        material = {
+            "sheet": str(payload.get("sheet_name") or payload.get("title") or ""),
+            "updates": payload.get("updates") or payload,
+        }
+    elif kind == "handoff_gemini":
+        material = {
+            "inbox_id": str(payload.get("inbox_id") or ""),
+            "artifact_id": str(payload.get("artifact_id") or ""),
+            "steps": str(payload.get("steps") or ""),
+        }
+    else:
+        material = {"kind": kind, "payload": payload}
+    blob = json.dumps(material, sort_keys=True, ensure_ascii=False, default=str)
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()
+
+
+def _try_claim_pending(action_id: str) -> str | None:
+    claim_id = uuid.uuid4().hex[:16]
+    with db.connect() as conn:
+        cur = conn.execute(
+            """
+            UPDATE pending_actions
+            SET status = 'claimed', claim_id = ?, claimed_at = ?
+            WHERE id = ? AND status = 'pending'
+            """,
+            (claim_id, db.utc_now(), action_id),
+        )
+        if cur.rowcount != 1:
+            return None
+    return claim_id
+
+
+def _release_claim(action_id: str) -> None:
+    with db.connect() as conn:
+        conn.execute(
+            """
+            UPDATE pending_actions
+            SET status = 'pending', claim_id = NULL, claimed_at = NULL
+            WHERE id = ? AND status = 'claimed'
+            """,
+            (action_id,),
+        )
+
+
+def _settle_external_effect(
+    effect_id: str | None,
+    state: str,
+    *,
+    provider_message_id: str = "",
+    error: str = "",
+) -> None:
+    if not effect_id:
+        return
+    with db.connect() as conn:
+        conn.execute(
+            """
+            UPDATE external_effects
+            SET state = ?, provider_message_id = ?, error = ?, settled_at = ?
+            WHERE id = ?
+            """,
+            (state, provider_message_id or None, error, db.utc_now(), effect_id),
+        )
+
+
+def _begin_external_effect(action_id: str, kind: str, payload: dict[str, Any]) -> tuple[str | None, str | None]:
+    provider = _provider_for_kind(kind)
+    if not provider:
+        return None, None
+    request_hash = _request_hash_for_action(kind, payload)
+    effect_id = uuid.uuid4().hex[:16]
+    try:
+        with db.connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO external_effects
+                (id, action_id, provider, request_hash, state, created_at)
+                VALUES (?, ?, ?, ?, 'intent', ?)
+                """,
+                (effect_id, action_id, provider, request_hash, db.utc_now()),
+            )
+        return effect_id, None
+    except sqlite3.IntegrityError:
+        return None, "already_handled"
+
+
+def _after_external_provider(action_id: str) -> None:
+    hook = _POST_EXTERNAL_PROVIDER_HOOK
+    if hook:
+        hook(action_id)
+
+
+def _complete_external_provider(
+    action_id: str,
+    effect_id: str | None,
+    *,
+    provider_message_id: str = "",
+) -> None:
+    _after_external_provider(action_id)
+    _settle_external_effect(effect_id, "sent", provider_message_id=provider_message_id)
+
+
+def _scrub_pending_public(row: dict[str, Any]) -> dict[str, Any]:
+    cleaned = dict(row)
+    cleaned.pop("claim_id", None)
+    cleaned.pop("claimed_at", None)
+    return cleaned
+
+
+def _patch_pending_list_for_api() -> None:
+    original = db.list_pending
+
+    def list_pending_public(session_id: str) -> list[dict[str, Any]]:
+        return [_scrub_pending_public(item) for item in original(session_id)]
+
+    db.list_pending = list_pending_public  # type: ignore[assignment]
+    original_focused = db.list_focused_pending
+
+    def list_focused_public(session_id: str) -> list[dict[str, Any]]:
+        return [_scrub_pending_public(item) for item in original_focused(session_id)]
+
+    db.list_focused_pending = list_focused_public  # type: ignore[assignment]
+
+
+_patch_pending_list_for_api()
+
+def _park_action_needs_human(action_id: str, effect_id: str | None = None) -> None:
+    with db.connect() as conn:
+        if effect_id:
+            conn.execute(
+                """
+                UPDATE external_effects
+                SET state = 'unknown', settled_at = ?
+                WHERE id = ? AND state IN ('intent', 'unknown', 'sent')
+                """,
+                (db.utc_now(), effect_id),
+            )
+        conn.execute(
+            """
+            UPDATE pending_actions
+            SET status = 'needs_human'
+            WHERE id = ? AND status IN ('pending', 'claimed')
+            """,
+            (action_id,),
+        )
+
+
+def reconcile_external_effects_on_boot() -> None:
+    """Recover ambiguous outbound work — never silently retry a provider call."""
+    with db.connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT e.id AS effect_id, e.action_id, e.state AS effect_state, p.status AS pending_status
+            FROM external_effects e
+            JOIN pending_actions p ON p.id = e.action_id
+            WHERE e.state IN ('intent', 'unknown')
+               OR (e.state = 'sent' AND p.status = 'claimed')
+            """
+        ).fetchall()
+    for row in rows:
+        _park_action_needs_human(str(row["action_id"]), str(row["effect_id"]))
+
+
+def _already_handled_response(session_id: str) -> ChatResponse:
+    speak = "Already handled."
+    return ChatResponse(
+        speak=speak,
+        reply=speak,
+        scene=_fallback_scene(speak),
+        agents=_current_agents(session_id),
+    )
+
+
 def resolve_pending(action_id: str, approved: bool, session_id: str) -> ChatResponse:
+    reconcile_external_effects_on_boot()
     action = db.get_pending(action_id)
     if not action:
         speak = "That confirmation is no longer pending."
         return ChatResponse(speak=speak, reply=speak, scene=_fallback_scene(speak), agents=_current_agents(session_id))
     if action.get("status") != "pending":
-        speak = "Already handled."
-        return ChatResponse(speak=speak, reply=speak, scene=_fallback_scene(speak), agents=_current_agents(session_id))
+        return _already_handled_response(session_id)
 
     if not approved:
         db.set_pending_status(action_id, "rejected")
@@ -1471,6 +1693,10 @@ def resolve_pending(action_id: str, approved: bool, session_id: str) -> ChatResp
             agents=_agents_payload(rejected_pending),
         )
 
+    claim_id = _try_claim_pending(action_id)
+    if not claim_id:
+        return _already_handled_response(session_id)
+
     payload = action["payload"]
     watching = False
     spoken_line = ""
@@ -1487,7 +1713,7 @@ def resolve_pending(action_id: str, approved: bool, session_id: str) -> ChatResp
                 subject = _subject_from_body(body)
                 payload["subject"] = subject
             if not to_addr or not body:
-                db.set_pending_status(action_id, "pending")
+                _release_claim(action_id)
                 need = []
                 if not to_addr:
                     need.append("recipient")
@@ -1506,7 +1732,7 @@ def resolve_pending(action_id: str, approved: bool, session_id: str) -> ChatResp
                 )
         elif action["kind"] in {"email_send", "quote_send"}:
             if not to_addr or not body:
-                db.set_pending_status(action_id, "pending")
+                _release_claim(action_id)
                 speak = "I still need recipient and body before I can send."
                 db.set_focus_pending(session_id, action_id)
                 send_incomplete_pending = _pending_models(session_id)
@@ -1518,6 +1744,10 @@ def resolve_pending(action_id: str, approved: bool, session_id: str) -> ChatResp
                     watching=False,
                     agents=_agents_payload(send_incomplete_pending),
                 )
+        effect_id, blocked = _begin_external_effect(action_id, action["kind"], payload)
+        if blocked:
+            db.set_pending_status(action_id, "executed")
+            return _already_handled_response(session_id)
         try:
             sent = send_email(
                 to_addr,
@@ -1527,8 +1757,16 @@ def resolve_pending(action_id: str, approved: bool, session_id: str) -> ChatResp
                 payload.get("thread_id") or "",
                 attachment_paths=payload.get("attachment_paths") or None,
             )
+            _complete_external_provider(
+                action_id,
+                effect_id,
+                provider_message_id=str(sent.get("id") or sent.get("gmail_id") or ""),
+            )
+        except HitlPostProviderCrash:
+            raise
         except Exception:
-            db.set_pending_status(action_id, "rejected")
+            _settle_external_effect(effect_id, "failed", error="send_failed")
+            db.set_pending_status(action_id, "failed")
             speak = "Gmail did not take it."
             return ChatResponse(speak=speak, reply=speak, scene=_fallback_scene(speak), watching=False, agents=_current_agents(session_id))
         remember_person(session_id, to_addr, sent.get("id") or payload.get("source_id"), subject)
@@ -1557,14 +1795,22 @@ def resolve_pending(action_id: str, approved: bool, session_id: str) -> ChatResp
     elif action["kind"] == "email_forward":
         from .connectors.email import forward_email
 
+        effect_id, blocked = _begin_external_effect(action_id, action["kind"], payload)
+        if blocked:
+            db.set_pending_status(action_id, "executed")
+            return _already_handled_response(session_id)
         try:
             sent = forward_email(
                 payload["to"],
                 payload.get("source_id") or "",
                 note=payload.get("note") or "",
             )
+            _complete_external_provider(action_id, effect_id, provider_message_id=str(sent.get("id") or ""))
+        except HitlPostProviderCrash:
+            raise
         except Exception:
-            db.set_pending_status(action_id, "rejected")
+            _settle_external_effect(effect_id, "failed", error="forward_failed")
+            db.set_pending_status(action_id, "failed")
             speak = "Gmail did not take it."
             return ChatResponse(speak=speak, reply=speak, scene=_fallback_scene(speak), watching=False, agents=_current_agents(session_id))
         remember_person(session_id, payload["to"], sent.get("id") or payload.get("source_id"), payload.get("subject"))
@@ -1580,6 +1826,10 @@ def resolve_pending(action_id: str, approved: bool, session_id: str) -> ChatResp
     elif action["kind"] == "calendar_create":
         from .connectors.calendar import clock, create_event
 
+        effect_id, blocked = _begin_external_effect(action_id, action["kind"], payload)
+        if blocked:
+            db.set_pending_status(action_id, "executed")
+            return _already_handled_response(session_id)
         try:
             event_kwargs = {
                 "title": str(payload.get("title") or ""),
@@ -1589,8 +1839,12 @@ def resolve_pending(action_id: str, approved: bool, session_id: str) -> ChatResp
                 "notes": str(payload.get("notes") or ""),
             }
             create_event(**event_kwargs)
+            _complete_external_provider(action_id, effect_id)
+        except HitlPostProviderCrash:
+            raise
         except Exception as exc:
-            db.set_pending_status(action_id, "rejected")
+            _settle_external_effect(effect_id, "failed", error=str(exc)[:200])
+            db.set_pending_status(action_id, "failed")
             speak = str(exc).strip() or "Calendar did not take it."
             if "traceback" in speak.lower() or len(speak) > 160:
                 speak = "Calendar did not take it."
@@ -1610,7 +1864,7 @@ def resolve_pending(action_id: str, approved: bool, session_id: str) -> ChatResp
     elif action["kind"] == "clarify":
         result = execute_tool(payload.get("tool") or "", payload.get("arguments") or {}, session_id)
         thought = _thought_from_result(result)
-        db.set_pending_status(action_id, "approved")
+        db.set_pending_status(action_id, "executed")
         db.add_audit(session_id, "clarify", f"Approved {payload.get('label') or payload.get('tool')}", "approved")
         if thought:
             remaining = db.thought_count(session_id)
@@ -1636,10 +1890,18 @@ def resolve_pending(action_id: str, approved: bool, session_id: str) -> ChatResp
     elif action["kind"] == "sheets_write":
         from .shop_log import apply_write
 
+        effect_id, blocked = _begin_external_effect(action_id, action["kind"], payload)
+        if blocked:
+            db.set_pending_status(action_id, "executed")
+            return _already_handled_response(session_id)
         try:
             written = apply_write(payload)
+            _complete_external_provider(action_id, effect_id)
+        except HitlPostProviderCrash:
+            raise
         except Exception:
-            db.set_pending_status(action_id, "rejected")
+            _settle_external_effect(effect_id, "failed", error="sheets_failed")
+            db.set_pending_status(action_id, "failed")
             speak = "Google Sheets did not take it."
             return ChatResponse(speak=speak, reply=speak, scene=_fallback_scene(speak), watching=False, agents=_current_agents(session_id))
         cells = ", ".join(str(item) for item in (written.get("updated") or []))
@@ -1664,19 +1926,27 @@ def resolve_pending(action_id: str, approved: bool, session_id: str) -> ChatResp
         title = (inbox or artifact or {}).get("name") or "file"
         if not path:
             speak = "I do not have that file anymore."
-            db.set_pending_status(action_id, "rejected")
+            db.set_pending_status(action_id, "failed")
             return ChatResponse(speak=speak, reply=speak, scene=_fallback_scene(speak), agents=_current_agents(session_id))
         if not drive_conn.live():
-            db.set_pending_status(action_id, "rejected")
+            db.set_pending_status(action_id, "failed")
             speak = "Drive is not connected."
             return ChatResponse(speak=speak, reply=speak, scene=_fallback_scene(speak), agents=_current_agents(session_id))
+        effect_id, blocked = _begin_external_effect(action_id, action["kind"], payload)
+        if blocked:
+            db.set_pending_status(action_id, "executed")
+            return _already_handled_response(session_id)
         try:
             uploaded = drive_conn.upload_file(path, title)
             file_line = uploaded.get("link") or uploaded.get("title") or title
             body = gemini_body(file_line, payload.get("steps") or f"Analyze {title}.", payload.get("reply_format") or DEFAULT_GEMINI_REPLY)
             sent = send_email(settings.gemini_task_to or settings.google_account, "Task for Gemini", body)
+            _complete_external_provider(action_id, effect_id, provider_message_id=str(sent.get("id") or ""))
+        except HitlPostProviderCrash:
+            raise
         except Exception:
-            db.set_pending_status(action_id, "rejected")
+            _settle_external_effect(effect_id, "failed", error="handoff_failed")
+            db.set_pending_status(action_id, "failed")
             speak = "Gmail did not take it."
             return ChatResponse(speak=speak, reply=speak, scene=_fallback_scene(speak), agents=_current_agents(session_id))
         if uploaded:
@@ -1696,7 +1966,7 @@ def resolve_pending(action_id: str, approved: bool, session_id: str) -> ChatResp
 
         ns = str(payload.get("namespace") or "").strip()
         if not ns:
-            db.set_pending_status(action_id, "rejected")
+            db.set_pending_status(action_id, "failed")
             speak = "No memory namespace to wipe."
             return ChatResponse(speak=speak, reply=speak, scene=_fallback_scene(speak), watching=False, agents=_current_agents(session_id))
         result = forget(namespace=ns, wipe_namespace=True)
@@ -1704,16 +1974,16 @@ def resolve_pending(action_id: str, approved: bool, session_id: str) -> ChatResp
         scene = Scene(title="Memory wiped", subtitle=ns, widgets=[Widget(type="quote", text=detail)])
     elif action["kind"] == "browser_action":
         # Foundation stretch: evidence-only; do not pretend a browser ran.
-        db.set_pending_status(action_id, "rejected")
+        db.set_pending_status(action_id, "failed")
         speak = "Browser actions are not executable yet — evidence can be recorded, but I will not Authorize a live browse until that path is wired."
         return ChatResponse(speak=speak, reply=speak, scene=_fallback_scene(speak), watching=False, agents=_current_agents(session_id))
     else:
         # Unknown kinds must not look like success
-        db.set_pending_status(action_id, "rejected")
+        db.set_pending_status(action_id, "failed")
         speak = f"I cannot execute `{action['kind']}` yet."
         return ChatResponse(speak=speak, reply=speak, scene=_fallback_scene(speak), watching=False, agents=_current_agents(session_id))
 
-    db.set_pending_status(action_id, "approved")
+    db.set_pending_status(action_id, "executed")
     db.add_audit(session_id, action["kind"], detail, "approved")
     remaining = db.thought_count(session_id)
     db.set_focus_pending(session_id, "" if remaining else None)
