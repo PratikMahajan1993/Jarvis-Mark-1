@@ -133,6 +133,24 @@ body {
 .pane-dock[data-lens="bench"] [data-panel="stage"] { grid-area: 1 / 1 / 7 / 9; }
 .pane-dock[data-lens="bench"] [data-panel="sheet"] { grid-area: 1 / 9 / 9 / 13; }
 
+/* Bench focus — stage spans; sheet parks to a right-edge tab. */
+.pane-dock[data-lens="bench"][data-focus="stage"] [data-panel="stage"] {
+  grid-area: 1 / 1 / 7 / 13;
+}
+.pane-dock[data-lens="bench"][data-focus="stage"] [data-panel="sheet"] {
+  grid-area: 1 / 12 / 9 / 13;
+}
+.pane-dock[data-lens="bench"][data-focus="stage"] [data-panel="voice"] {
+  grid-area: 7 / 1 / 9 / 13;
+}
+
+.bench-row-hl {
+  box-shadow: inset 2px 0 0 color-mix(in oklch, var(--accent) 70%, transparent);
+}
+.bench-pin-hl {
+  box-shadow: 0 0 0 2px color-mix(in oklch, var(--accent) 55%, transparent);
+}
+
 .slot-centre-low {
   grid-area: 3 / 4 / 6 / 10;
 }

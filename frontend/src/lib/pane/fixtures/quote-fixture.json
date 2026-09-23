@@ -15,7 +15,8 @@
       "basis": "12 kg × supplier_rm_quotes#42",
       "amount": 18000,
       "currency": "INR",
-      "provenance": "tool"
+      "provenance": "tool",
+      "region": { "page": 1, "x": 0.22, "y": 0.28, "w": 0.18, "h": 0.14 }
     },
     {
       "label": "CNC mill — op 10 facing",
@@ -31,7 +32,8 @@
       "basis": "4.0 h proposed — cycletime est.",
       "amount": 3400,
       "currency": "INR",
-      "provenance": "pending"
+      "provenance": "pending",
+      "region": { "page": 1, "x": 0.55, "y": 0.42, "w": 0.2, "h": 0.16 }
     },
     {
       "label": "Margin & overhead",
@@ -55,7 +57,8 @@
       "qty": 1,
       "amount": 5000,
       "currency": "INR",
-      "provenance": "confirmed"
+      "provenance": "confirmed",
+      "region": { "page": 1, "x": 0.38, "y": 0.68, "w": 0.16, "h": 0.12 }
     }
   ],
   "failingCheckIds": [

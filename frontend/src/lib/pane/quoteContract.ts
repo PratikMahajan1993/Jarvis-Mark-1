@@ -28,6 +28,8 @@ export type QuoteSheetRow = {
   amount: number | null;
   currency: string;
   provenance: QuoteProvenance;
+  /** Optional drawing callout — normalized page coords for Bench pins. */
+  region?: { page: number; x: number; y: number; w: number; h: number };
 };
 
 export type QuoteVerifySeverity = "BLOCKER" | "WARN";

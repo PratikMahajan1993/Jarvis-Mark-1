@@ -41,12 +41,14 @@ import BlurText from "@/components/react-bits/BlurText";
 import ClickSpark from "@/components/react-bits/ClickSpark";
 import GradientText from "@/components/react-bits/GradientText";
 import SpotlightCard from "@/components/react-bits/SpotlightCard";
+import { ConverseStrip } from "@/components/bench/ConverseStrip";
+import { DrawingStage } from "@/components/bench/DrawingStage";
+import { QuoteSheet, quoteSheetRowsForScene } from "@/components/bench/QuoteSheet";
 import { ActivityStream } from "./ActivityStream";
+import { CommandBaton } from "./CommandBaton";
 import { ConversationRail, type RailConversation } from "./ConversationRail";
 import { DraftComposeModal } from "./DraftComposeModal";
 import { HitlModal } from "./HitlModal";
-import { EngineeringDesk } from "./engineering/EngineeringDesk";
-import { QuoteStack } from "./engineering/QuoteStack";
 import { AgentOrbit } from "./monitor/AgentOrbit";
 import { Orchestra } from "./Orchestra";
 import { SuggestedTasksPanel, type SuggestedTask } from "./SuggestedTasksPanel";
@@ -178,41 +180,21 @@ function LensSparkShell({ children }: { children: React.ReactNode }) {
 
 function BenchStagePanel({
   scene,
-  focusTitle,
   focus,
-  voice,
-  voiceVisible,
-  dimmed,
 }: {
   scene: Scene;
-  focusTitle: string;
   focus: Record<string, unknown>;
-  voice: string;
-  voiceVisible: boolean;
-  dimmed: boolean;
 }) {
   const gatedScene = useValueWhenSettled(scene);
+  const pinRows = quoteSheetRowsForScene(gatedScene);
   return (
-    <div className="relative h-full min-h-0 w-full overflow-hidden">
-      <EngineeringDesk
-        scene={gatedScene}
-        focusTitle={focusTitle}
-        focus={focus}
-        voice={voice}
-        voiceVisible={voiceVisible}
-        dimmed={dimmed}
-      />
-    </div>
+    <DrawingStage scene={gatedScene} focus={focus} pinRows={pinRows} />
   );
 }
 
 function BenchQuotePanel({ scene }: { scene: Scene }) {
   const gatedScene = useValueWhenSettled(scene);
-  return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden p-2">
-      <QuoteStack scene={gatedScene} />
-    </div>
-  );
+  return <QuoteSheet scene={gatedScene} />;
 }
 
 function BenchAgentDots({ agents }: { agents: AgentNode[] }) {
@@ -299,6 +281,13 @@ function VoiceDockPanel({
   prefsName,
   onLedgerTurnComplete,
   onLedgerTurnFailed,
+  compose,
+  listening,
+  batonDisabled,
+  batonHidden,
+  onComposeChange,
+  onComposeSubmit,
+  onMic,
 }: {
   voice: string;
   voiceVisible: boolean;
@@ -312,6 +301,13 @@ function VoiceDockPanel({
   prefsName: string;
   onLedgerTurnComplete: (output: ChatResponse) => void;
   onLedgerTurnFailed: (message: string) => void;
+  compose: string;
+  listening: boolean;
+  batonDisabled?: boolean;
+  batonHidden?: boolean;
+  onComposeChange: (value: string) => void;
+  onComposeSubmit: (value: string) => void;
+  onMic: () => void;
 }) {
   const activeLens = useDisplayLens();
   const gatedScene = useValueWhenSettled(scene);
@@ -326,12 +322,23 @@ function VoiceDockPanel({
   }
 
   if (activeLens === "bench") {
+    const line = voiceVisible ? voice : focusTitle;
     return (
-      <div className="flex h-full flex-col justify-center px-4 py-2">
-        <p className="font-display text-[1.05rem] leading-snug text-[color:var(--fg)] whitespace-pre-wrap break-words">
-          {voiceVisible ? voice : focusTitle}
-        </p>
-      </div>
+      <ConverseStrip
+        line={line}
+        baton={
+          <CommandBaton
+            value={compose}
+            onChange={onComposeChange}
+            onSubmit={onComposeSubmit}
+            onMic={onMic}
+            listening={listening}
+            disabled={batonDisabled}
+            hidden={batonHidden}
+            absolute={false}
+          />
+        }
+      />
     );
   }
 
@@ -1378,6 +1385,13 @@ export function OrchestratorShell() {
               prefsName={prefs?.assistant_name || "Jarvis"}
               onLedgerTurnComplete={onLedgerTurnComplete}
               onLedgerTurnFailed={onLedgerTurnFailed}
+              compose={compose}
+              listening={listening}
+              batonDisabled={busy || hitl}
+              batonHidden={hitl}
+              onComposeChange={setCompose}
+              onComposeSubmit={(value) => void send(value)}
+              onMic={() => void startMic()}
             />
           ),
           notes: (
@@ -1419,11 +1433,7 @@ export function OrchestratorShell() {
           stage: (
             <BenchStagePanel
               scene={scene}
-              focusTitle={focusTitle}
               focus={conversationFocus}
-              voice={voice}
-              voiceVisible={voiceVisible}
-              dimmed={Boolean(hitlAction)}
             />
           ),
           sheet: <BenchQuotePanel scene={scene} />,

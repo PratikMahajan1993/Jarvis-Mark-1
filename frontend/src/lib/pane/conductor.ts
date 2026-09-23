@@ -89,11 +89,17 @@ export function playFocus(focusStage: boolean): void {
   if (!root) return;
   const dock = root.querySelector<HTMLElement>("[data-dock]");
   if (!dock) return;
-  gsap.to(dock, {
-    opacity: focusStage ? 0.35 : 1,
-    duration: DURATION.chrome,
-    ease: EASE.gsapOut,
-  });
+  dock.dataset.focus = focusStage ? "stage" : "normal";
+  /* Grid areas swap via CSS [data-focus]; motion layout FLIPs panels — no setTimeout. */
+  gsap.fromTo(
+    dock,
+    { opacity: focusStage ? 0.92 : 0.92 },
+    {
+      opacity: 1,
+      duration: DURATION.chrome,
+      ease: EASE.gsapOut,
+    },
+  );
 }
 
 export const tiltTo = (dock: HTMLElement) =>
