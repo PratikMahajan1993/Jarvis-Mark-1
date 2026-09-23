@@ -46,9 +46,9 @@ import { CommandBaton } from "./CommandBaton";
 import { ConversationRail, type RailConversation } from "./ConversationRail";
 import { DraftComposeModal } from "./DraftComposeModal";
 import { HitlModal } from "./HitlModal";
-import { JarvisCore } from "./JarvisCore";
 import { EngineeringDesk } from "./engineering/EngineeringDesk";
-import { MonitorDesk } from "./monitor/MonitorDesk";
+import { QuoteStack } from "./engineering/QuoteStack";
+import { AgentOrbit } from "./monitor/AgentOrbit";
 import { Orchestra } from "./Orchestra";
 import { SuggestedTasksPanel, type SuggestedTask } from "./SuggestedTasksPanel";
 import {
@@ -60,22 +60,18 @@ import {
 import { PreferencesPanel } from "./PreferencesPanel";
 import { WeatherCard } from "./WeatherCard";
 import {
-  chromeOn,
   initialWorkspaceFromBootstrap,
   isHudWorkspace,
   loadStoredWorkspace,
   loadStoredWorkspacePinned,
   persistWorkspace,
   persistWorkspacePinned,
-  presenceOn,
   talkJumpWorkspace,
-  useWorkspaceLayers,
   type HudWorkspace,
 } from "./hudWorkspace";
-import { HudChrome, HudPresence } from "./hudMorph";
-import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 import { TurnStageLine } from "./TurnStageLine";
-import { Substrate } from "@/components/pane/Substrate";
+import { Pane } from "@/components/pane/Pane";
+import { usePane } from "@/lib/pane/paneStore";
 
 const AMBIENT_SESSION = "default";
 
@@ -170,6 +166,171 @@ function VoiceLine({ text, dimmed }: { text: string; dimmed?: boolean }) {
 /** Maps the FSM's macro-state onto the visual mode JarvisCore/Orchestra already render.
  * SPEAKING maps to "busy" — same visual treatment as THINKING/EXECUTING, just correctly
  * covering the TTS-playback window that the old flag-based code left unaccounted for. */
+function BenchAgentDots({ agents }: { agents: AgentNode[] }) {
+  return (
+    <div className="flex items-center gap-1.5">
+      {agents.slice(0, 4).map((agent) => (
+        <span
+          key={agent.id}
+          className={[
+            "h-1.5 w-1.5 rounded-full bg-[color:var(--muted)]",
+            agent.state ? "bg-[color:var(--accent)] shadow-[0_0_6px_color-mix(in_oklch,var(--accent)_50%,transparent)]" : "",
+          ].join(" ")}
+          title={agent.code}
+        />
+      ))}
+    </div>
+  );
+}
+
+function TasksDockPanel({
+  tasks,
+  hitl,
+  onDismiss,
+  onAction,
+}: {
+  tasks: SuggestedTask[];
+  hitl: boolean;
+  onDismiss: (id: string) => void;
+  onAction: (task: SuggestedTask, actionId: string) => void;
+}) {
+  const lens = usePane((s) => s.lens);
+  if (hitl) {
+    return <div className="h-full min-h-[120px]" aria-hidden />;
+  }
+  return (
+    <div className="flex h-full max-h-full min-h-0 flex-col overflow-hidden p-2">
+      <SuggestedTasksPanel
+        variant={lens === "watch" ? "findings" : "suggested"}
+        tasks={tasks}
+        onDismiss={onDismiss}
+        onAction={onAction}
+      />
+    </div>
+  );
+}
+
+function AgentsDockPanel({
+  agents,
+  activity,
+  hitl,
+}: {
+  agents: AgentNode[];
+  activity: ActivityItem[];
+  hitl: boolean;
+}) {
+  const lens = usePane((s) => s.lens);
+  if (lens === "watch") {
+    return (
+      <div className="flex h-full min-h-[80px] items-end justify-center pb-2">
+        <AgentOrbit agents={agents} activity={activity} dimmed={hitl} />
+      </div>
+    );
+  }
+  if (lens === "converse") {
+    return (
+      <div className="flex h-full w-full items-end justify-center pb-1">
+        <Orchestra agents={agents} dimmed={hitl} />
+      </div>
+    );
+  }
+  return null;
+}
+
+function VoiceDockPanel({
+  voice,
+  voiceVisible,
+  showCenterVoice,
+  hitlAction,
+  scene,
+  sending,
+  ledgerTurnId,
+  error,
+  focusTitle,
+  prefsName,
+  onLedgerTurnComplete,
+  onLedgerTurnFailed,
+}: {
+  voice: string;
+  voiceVisible: boolean;
+  showCenterVoice: boolean;
+  hitlAction: PendingAction | null;
+  scene: Scene;
+  sending: boolean;
+  ledgerTurnId: string | null;
+  error: string;
+  focusTitle: string;
+  prefsName: string;
+  onLedgerTurnComplete: (output: ChatResponse) => void;
+  onLedgerTurnFailed: (message: string) => void;
+}) {
+  const activeLens = usePane((s) => s.lens);
+
+  if (activeLens === "watch") {
+    const line = (voiceVisible && voice ? voice : focusTitle).slice(0, 120);
+    return (
+      <p className="px-4 py-3 text-center font-display text-lg leading-snug text-[color:var(--fg)]/90">
+        {line}
+      </p>
+    );
+  }
+
+  if (activeLens === "bench") {
+    return (
+      <div className="flex h-full flex-col justify-center px-4 py-2">
+        <p className="font-display text-[1.05rem] leading-snug text-[color:var(--fg)] whitespace-pre-wrap break-words">
+          {voiceVisible ? voice : focusTitle}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <main className="pointer-events-auto flex h-full min-h-0 flex-col items-center justify-start overflow-y-auto px-4 py-4">
+      <div
+        className={[
+          "transition-all duration-[600ms]",
+          showCenterVoice ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-2.5 opacity-0",
+        ].join(" ")}
+        aria-hidden={!showCenterVoice}
+      >
+        <VoiceLine text={voice} dimmed={Boolean(hitlAction)} />
+      </div>
+      {sceneHasBoardContent(scene) ? (
+        <SpotlightCard
+          className="orch-board mt-4 w-full max-w-full rounded-2xl border border-[color:var(--border)] bg-black/35"
+          bodyClassName="max-h-[32vh] overflow-y-auto p-4"
+        >
+          <SceneBoard scene={scene} compact />
+        </SpotlightCard>
+      ) : null}
+      {sending ? (
+        <div className="orch-sending mt-6 flex flex-col items-center gap-3" aria-live="polite">
+          <div className="orch-sending-ring" />
+          <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--accent)]/80">
+            Transmitting…
+          </p>
+        </div>
+      ) : null}
+      <TurnStageLine
+        turnId={ledgerTurnId}
+        onComplete={onLedgerTurnComplete}
+        onFailed={onLedgerTurnFailed}
+      />
+      {error ? (
+        <p className="mt-3 max-w-lg text-center font-mono text-xs text-red-300/80">{error}</p>
+      ) : null}
+      <p className="mt-4 font-mono text-[10px] uppercase tracking-[0.2em] text-[color:var(--muted)]/55">
+        <GradientText className="font-mono text-[10px] uppercase tracking-[0.2em]" animationSpeed={9}>
+          {prefsName}
+        </GradientText>
+        <span className="mx-2 text-[color:var(--muted)]/40">·</span>
+        {focusTitle}
+      </p>
+    </main>
+  );
+}
+
 function modeToOrchestratorMode(state: JarvisState): OrchestratorMode {
   switch (state.mode) {
     case "LISTENING":
@@ -1095,229 +1256,125 @@ export function OrchestratorShell() {
     [focusConversation, pushLog, send, setWorkspaceExplicit],
   );
 
-  const layers = useWorkspaceLayers(workspace);
-  const monitorTheme = layers.theme === "monitor";
-  const prevMorphRef = useRef({ theme: layers.theme, chrome: layers.chrome });
+  const taskDismiss = useCallback((id: string) => {
+    void api.setSuggestedTaskStatus(id, "dismissed").catch(() => null);
+    setSuggested((prev) => prev.filter((t) => t.id !== id));
+  }, []);
 
-  useEffect(() => {
-    const prev = prevMorphRef.current;
-    if (prev.theme !== layers.theme) {
-      liveLog(
-        "morph",
-        { layer: "theme", from: prev.theme, to: layers.theme },
-        { sessionId: sessionRef.current },
-      );
-      prev.theme = layers.theme;
-    }
-    if (prev.chrome !== layers.chrome) {
-      liveLog(
-        "morph",
-        { layer: "chrome", from: prev.chrome, to: layers.chrome },
-        { sessionId: sessionRef.current },
-      );
-      prev.chrome = layers.chrome;
-    }
-  }, [layers.theme, layers.chrome]);
+  const taskAction = useCallback(
+    (task: SuggestedTask, actionId: string) => {
+      if (task.kind === "rfq" && actionId === "engineering") {
+        void openWorkflowFromTask(task);
+      } else if (actionId === "calendar" || actionId === "meeting") {
+        void send(`Create a calendar event for: ${task.title}`);
+      } else if (actionId === "chat" || actionId === "review") {
+        void (async () => {
+          setWorkspaceExplicit("casual");
+          const row = await api.startDiscussion(task.title.slice(0, 80));
+          await focusConversation(row, { announce: true });
+          void send(`Let's discuss: ${task.title}. ${task.detail || ""}`);
+        })();
+      } else {
+        void send(`${actionId} for suggested task: ${task.title}`);
+      }
+    },
+    [focusConversation, openWorkflowFromTask, send, setWorkspaceExplicit],
+  );
 
   const shellTree = (
     <ClickSpark
-      className={[
-        "orch-root relative flex h-screen flex-col overflow-hidden",
-        layers.morphReady ? "hud-morph-ready" : "",
-      ].join(" ")}
-      sparkColor={monitorTheme ? "#FF6F37" : "#7dffe0"}
-      data-workspace={layers.theme}
+      className="relative flex h-screen flex-col overflow-hidden"
+      sparkColor={workspace === "monitor" ? "#FF6F37" : "#7dffe0"}
     >
-      <Substrate workspace={workspace} />
-      <div className="orch-vignette" />
-      <HudPresence id="monitor" layers={layers} keepMounted>
-        <MonitorDesk
-          mode={mode}
-          agents={agents}
-          activity={activity}
-          orbitOn={chromeOn("monitor", layers)}
-        />
-      </HudPresence>
-      <HudPresence id="engineering" layers={layers}>
-        <EngineeringDesk
-          scene={scene}
-          focusTitle={focusTitle}
-          focus={conversationFocus}
-          voice={voice}
-          voiceVisible={voiceVisible}
-          dimmed={Boolean(hitlAction)}
-        />
-      </HudPresence>
-      <HudPresence id="casual" layers={layers} keepMounted>
-        <JarvisCore mode={mode} playing={presenceOn("casual", layers)} />
-      </HudPresence>
-
-      <ActivityStream items={activity} />
-
-      <WorkspaceSwitcher
+      <Pane
         workspace={workspace}
-        pinned={workspacePinned}
+        workspacePinned={workspacePinned}
+        orchestratorMode={mode}
+        assistantName={prefs?.assistant_name || "Jarvis"}
+        focusTitle={focusTitle}
         dimmed={hitl}
-        onSelect={(ws) => setWorkspaceExplicit(ws, "switcher")}
-        onTogglePin={toggleWorkspacePin}
-      />
-
-      <button
-        type="button"
-        onClick={() => setPrefsOpen(true)}
-        className="pointer-events-auto absolute right-4 top-4 z-[12] rounded-full border border-[color:var(--border)] bg-black/40 px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-[color:var(--muted)] backdrop-blur-md transition hover:border-[color:var(--accent)]/40 hover:text-[color:var(--accent)]"
-        title="Preferences — Connect Gmail, voice, and connectors"
-      >
-        Prefs
-      </button>
-
-      <HudChrome id="casual" layers={layers}>
-        <ConversationRail
-          items={desk}
-          openCount={desk.length}
-          maxOpen={MAX_OPEN_CONVERSATIONS}
-          ambientActive={activeSession === AMBIENT_SESSION && !activeConversationId}
-          dimmed={hitl}
-          hidden={dockHidden}
-          onSelectAmbient={() => void focusAmbient()}
-          onSelect={(id) => {
-            void (async () => {
-              const rows = await refreshDesk(activeConversationId);
-              const row = rows.find((item) => item.id === id);
-              if (row) await focusConversation(row, { announce: true });
-            })();
-          }}
-          onNewDiscussion={() => void startNewDiscussion()}
-        />
-      </HudChrome>
-
-      <HudChrome id="casual" layers={layers} className="relative z-[1] flex flex-1 flex-col">
-        <main className="pointer-events-auto flex flex-1 flex-col items-center justify-center px-16">
-          <div
-            className={[
-              "transition-all duration-[600ms]",
-              showCenterVoice
-                ? "translate-y-0 opacity-100"
-                : "pointer-events-none translate-y-2.5 opacity-0",
-            ].join(" ")}
-            aria-hidden={!showCenterVoice}
-          >
-            <VoiceLine text={voice} dimmed={Boolean(hitlAction)} />
-          </div>
-          {sceneHasBoardContent(scene) ? (
-            <SpotlightCard
-              className="orch-board mt-8 w-full max-w-[min(720px,92vw)] rounded-2xl border border-[color:var(--border)] bg-black/35 backdrop-blur-md"
-              bodyClassName="max-h-[38vh] overflow-y-auto p-4"
-            >
-              <SceneBoard scene={scene} compact />
-            </SpotlightCard>
-          ) : null}
-          {sending ? (
-            <div className="orch-sending mt-10 flex flex-col items-center gap-3" aria-live="polite">
-              <div className="orch-sending-ring" />
-              <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--accent)]/80">
-                Transmitting…
-              </p>
-            </div>
-          ) : null}
-          <TurnStageLine
-            turnId={ledgerTurnId}
-            onComplete={onLedgerTurnComplete}
-            onFailed={onLedgerTurnFailed}
-          />
-          {error ? (
-            <p className="mt-4 max-w-lg text-center font-mono text-xs text-red-300/80">{error}</p>
-          ) : null}
-          <p className="mt-6 font-mono text-[10px] uppercase tracking-[0.2em] text-[color:var(--muted)]/55">
-            <GradientText className="font-mono text-[10px] uppercase tracking-[0.2em]" animationSpeed={9}>
-              {prefs?.assistant_name || "Jarvis"}
-            </GradientText>
-            <span className="mx-2 text-[color:var(--muted)]/40">·</span>
-            {focusTitle}
-          </p>
-        </main>
-      </HudChrome>
-      {layers.incoming !== "casual" && error ? (
-        <p className="pointer-events-auto absolute left-1/2 top-[3.5rem] z-[2] -translate-x-1/2 font-mono text-xs text-red-300/80">
-          {error}
-        </p>
-      ) : null}
-
-      <HudChrome id="casual" layers={layers}>
-        <Orchestra agents={agents} dimmed={hitl} />
-      </HudChrome>
-
-      <HudChrome id="casual" layers={layers} className="pointer-events-none absolute right-4 top-24 z-10 flex max-h-[calc(100vh-11rem)] w-[min(360px,92vw)] flex-col gap-3">
-        {!hitl && (weatherLine || suggested.length) ? (
-          <aside className="pointer-events-auto flex max-h-[calc(100vh-11rem)] flex-col gap-3">
-            <WeatherCard line={weatherLine} />
-            <SuggestedTasksPanel
-              variant="suggested"
-              tasks={suggested}
-              onDismiss={(id) => {
-                void api.setSuggestedTaskStatus(id, "dismissed").catch(() => null);
-                setSuggested((prev) => prev.filter((t) => t.id !== id));
-              }}
-              onAction={(task, actionId) => {
-                if (task.kind === "rfq" && actionId === "engineering") {
-                  void openWorkflowFromTask(task);
-                } else if (actionId === "calendar" || actionId === "meeting") {
-                  void send(`Create a calendar event for: ${task.title}`);
-                } else if (actionId === "chat" || actionId === "review") {
-                  void (async () => {
-                    setWorkspaceExplicit("casual");
-                    const row = await api.startDiscussion(task.title.slice(0, 80));
-                    await focusConversation(row, { announce: true });
-                    void send(`Let's discuss: ${task.title}. ${task.detail || ""}`);
-                  })();
-                } else {
-                  void send(`${actionId} for suggested task: ${task.title}`);
-                }
-              }}
-            />
-          </aside>
-        ) : null}
-      </HudChrome>
-
-      <HudChrome id="monitor" layers={layers} className="pointer-events-none absolute right-4 top-24 z-10 flex max-h-[calc(100vh-11rem)] w-[min(360px,92vw)] flex-col gap-3">
-        {!hitl && suggested.length > 0 ? (
-          <aside className="pointer-events-auto flex max-h-[calc(100vh-11rem)] flex-col gap-3">
-            <SuggestedTasksPanel
-              variant="findings"
-              tasks={suggested}
-              onDismiss={(id) => {
-                void api.setSuggestedTaskStatus(id, "dismissed").catch(() => null);
-                setSuggested((prev) => prev.filter((t) => t.id !== id));
-              }}
-              onAction={(task, actionId) => {
-                if (task.kind === "rfq" && actionId === "engineering") {
-                  void openWorkflowFromTask(task);
-                } else if (actionId === "calendar" || actionId === "meeting") {
-                  void send(`Create a calendar event for: ${task.title}`);
-                } else if (actionId === "chat" || actionId === "review") {
-                  void (async () => {
-                    setWorkspaceExplicit("casual");
-                    const row = await api.startDiscussion(task.title.slice(0, 80));
-                    await focusConversation(row, { announce: true });
-                    void send(`Let's discuss: ${task.title}. ${task.detail || ""}`);
-                  })();
-                } else {
-                  void send(`${actionId} for suggested task: ${task.title}`);
-                }
-              }}
-            />
-          </aside>
-        ) : null}
-      </HudChrome>
-
-      <CommandBaton
-        value={compose}
-        onChange={setCompose}
-        onSubmit={(value) => void send(value)}
-        onMic={() => void startMic()}
+        batonHidden={hitl}
+        batonDisabled={busy || hitl}
+        compose={compose}
         listening={listening}
-        disabled={busy || hitl}
-        hidden={hitl}
+        onComposeChange={setCompose}
+        onComposeSubmit={(value) => void send(value)}
+        onMic={() => void startMic()}
+        onSelectWorkspace={(ws) => setWorkspaceExplicit(ws, "switcher")}
+        onTogglePin={toggleWorkspacePin}
+        onOpenPrefs={() => setPrefsOpen(true)}
+        className="flex-1"
+        panels={{
+          voice: (
+            <VoiceDockPanel
+              voice={voice}
+              voiceVisible={voiceVisible}
+              showCenterVoice={showCenterVoice}
+              hitlAction={hitlAction}
+              scene={scene}
+              sending={sending}
+              ledgerTurnId={ledgerTurnId}
+              error={error}
+              focusTitle={focusTitle}
+              prefsName={prefs?.assistant_name || "Jarvis"}
+              onLedgerTurnComplete={onLedgerTurnComplete}
+              onLedgerTurnFailed={onLedgerTurnFailed}
+            />
+          ),
+          notes: (
+            <ConversationRail
+              items={desk}
+              openCount={desk.length}
+              maxOpen={MAX_OPEN_CONVERSATIONS}
+              ambientActive={activeSession === AMBIENT_SESSION && !activeConversationId}
+              dimmed={hitl}
+              hidden={dockHidden}
+              onSelectAmbient={() => void focusAmbient()}
+              onSelect={(id) => {
+                void (async () => {
+                  const rows = await refreshDesk(activeConversationId);
+                  const row = rows.find((item) => item.id === id);
+                  if (row) await focusConversation(row, { announce: true });
+                })();
+              }}
+              onNewDiscussion={() => void startNewDiscussion()}
+            />
+          ),
+          weather: (
+            <div className="p-2">
+              <WeatherCard line={weatherLine} />
+            </div>
+          ),
+          tasks: (
+            <TasksDockPanel tasks={suggested} hitl={hitl} onDismiss={taskDismiss} onAction={taskAction} />
+          ),
+          agents: (
+            <AgentsDockPanel agents={agents} activity={activity} hitl={Boolean(hitlAction)} />
+          ),
+          agentsStatus: <BenchAgentDots agents={agents} />,
+          activity: (
+            <div className="p-2">
+              <ActivityStream items={activity} />
+            </div>
+          ),
+          stage: (
+            <div className="relative h-full min-h-0 w-full overflow-hidden">
+              <EngineeringDesk
+                scene={scene}
+                focusTitle={focusTitle}
+                focus={conversationFocus}
+                voice={voice}
+                voiceVisible={voiceVisible}
+                dimmed={Boolean(hitlAction)}
+              />
+            </div>
+          ),
+          sheet: (
+            <div className="flex h-full min-h-0 flex-col overflow-hidden p-2">
+              <QuoteStack scene={scene} />
+            </div>
+          ),
+        }}
       />
 
       <HitlModal

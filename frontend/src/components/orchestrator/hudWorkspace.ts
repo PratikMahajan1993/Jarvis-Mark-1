@@ -1,7 +1,5 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-
 /** HUD workspace — orthogonal to the turn FSM (IDLE | LISTENING | …). */
 export type HudWorkspace = "casual" | "monitor" | "engineering";
 
@@ -131,101 +129,4 @@ export function initialWorkspaceFromBootstrap(opts: {
     : "monitor";
   if (opts.pinned && opts.stored) return opts.stored;
   return derived;
-}
-
-/** Staged HUD morph: presence (orb/eye/bench) → palette → chrome (rails). */
-export const HUD_PRESENCE_MS = 1200;
-export const HUD_THEME_DELAY_MS = 1300;
-export const HUD_CHROME_DELAY_MS = 2400;
-
-export type HudLayers = {
-  incoming: HudWorkspace;
-  outgoing: HudWorkspace | null;
-  theme: HudWorkspace;
-  chrome: HudWorkspace;
-  morphReady: boolean;
-  incomingLit: boolean;
-};
-
-function reduceMotion(): boolean {
-  if (typeof window === "undefined") return false;
-  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-}
-
-export function useWorkspaceLayers(target: HudWorkspace): HudLayers {
-  const [incoming, setIncoming] = useState(target);
-  const [outgoing, setOutgoing] = useState<HudWorkspace | null>(null);
-  const [theme, setTheme] = useState(target);
-  const [chrome, setChrome] = useState(target);
-  const [morphReady, setMorphReady] = useState(false);
-  const [incomingLit, setIncomingLit] = useState(true);
-  const first = useRef(true);
-  const incomingRef = useRef(target);
-  incomingRef.current = incoming;
-
-  useEffect(() => {
-    const ready = window.requestAnimationFrame(() => setMorphReady(true));
-    return () => window.cancelAnimationFrame(ready);
-  }, []);
-
-  useEffect(() => {
-    if (first.current) {
-      first.current = false;
-      setIncoming(target);
-      setOutgoing(null);
-      setTheme(target);
-      setChrome(target);
-      setIncomingLit(true);
-      return;
-    }
-    const from = incomingRef.current;
-    if (target === from) {
-      setOutgoing(null);
-      setTheme(target);
-      setChrome(target);
-      setIncomingLit(true);
-      return;
-    }
-
-    if (reduceMotion()) {
-      setIncoming(target);
-      setOutgoing(null);
-      setTheme(target);
-      setChrome(target);
-      setIncomingLit(true);
-      return;
-    }
-
-    setOutgoing(from);
-    setIncoming(target);
-    setIncomingLit(false);
-    let litFrame2 = 0;
-    const litFrame1 = window.requestAnimationFrame(() => {
-      litFrame2 = window.requestAnimationFrame(() => setIncomingLit(true));
-    });
-    const themeTimer = window.setTimeout(() => setTheme(target), HUD_THEME_DELAY_MS);
-    const presenceTimer = window.setTimeout(() => setOutgoing(null), HUD_PRESENCE_MS);
-    const chromeTimer = window.setTimeout(() => setChrome(target), HUD_CHROME_DELAY_MS);
-    return () => {
-      window.cancelAnimationFrame(litFrame1);
-      window.cancelAnimationFrame(litFrame2);
-      window.clearTimeout(themeTimer);
-      window.clearTimeout(presenceTimer);
-      window.clearTimeout(chromeTimer);
-    };
-  }, [target]);
-
-  return { incoming, outgoing, theme, chrome, morphReady, incomingLit };
-}
-
-export function presenceVisible(id: HudWorkspace, layers: HudLayers): boolean {
-  return layers.incoming === id || layers.outgoing === id;
-}
-
-export function presenceOn(id: HudWorkspace, layers: HudLayers): boolean {
-  return layers.incoming === id && layers.incomingLit;
-}
-
-export function chromeOn(id: HudWorkspace, layers: HudLayers): boolean {
-  return layers.incoming === id && layers.chrome === id;
 }

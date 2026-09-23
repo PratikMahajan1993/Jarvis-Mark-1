@@ -2,8 +2,10 @@
 
 import { useEffect, useRef } from "react";
 import { createSubstrate, type SubstrateHandle } from "@/substrate/createSubstrate";
-import { lensFor, type Lens, type SubstrateIn, type SubstrateOut } from "@/substrate/protocol";
-import type { HudWorkspace } from "@/components/orchestrator/hudWorkspace";
+import type { Lens, SubstrateIn, SubstrateOut } from "@/substrate/protocol";
+import { getPaneState, subscribePane } from "@/lib/pane/paneStore";
+import { lensForWorkspace } from "@/lib/pane/lenses";
+import { isHudWorkspace } from "@/components/orchestrator/hudWorkspace";
 
 export type JarvisSubstrateGlobal = {
   ready: Extract<SubstrateOut, { type: "ready" }> | null;
@@ -65,15 +67,38 @@ function qualityFromQuery(): { scale: number; fps: 30 | 60 } | null {
   }
 }
 
+/** Screenshot / verify override: ?lens=monitor|casual|engineering */
+function lensFromQuery(): Lens | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const v = new URLSearchParams(window.location.search).get("lens");
+    if (!isHudWorkspace(v)) return null;
+    return lensForWorkspace(v);
+  } catch {
+    return null;
+  }
+}
+
+function resolveLens(): Lens {
+  return lensFromQuery() ?? getPaneState().lens;
+}
+
+/** After init, post current store lens once workspace/pane have hydrated from ?lens=. */
+function postStoreLens(handle: SubstrateHandle) {
+  handle.post({
+    type: "lens",
+    lens: getPaneState().lens,
+    t0: performance.timeOrigin + performance.now(),
+  });
+}
+
 /**
  * Single full-pane canvas → one WebGL context (worker OffscreenCanvas or inline shim).
  * Forwards ?quality= and posts {type:"quality"} for adaptive override / recovery.
  */
-export function Substrate({ workspace }: { workspace: HudWorkspace }) {
+export function Substrate() {
   const hostRef = useRef<HTMLDivElement>(null);
   const handleRef = useRef<SubstrateHandle | null>(null);
-  const workspaceRef = useRef(workspace);
-  workspaceRef.current = workspace;
 
   useEffect(() => {
     const host = hostRef.current;
@@ -108,7 +133,6 @@ export function Substrate({ workspace }: { workspace: HudWorkspace }) {
       }
     });
     handleRef.current = handle;
-    // Dev/headless: post {type:"quality"} via window.__JARVIS_SUBSTRATE__.post(...)
     window.__JARVIS_SUBSTRATE__.post = (msg) => handle.post(msg);
 
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -120,9 +144,10 @@ export function Substrate({ workspace }: { workspace: HudWorkspace }) {
       width: Math.max(1, rect.width || host.clientWidth || 1),
       height: Math.max(1, rect.height || host.clientHeight || 1),
       dpr,
-      lens: lensFor(workspaceRef.current),
+      lens: resolveLens(),
       reducedMotion,
     });
+    requestAnimationFrame(() => postStoreLens(handle));
 
     let resizeRaf = 0;
     const ro = new ResizeObserver(() => {
@@ -169,7 +194,17 @@ export function Substrate({ workspace }: { workspace: HudWorkspace }) {
     };
     mq.addEventListener("change", onMq);
 
+    const onLensStore = () => {
+      handle.post({
+        type: "lens",
+        lens: getPaneState().lens,
+        t0: performance.timeOrigin + performance.now(),
+      });
+    };
+    const unsub = subscribePane(onLensStore);
+
     return () => {
+      unsub();
       ro.disconnect();
       if (resizeRaf) cancelAnimationFrame(resizeRaf);
       if (pointerRaf) cancelAnimationFrame(pointerRaf);
@@ -181,16 +216,6 @@ export function Substrate({ workspace }: { workspace: HudWorkspace }) {
       if (canvas.parentNode === host) host.removeChild(canvas);
     };
   }, []);
-
-  useEffect(() => {
-    const handle = handleRef.current;
-    if (!handle) return;
-    handle.post({
-      type: "lens",
-      lens: lensFor(workspace),
-      t0: performance.timeOrigin + performance.now(),
-    });
-  }, [workspace]);
 
   return (
     <div
