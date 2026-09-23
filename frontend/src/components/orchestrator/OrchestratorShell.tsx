@@ -1,6 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+import { Profiler, useCallback, useEffect, useReducer, useRef, useState } from "react";
+import { PerfOverlay } from "@/components/pane/PerfOverlay";
+import { isJarvisPerfMode, recordOrchestratorShellCommit } from "@/lib/pane/perf";
+import "@/lib/pane/perf";
 import { api, apiBase } from "@/lib/api";
 import { liveLog } from "@/lib/liveLog";
 import type { ChatResponse, Conversation, PendingAction, Preferences, Scene } from "@/lib/types";
@@ -1098,7 +1101,7 @@ export function OrchestratorShell() {
     }
   }, [layers.theme, layers.chrome]);
 
-  return (
+  const shellTree = (
     <ClickSpark
       className={[
         "orch-root relative flex h-screen flex-col overflow-hidden",
@@ -1340,6 +1343,20 @@ export function OrchestratorShell() {
         }}
         onDecide={(id, approved, fields) => void decide(id, approved, fields)}
       />
+
     </ClickSpark>
   );
+
+  if (isJarvisPerfMode()) {
+    return (
+      <>
+        <Profiler id="OrchestratorShell" onRender={recordOrchestratorShellCommit}>
+          {shellTree}
+        </Profiler>
+        <PerfOverlay />
+      </>
+    );
+  }
+
+  return shellTree;
 }
