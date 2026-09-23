@@ -1,6 +1,6 @@
 import { noteWorkerWebGLContext } from "@/lib/pane/perf";
 import { SubstrateEngine } from "./engine";
-import type { Lens, SubstrateIn, SubstrateOut } from "./protocol";
+import type { SubstrateIn, SubstrateOut } from "./protocol";
 
 export type SubstrateHandle = {
   post: (msg: SubstrateIn) => void;
@@ -94,5 +94,3 @@ export function createSubstrate(
     },
   };
 }
-
-export type { Lens };

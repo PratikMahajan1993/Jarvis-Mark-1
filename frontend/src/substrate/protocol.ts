@@ -1,4 +1,4 @@
-/** Substrate worker protocol — Phase 1a (eye pass). See work/SONNET_UI_VISION.md §2.2. */
+/** Substrate worker protocol — Phase 1b (eye + orb + particles + rays). See work/SONNET_UI_VISION.md §2.2. */
 
 export type Lens = "watch" | "converse" | "bench";
 export type PresenceMode = "idle" | "listening" | "thinking" | "speaking" | "hitl";

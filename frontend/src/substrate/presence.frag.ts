@@ -1,4 +1,4 @@
-/** EvilEye fragment + vertex — ported stock look (Phase 1a eye pass). */
+/** Merged eye + orb glow fragment (uEye / uOrb weights on one program). */
 
 export const PRESENCE_VERTEX = /* glsl */ `
 attribute vec2 uv;
@@ -11,9 +11,9 @@ void main() {
 `;
 
 /**
- * Stock EvilEye body plus presence weights:
- * - uEye fades the pass (watch = 1)
- * - uCenter / uPresenceScale place the eye (watch = centre, scale 1 → identical UV math)
+ * Stock EvilEye body plus orb nucleus/bloom.
+ * Weights: uEye (watch), uOrb (converse / bench pilot).
+ * Placement: uCenter, uPresenceScale. Tint: uAccent, uDim.
  */
 export const PRESENCE_FRAGMENT = /* glsl */ `
 precision mediump float;
@@ -34,83 +34,115 @@ uniform vec3 uEyeColor;
 uniform vec3 uBgColor;
 uniform bool uLightMode;
 uniform float uEye;
+uniform float uOrb;
 uniform vec2 uCenter;
 uniform float uPresenceScale;
+uniform vec3 uAccent;
+uniform float uDim;
 
 void main() {
-  if (uEye < 0.01) {
+  if (uEye < 0.01 && uOrb < 0.01) {
     gl_FragColor = vec4(0.0);
     return;
   }
 
-  vec2 centerPx = uCenter * uResolution.xy;
+  // uCenter is top-left normalised (status cluster); gl_FragCoord is bottom-left.
+  vec2 centerPx = vec2(uCenter.x * uResolution.x, (1.0 - uCenter.y) * uResolution.y);
   float fit = max(uPresenceScale, 0.001);
   vec2 uv = (gl_FragCoord.xy * 2.0 - 2.0 * centerPx) / (uResolution.y * fit);
   uv /= uScale;
-  float ft = uTime * uFlameSpeed;
 
-  float polarRadius = length(uv) * 2.0;
-  float polarAngle = (2.0 * atan(uv.x, uv.y)) / 6.28 * 0.3;
-  vec2 polarUv = vec2(polarRadius, polarAngle);
+  vec4 eyeOut = vec4(0.0);
+  if (uEye >= 0.01) {
+    float ft = uTime * uFlameSpeed;
 
-  vec4 noiseA = texture2D(uNoiseTexture, polarUv * vec2(0.2, 7.0) * uNoiseScale + vec2(-ft * 0.1, 0.0));
-  vec4 noiseB = texture2D(uNoiseTexture, polarUv * vec2(0.3, 4.0) * uNoiseScale + vec2(-ft * 0.2, 0.0));
-  vec4 noiseC = texture2D(uNoiseTexture, polarUv * vec2(0.1, 5.0) * uNoiseScale + vec2(-ft * 0.1, 0.0));
+    float polarRadius = length(uv) * 2.0;
+    float polarAngle = (2.0 * atan(uv.x, uv.y)) / 6.28 * 0.3;
+    vec2 polarUv = vec2(polarRadius, polarAngle);
 
-  float distanceMask = 1.0 - length(uv);
+    vec4 noiseA = texture2D(uNoiseTexture, polarUv * vec2(0.2, 7.0) * uNoiseScale + vec2(-ft * 0.1, 0.0));
+    vec4 noiseB = texture2D(uNoiseTexture, polarUv * vec2(0.3, 4.0) * uNoiseScale + vec2(-ft * 0.2, 0.0));
+    vec4 noiseC = texture2D(uNoiseTexture, polarUv * vec2(0.1, 5.0) * uNoiseScale + vec2(-ft * 0.1, 0.0));
 
-  float innerRing = clamp(-1.0 * ((distanceMask - 0.7) / uIrisWidth), 0.0, 1.0);
-  innerRing = (innerRing * distanceMask - 0.2) / 0.28;
-  innerRing += noiseA.r - 0.5;
-  innerRing *= 1.3;
-  innerRing = clamp(innerRing, 0.0, 1.0);
+    float distanceMask = 1.0 - length(uv);
 
-  float outerRing = clamp(-1.0 * ((distanceMask - 0.5) / 0.2), 0.0, 1.0);
-  outerRing = (outerRing * distanceMask - 0.1) / 0.38;
-  outerRing += noiseC.r - 0.5;
-  outerRing *= 1.3;
-  outerRing = clamp(outerRing, 0.0, 1.0);
+    float innerRing = clamp(-1.0 * ((distanceMask - 0.7) / uIrisWidth), 0.0, 1.0);
+    innerRing = (innerRing * distanceMask - 0.2) / 0.28;
+    innerRing += noiseA.r - 0.5;
+    innerRing *= 1.3;
+    innerRing = clamp(innerRing, 0.0, 1.0);
 
-  innerRing += outerRing;
+    float outerRing = clamp(-1.0 * ((distanceMask - 0.5) / 0.2), 0.0, 1.0);
+    outerRing = (outerRing * distanceMask - 0.1) / 0.38;
+    outerRing += noiseC.r - 0.5;
+    outerRing *= 1.3;
+    outerRing = clamp(outerRing, 0.0, 1.0);
 
-  float innerEye = distanceMask - 0.1 * 2.0;
-  innerEye *= noiseB.r * 2.0;
+    innerRing += outerRing;
 
-  vec2 pupilOffset = uMouse * uPupilFollow * 0.12;
-  vec2 pupilUv = uv - pupilOffset;
-  float pupil = 1.0 - length(pupilUv * vec2(9.0, 2.3));
-  pupil *= uPupilSize;
-  pupil = clamp(pupil, 0.0, 1.0);
-  pupil /= 0.35;
+    float innerEye = distanceMask - 0.1 * 2.0;
+    innerEye *= noiseB.r * 2.0;
 
-  float outerEyeGlow = 1.0 - length(uv * vec2(0.5, 1.5));
-  outerEyeGlow = clamp(outerEyeGlow + 0.5, 0.0, 1.0);
-  outerEyeGlow += noiseC.r - 0.5;
-  float outerBgGlow = outerEyeGlow;
-  outerEyeGlow = pow(outerEyeGlow, 2.0);
-  outerEyeGlow += distanceMask;
-  outerEyeGlow *= uGlowIntensity;
-  outerEyeGlow = clamp(outerEyeGlow, 0.0, 1.0);
-  outerEyeGlow *= pow(1.0 - distanceMask, 2.0) * 2.5;
+    // Closing lid feel as orb rises: pupil grows toward a shut eye.
+    float lid = mix(1.0, 1.85, clamp(uOrb, 0.0, 1.0));
+    vec2 pupilOffset = uMouse * uPupilFollow * 0.12 * (1.0 - uOrb);
+    vec2 pupilUv = uv - pupilOffset;
+    float pupil = 1.0 - length(pupilUv * vec2(9.0, 2.3));
+    pupil *= uPupilSize * lid;
+    pupil = clamp(pupil, 0.0, 1.0);
+    pupil /= 0.35;
 
-  outerBgGlow += distanceMask;
-  outerBgGlow = pow(outerBgGlow, 0.5);
-  outerBgGlow *= 0.15;
+    float outerEyeGlow = 1.0 - length(uv * vec2(0.5, 1.5));
+    outerEyeGlow = clamp(outerEyeGlow + 0.5, 0.0, 1.0);
+    outerEyeGlow += noiseC.r - 0.5;
+    float outerBgGlow = outerEyeGlow;
+    outerEyeGlow = pow(outerEyeGlow, 2.0);
+    outerEyeGlow += distanceMask;
+    outerEyeGlow *= uGlowIntensity;
+    outerEyeGlow = clamp(outerEyeGlow, 0.0, 1.0);
+    outerEyeGlow *= pow(1.0 - distanceMask, 2.0) * 2.5;
 
-  vec3 eyeEnergy = uEyeColor * uIntensity * clamp(max(innerRing + innerEye, outerEyeGlow + outerBgGlow) - pupil, 0.0, 3.0);
-  vec3 color;
-  if (uLightMode) {
-    vec3 mapped = vec3(1.0) - exp(-max(eyeEnergy, vec3(0.0)) * 1.3);
-    float energy = clamp(max(mapped.r, max(mapped.g, mapped.b)), 0.0, 1.0);
-    vec3 hue = mapped / max(energy, 0.0001);
-    hue = pow(clamp(hue, 0.0, 1.0), vec3(1.2));
-    color = mix(uBgColor, hue, smoothstep(0.02, 0.82, energy) * 0.96);
-  } else {
-    color = eyeEnergy;
+    outerBgGlow += distanceMask;
+    outerBgGlow = pow(outerBgGlow, 0.5);
+    outerBgGlow *= 0.15;
+
+    vec3 eyeEnergy = uEyeColor * uIntensity * clamp(max(innerRing + innerEye, outerEyeGlow + outerBgGlow) - pupil, 0.0, 3.0);
+    vec3 color;
+    if (uLightMode) {
+      vec3 mapped = vec3(1.0) - exp(-max(eyeEnergy, vec3(0.0)) * 1.3);
+      float energy = clamp(max(mapped.r, max(mapped.g, mapped.b)), 0.0, 1.0);
+      vec3 hue = mapped / max(energy, 0.0001);
+      hue = pow(clamp(hue, 0.0, 1.0), vec3(1.2));
+      color = mix(uBgColor, hue, smoothstep(0.02, 0.82, energy) * 0.96);
+    } else {
+      color = eyeEnergy;
+    }
+
+    float alpha = smoothstep(1.18, 0.72, length(uv)) * uEye;
+    eyeOut = vec4(color * uEye, alpha);
   }
 
-  float alpha = smoothstep(1.18, 0.72, length(uv)) * uEye;
-  gl_FragColor = vec4(color * uEye, alpha);
+  vec4 orbOut = vec4(0.0);
+  if (uOrb >= 0.01) {
+    // Same centre / fit as the eye. Soft falloff so scale 0.07 reads as a clear mint pilot bead.
+    vec2 ou = (gl_FragCoord.xy - centerPx) / (uResolution.y * fit);
+    float r = length(ou);
+    float nucleus = exp(-r * r * 6.0);
+    float bloom = exp(-r * r * 1.1) * 0.85;
+    float halo = exp(-r * r * 0.28) * 0.4;
+    float ring = smoothstep(1.0, 0.5, r) * smoothstep(0.12, 0.45, r) * 0.4;
+    float breath = 0.92 + 0.08 * sin(uTime * 1.4);
+    // Bench dim is 0.35 — keep a readable floor so the pilot stays lit through the mat hole.
+    float lit = max(uDim, 0.75);
+    float energy = (nucleus * 1.8 + bloom + halo + ring) * lit * breath;
+    vec3 col = uAccent * energy;
+    float a = clamp(energy, 0.0, 1.0) * uOrb;
+    orbOut = vec4(col * uOrb, a);
+  }
+
+  vec3 rgb = eyeOut.rgb + orbOut.rgb;
+  float a = clamp(eyeOut.a + orbOut.a, 0.0, 1.0);
+  gl_FragColor = vec4(rgb, a);
 }
 `;
 

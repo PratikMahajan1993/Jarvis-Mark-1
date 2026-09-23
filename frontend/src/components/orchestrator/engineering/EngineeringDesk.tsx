@@ -18,6 +18,9 @@ import { VarianceCard } from "./VarianceCard";
 import { ToolChangeField } from "./ToolChangeField";
 
 const BENCH_BG = "#060a0e";
+/** Match LENS_SUBSTRATE.bench centre — keep the mat clear so the substrate pilot can show. */
+const PILOT_HOLE =
+  "radial-gradient(circle at 4.5% 7.5%, transparent 0 7.5%, #000 9%)";
 
 function isViewableDrawing(att: MailAttachment): boolean {
   if (!isSavedLocal(att)) return false;
@@ -90,6 +93,8 @@ export function EngineeringDesk({
         className="pointer-events-none absolute inset-0 z-0"
         style={{
           background: `radial-gradient(ellipse 120% 80% at 30% 40%, rgba(125, 255, 224, 0.04), transparent 55%), ${BENCH_BG}`,
+          WebkitMaskImage: PILOT_HOLE,
+          maskImage: PILOT_HOLE,
         }}
       />
       <div
@@ -98,6 +103,8 @@ export function EngineeringDesk({
           backgroundImage:
             "linear-gradient(rgba(125,255,224,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(125,255,224,0.04) 1px, transparent 1px)",
           backgroundSize: "48px 48px",
+          WebkitMaskImage: PILOT_HOLE,
+          maskImage: PILOT_HOLE,
         }}
       />
 

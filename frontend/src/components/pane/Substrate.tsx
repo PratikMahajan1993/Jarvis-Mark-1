@@ -2,14 +2,18 @@
 
 import { useEffect, useRef } from "react";
 import { createSubstrate, type SubstrateHandle } from "@/substrate/createSubstrate";
-import { lensFor, type SubstrateOut } from "@/substrate/protocol";
+import { lensFor, type Lens, type SubstrateIn, type SubstrateOut } from "@/substrate/protocol";
 import type { HudWorkspace } from "@/components/orchestrator/hudWorkspace";
 
 export type JarvisSubstrateGlobal = {
   ready: Extract<SubstrateOut, { type: "ready" }> | null;
   stats: Extract<SubstrateOut, { type: "stats" }> | null;
+  settled: Extract<SubstrateOut, { type: "settled" }> | null;
+  contextLost: boolean;
   latest: SubstrateOut | null;
   mode: "worker" | "inline";
+  /** Forward SubstrateIn (e.g. quality override) from console / headless. */
+  post?: (msg: SubstrateIn) => void;
 };
 
 declare global {
@@ -24,11 +28,19 @@ function publishOut(msg: SubstrateOut, mode: "worker" | "inline") {
   const next: JarvisSubstrateGlobal = {
     ready: prev?.ready ?? null,
     stats: prev?.stats ?? null,
+    settled: prev?.settled ?? null,
+    contextLost: prev?.contextLost ?? false,
     latest: msg,
     mode,
+    post: prev?.post,
   };
-  if (msg.type === "ready") next.ready = msg;
+  if (msg.type === "ready") {
+    next.ready = msg;
+    next.contextLost = false;
+  }
   if (msg.type === "stats") next.stats = msg;
+  if (msg.type === "settled") next.settled = msg;
+  if (msg.type === "contextLost") next.contextLost = true;
   window.__JARVIS_SUBSTRATE__ = next;
 }
 
@@ -40,9 +52,22 @@ function isInlineForced(): boolean {
   }
 }
 
+function qualityFromQuery(): { scale: number; fps: 30 | 60 } | null {
+  try {
+    const raw = new URLSearchParams(window.location.search).get("quality");
+    if (raw == null || raw === "") return null;
+    const scale = Number(raw);
+    if (!Number.isFinite(scale) || scale <= 0) return null;
+    const fps: 30 | 60 = scale < 0.55 ? 30 : 60;
+    return { scale, fps };
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Single full-pane canvas → one WebGL context (worker OffscreenCanvas or inline shim).
- * Lens follows the current HudWorkspace; no paneStore in Phase 1a.
+ * Forwards ?quality= and posts {type:"quality"} for adaptive override / recovery.
  */
 export function Substrate({ workspace }: { workspace: HudWorkspace }) {
   const hostRef = useRef<HTMLDivElement>(null);
@@ -69,12 +94,22 @@ export function Substrate({ workspace }: { workspace: HudWorkspace }) {
     window.__JARVIS_SUBSTRATE__ = {
       ready: null,
       stats: null,
+      settled: null,
+      contextLost: false,
       latest: null,
       mode,
     };
 
-    const handle = createSubstrate(canvas, (msg) => publishOut(msg, mode));
+    const handle = createSubstrate(canvas, (msg) => {
+      publishOut(msg, mode);
+      if (msg.type === "ready") {
+        const q = qualityFromQuery();
+        if (q) handle.post({ type: "quality", scale: q.scale, fps: q.fps });
+      }
+    });
     handleRef.current = handle;
+    // Dev/headless: post {type:"quality"} via window.__JARVIS_SUBSTRATE__.post(...)
+    window.__JARVIS_SUBSTRATE__.post = (msg) => handle.post(msg);
 
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const rect = host.getBoundingClientRect();
@@ -121,7 +156,6 @@ export function Substrate({ workspace }: { workspace: HudWorkspace }) {
         pending = null;
       });
     };
-    // ≤30 Hz via rAF coalesce (one post per frame max).
     window.addEventListener("pointermove", onPointer, { passive: true });
 
     const onVisibility = () => {
@@ -167,3 +201,5 @@ export function Substrate({ workspace }: { workspace: HudWorkspace }) {
     />
   );
 }
+
+export type { Lens };
