@@ -62,6 +62,7 @@ import { WeatherCard } from "./WeatherCard";
 import {
   chromeOn,
   initialWorkspaceFromBootstrap,
+  isHudWorkspace,
   loadStoredWorkspace,
   loadStoredWorkspacePinned,
   persistWorkspace,
@@ -74,8 +75,20 @@ import {
 import { HudChrome, HudPresence } from "./hudMorph";
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 import { TurnStageLine } from "./TurnStageLine";
+import { Substrate } from "@/components/pane/Substrate";
 
 const AMBIENT_SESSION = "default";
+
+/** Screenshot / verify override: ?lens=monitor|casual|engineering */
+function workspaceFromLensQuery(): HudWorkspace | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const v = new URLSearchParams(window.location.search).get("lens");
+    return isHudWorkspace(v) ? v : null;
+  } catch {
+    return null;
+  }
+}
 const FOCUS_STORAGE_KEY = "jarvis.activeConversationId";
 const IDLE_VOICE = "Awaiting instruction.";
 const EMPTY_SCENE: Scene = { title: "", widgets: [] };
@@ -193,7 +206,9 @@ export function OrchestratorShell() {
   const [prefsOpen, setPrefsOpen] = useState(false);
   const [googleStatus, setGoogleStatus] = useState<GoogleConnectStatus | null>(null);
   const [googleConnectOpen, setGoogleConnectOpen] = useState(false);
-  const [workspace, setWorkspaceState] = useState<HudWorkspace>("monitor");
+  const [workspace, setWorkspaceState] = useState<HudWorkspace>(
+    () => workspaceFromLensQuery() ?? "monitor",
+  );
   const [workspacePinned, setWorkspacePinned] = useState(false);
   const [ledgerTurnId, setLedgerTurnId] = useState<string | null>(null);
 
@@ -917,11 +932,14 @@ export function OrchestratorShell() {
         const stored = loadStoredWorkspace();
         workspacePinnedRef.current = pinned;
         setWorkspacePinned(pinned);
-        const initialWs = initialWorkspaceFromBootstrap({
-          restoredCategory: restored?.category,
-          pinned,
-          stored,
-        });
+        const lensWs = workspaceFromLensQuery();
+        const initialWs =
+          lensWs ??
+          initialWorkspaceFromBootstrap({
+            restoredCategory: restored?.category,
+            pinned,
+            stored,
+          });
         setWorkspaceState(initialWs);
         workspaceRef.current = initialWs;
         persistWorkspace(initialWs);
@@ -1110,6 +1128,7 @@ export function OrchestratorShell() {
       sparkColor={monitorTheme ? "#FF6F37" : "#7dffe0"}
       data-workspace={layers.theme}
     >
+      <Substrate workspace={workspace} />
       <div className="orch-vignette" />
       <HudPresence id="monitor" layers={layers} keepMounted>
         <MonitorDesk

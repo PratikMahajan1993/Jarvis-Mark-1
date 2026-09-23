@@ -14,6 +14,7 @@ export type PerfSnapshot = {
   rafHistogram: RafHistogram;
   rafP95Ms: number;
   longTasks: LongTaskEntry[];
+  /** Live WebGL contexts (create +, webglcontextlost / worker dispose −). */
   webglContextCount: number;
   orchestratorShellCommits: number;
   switchCount?: number;
@@ -40,7 +41,12 @@ const RAF_BUCKETS: { label: string; max: number }[] = [
 ];
 
 let orchestratorShellCommits = 0;
+/** Live count — not cumulative creations. */
 let webglContextCount = 0;
+const liveWebglCanvases = new WeakSet<object>();
+/** Handles that have already credited a worker OffscreenCanvas context. */
+const workerCredits = new WeakSet<object>();
+
 const longTasks: LongTaskEntry[] = [];
 const rafDeltas: number[] = [];
 const rafHistogram: RafHistogram = Object.fromEntries(RAF_BUCKETS.map((b) => [b.label, 0]));
@@ -72,28 +78,75 @@ function percentile(values: number[], p: number): number {
   return sorted[Math.max(0, idx)] ?? 0;
 }
 
-function installWebGLContextCounter() {
-  if (webglHookInstalled || typeof HTMLCanvasElement === "undefined") return;
-  webglHookInstalled = true;
+function isWebGLContextId(contextId: string): boolean {
+  return contextId === "webgl" || contextId === "webgl2" || contextId === "experimental-webgl";
+}
 
-  const proto = HTMLCanvasElement.prototype;
+function trackLiveContext(canvas: object) {
+  if (liveWebglCanvases.has(canvas)) return;
+  liveWebglCanvases.add(canvas);
+  webglContextCount += 1;
+
+  const target = canvas as EventTarget;
+  if (typeof target.addEventListener !== "function") return;
+
+  const onLost = () => {
+    target.removeEventListener("webglcontextlost", onLost);
+    if (!liveWebglCanvases.has(canvas)) return;
+    liveWebglCanvases.delete(canvas);
+    webglContextCount = Math.max(0, webglContextCount - 1);
+  };
+  target.addEventListener("webglcontextlost", onLost);
+}
+
+function patchGetContext(proto: { getContext: (contextId: string, options?: unknown) => unknown }) {
   const original = proto.getContext;
-
-  const patched = function getContextPatched(
-    this: HTMLCanvasElement,
+  proto.getContext = function getContextPatched(
+    this: object,
     contextId: string,
     options?: unknown,
   ) {
     const ctx = original.call(this, contextId as never, options as never);
-    if (
-      ctx &&
-      (contextId === "webgl" || contextId === "webgl2" || contextId === "experimental-webgl")
-    ) {
-      webglContextCount += 1;
+    if (ctx && isWebGLContextId(contextId)) {
+      trackLiveContext(this);
     }
     return ctx;
   };
-  proto.getContext = patched as typeof proto.getContext;
+}
+
+function installWebGLContextCounter() {
+  if (webglHookInstalled) return;
+  webglHookInstalled = true;
+
+  if (typeof HTMLCanvasElement !== "undefined") {
+    patchGetContext(HTMLCanvasElement.prototype as never);
+  }
+  // Main-thread OffscreenCanvas only. Worker-realm getContext is credited via
+  // noteWorkerWebGLContext (separate JS realm — prototype hooks do not apply).
+  if (typeof OffscreenCanvas !== "undefined") {
+    patchGetContext(OffscreenCanvas.prototype as never);
+  }
+}
+
+/**
+ * Credit / release a WebGL context that lives inside a substrate worker.
+ * `handle` is a stable object (the SubstrateHandle) so Strict Mode remounts
+ * credit and release independently without double-counting.
+ */
+export function noteWorkerWebGLContext(handle: object, live: boolean) {
+  if (typeof window === "undefined" || !isJarvisPerfMode()) return;
+  ensureJarvisPerf();
+
+  if (live) {
+    if (workerCredits.has(handle)) return;
+    workerCredits.add(handle);
+    webglContextCount += 1;
+    return;
+  }
+
+  if (!workerCredits.has(handle)) return;
+  workerCredits.delete(handle);
+  webglContextCount = Math.max(0, webglContextCount - 1);
 }
 
 function startLongTaskObserver() {
