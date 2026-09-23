@@ -1,0 +1,71 @@
+---
+description: Jarvis HUD frontend — single glass pane, lens transitions, substrate worker, depth model, z-index contexts, motion specs, state rules. Use when creating or editing anything under frontend/src (components, lib, css, tailwind config).
+globs: frontend/src/**/*.{ts,tsx,css}, frontend/tailwind.config.ts
+alwaysApply: false
+---
+
+# Frontend UI/UX — the Single Pane
+
+Design of record: `work/SONNET_UI_VISION.md`. This rule is the enforceable subset. If code and this rule disagree, fix the code.
+
+## 1. One pane, three lenses
+
+- The HUD is **one always-mounted pane**. Intent enum `HudWorkspace` (`casual|monitor|engineering`, `hudWorkspace.ts`) is unchanged and maps 1:1 to lenses `converse|watch|bench` via `lensFor()` in `lib/pane/lenses.ts`. Never add a fourth value to either.
+- A lens is a preset: `LENS_LAYOUT` (panel → slot + depth), `LENS_THEME` (root variables), `LENS_SUBSTRATE` (worker uniforms). Changing lens changes presets. It **never** mounts, unmounts, or conditionally renders a panel.
+- Every instrument on the pane is a `<PanePanel id>` inside `<Dock>`. No absolutely positioned one-off panels in `OrchestratorShell`. No `{cond ? <Panel/> : null}` driven by lens; use depth 3.
+- `OrchestratorShell` owns data, FSM, voice, sessions. It renders `<Pane>` and passes props. It must **not** subscribe to `paneStore.lens` (0 shell commits per lens change is a gate).
+
+## 2. Depth is the only visibility
+
+| depth | scale | opacity | pointer | notes |
+| --- | --- | --- | --- | --- |
+| 0 hero | 1 | 1 | auto | |
+| 1 rail | 1 | 1 | auto | |
+| 2 recessed | 0.97 | 0.55 | auto | click raises to 1 |
+| 3 parked | 0.94 | 0 | none | `visibility:hidden; content-visibility:hidden; inert; aria-hidden` after settle |
+
+Use `DEPTH_VARIANTS` from `lib/pane/springs.ts`. Do not hand-write depth values.
+
+## 3. Stacking contexts (Tailwind `z-*` tokens only — no `z-[n]` literals)
+
+`z-substrate 0` canvas · `z-field 1` grid/mat · `z-pane 10` Dock · `z-depth3..z-depth0 11–14` panels · `z-vignette 50` · `z-status 60` · `z-baton 70` · `z-toast 90` · `z-overlay 100` scrim · `z-hitl 110` · `z-modal 120`.
+Each layer root sets `isolation: isolate`. Nothing inside a panel may set a z-index token outside its own panel.
+
+## 4. Animation strategy — who owns what
+
+- **Worker** (`frontend/src/substrate/`): all WebGL. One `<canvas>`, one context, `OffscreenCanvas` + `substrate.worker.ts`, inline shim fallback. Eye/orb/pilot light are uniform weights on one program set. **Never** create a second WebGL context, never mount `EvilEye`/`Particles`/`LightRays` as DOM components in the pane, never call `renderer.render` on the main thread except in the shim.
+- **`motion`** (`motion/react`): per-panel `layout` FLIP and depth `variants`; `whileHover`/`whileTap` micro-motion; `<MotionConfig reducedMotion="user">` at pane root; `useWillChange()` on panels. `layout` is on the **frame** only; inner content uses `layout="position"` or none.
+- **GSAP**: the conductor (`lib/pane/conductor.ts`) — root CSS variables (`--bg --surface --fg --muted --border --accent --grid-opacity --vignette-opacity --substrate-dim`), field/vignette, status title, worker `post()` calls, `quickTo` for pointer-linked pin/row highlights and dock tilt.
+- Two systems never animate the same element or property. `motion` never touches root vars; GSAP never touches a `PanePanel` transform.
+- Constants come **only** from `lib/pane/springs.ts`: `SPRING.pane {170,26,1}`, `SPRING.hero {120,20,1.2}`, `SPRING.recess {200,28,1}`, `SPRING.drawer {260,30,0.9}`, `SPRING.chip {400,30,0.6}`, `EASE.out [0.22,1,0.36,1]`, `DURATION.theme 0.7`. No inline `transition={{ duration: … }}` literals.
+- **Banned:** `setTimeout`/`setInterval` choreography; CSS `transition` on root variables; animating `width height top left filter backdrop-filter box-shadow border-color background`; `backdrop-filter` anywhere except `Overlay.tsx` scrim; full-screen crossfades of two canvases; `AeroShards` on the desk.
+- A lens gesture starts all voices at t = 0 (no staging) and must be interruptible: `tl.kill()` + rebuild; springs retarget; worker receives a new target.
+
+## 5. Glass
+
+- Panels use `.pane-frost` (baked: surface fill 78 %, 3 % SVG grain, 1 px hairline, 1 px top accent light). No blur.
+- Radii: `rounded-pane` (20 px) frame, `rounded-inner` (12 px) content, `rounded-chip` (8 px).
+- Colour: only `var(--accent)` (Jarvis / confirmed), amber `ember` (pending / attention), graphite scale, drawing ink. No third accent. `#7dffe0` is `mint-bright` for canvas parity only.
+- Type: display `Source Serif 4` (Jarvis lines, titles, totals), body `IBM Plex Sans`, mono `IBM Plex Mono` with `tabular-nums` on every numeral. Micro labels: `text-micro` uppercase.
+
+## 6. State rules
+
+- `lib/pane/paneStore.ts` is an external store (`useSyncExternalStore`) holding `lens phase mode overlay focusMode`. Panels select the slice they need. No lens state in React context or component `useState`.
+- `phase: "moving"` from `setLens()` until settled (hero `onLayoutAnimationComplete` + worker `settled`, or 1.4 s watchdog). Heavy effects (scene fetch, findings reframe, quote build) **must** gate on `useLensSettled()` and run in `startTransition`.
+- Turn FSM (`orchestratorFsm.ts`) stays a pure reducer; lens never lives in turn state; `PresenceMode` is derived from FSM mode and posted to the worker — one model of Jarvis's state on every lens.
+- Persisted keys `jarvis.hudWorkspace` / `jarvis.hudWorkspacePinned` unchanged.
+
+## 7. Bench specifics
+
+- Three surfaces only: `stage` (cols 1–8 / rows 1–6), `strip` (1–8 / 7–8), `sheet` (9–12 / 1–8). Secondary content is tabbed inside the sheet (`Sheet · Strategy · Vision`), never stacked as cards.
+- Sheet rows show provenance: ● tool · ◉ owner-confirmed · ◐ pending (dashed amber) · ○ missing (em-dash). A numeral with no source renders ○ — never a guess.
+- Proof strip mirrors `quote_verify`; > 2 failures disables Authorize send. Authorize / Reject copy only.
+- Stage chrome fades after 2 s idle; Blueprint invert is a static filter toggle, never animated. `DrawingViewer` is wrapped by `DrawingStage`, not forked.
+
+## 8. Verification before you report DONE
+
+- `npm run typecheck && npm run lint` clean.
+- Headless: `google-chrome --headless=new --enable-unsafe-swiftshader` loads `/?perf=1`; switch lenses 20×; report `longTasks>50ms = 0`, `rafP95 < 20ms`, `contexts = 1`, `shellCommits = 0`. Attach the JSON or the screenshot.
+- Reduced motion (`--force-prefers-reduced-motion`) snaps with no visual gaps.
+- Screenshot each lens; on Bench, a fixture quote with all four provenance glyphs.
+- Do not expand scope; do not restyle panels outside the kickoff; do not touch `backend/`.
