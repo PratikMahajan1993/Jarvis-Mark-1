@@ -1,9 +1,10 @@
 "use client";
 
 import { motion, useWillChange } from "motion/react";
-import { markPaneSettled, usePane } from "@/lib/pane/paneStore";
+import { useLayoutEffect, useRef, type ReactNode } from "react";
+import { markHeroPanelSettled, usePane } from "@/lib/pane/paneStore";
 import { LENS_LAYOUT, type PanelId } from "@/lib/pane/lenses";
-import { DEPTH_VARIANTS } from "@/lib/pane/springs";
+import { DEPTH_VARIANTS, SPRING } from "@/lib/pane/springs";
 
 const DEPTH_Z: Record<number, string> = {
   0: "z-[14]",
@@ -24,21 +25,32 @@ export function PanePanel({
   onHeroLayoutComplete?: () => void;
 }) {
   const lens = usePane((s) => s.lens);
-  const { slot, depth } = LENS_LAYOUT[lens][id];
+  const phase = usePane((s) => s.phase);
+  const { depth } = LENS_LAYOUT[lens][id];
   const willChange = useWillChange();
   const parked = depth === 3;
+  const frozenBody = useRef<ReactNode>(children);
+  if (phase === "settled") {
+    frozenBody.current = children;
+  }
+  const body = phase === "moving" ? frozenBody.current : children;
+  const depthKey = String(depth);
+
+  useLayoutEffect(() => {
+    if (phase !== "moving" || depth !== 0) return;
+    onHeroLayoutComplete?.();
+    markHeroPanelSettled();
+  }, [phase, depth, lens, onHeroLayoutComplete]);
 
   return (
     <motion.div
-      layout
+      layout={phase === "settled"}
       layoutId={`panel-${id}`}
       data-panel={id}
       data-depth={depth}
-      data-slot={slot}
       className={[
         "pane-frost pointer-events-auto min-h-0 min-w-0 overflow-hidden",
         DEPTH_Z[depth] ?? "z-[11]",
-        `slot-${slot}`,
         className,
       ]
         .filter(Boolean)
@@ -50,19 +62,20 @@ export function PanePanel({
         contentVisibility: parked ? "hidden" : "visible",
       }}
       variants={DEPTH_VARIANTS}
-      animate={String(depth)}
+      animate={depthKey}
+      transition={phase === "moving" ? { duration: 0 } : SPRING.pane}
       initial={false}
       aria-hidden={parked}
       inert={parked ? true : undefined}
       onLayoutAnimationComplete={() => {
-        if (depth === 0) {
+        if (depth === 0 && phase === "settled") {
           onHeroLayoutComplete?.();
-          markPaneSettled();
+          markHeroPanelSettled();
         }
       }}
     >
-      <motion.div layout="position" className="h-full min-h-0">
-        {children}
+      <motion.div layout={false} className="h-full min-h-0">
+        {body}
       </motion.div>
     </motion.div>
   );

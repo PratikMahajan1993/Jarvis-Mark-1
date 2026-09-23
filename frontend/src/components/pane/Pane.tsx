@@ -1,22 +1,20 @@
 "use client";
 
 import { LayoutGroup, MotionConfig } from "motion/react";
-import gsap from "gsap";
 import { useEffect, useRef, type ReactNode } from "react";
 import type { HudWorkspace } from "@/components/orchestrator/hudWorkspace";
 import type { OrchestratorMode } from "@/lib/orchestrator";
-import { LENS_THEME, lensForWorkspace } from "@/lib/pane/lenses";
+import { lensForWorkspace } from "@/lib/pane/lenses";
+import { bindConductor, snapLensTheme } from "@/lib/pane/conductor";
 import {
   getPaneState,
   initLensFromWorkspace,
-  markPaneSettled,
-  registerLensSideEffect,
   setLens,
   setPresenceMode,
+  subscribePane,
+  useDisplayLens,
   useLens,
 } from "@/lib/pane/paneStore";
-import { DURATION, EASE } from "@/lib/pane/springs";
-import type { Lens } from "@/substrate/protocol";
 import { CommandBaton } from "@/components/orchestrator/CommandBaton";
 import { Dock } from "./Dock";
 import { Field } from "./Field";
@@ -73,25 +71,6 @@ function modeToPresence(mode: OrchestratorMode): "idle" | "listening" | "thinkin
   }
 }
 
-function applyLensTheme(root: HTMLElement, to: Lens) {
-  const T = LENS_THEME[to];
-  gsap.killTweensOf(root);
-  gsap.to(root, {
-    "--bg": T.bg,
-    "--surface": T.surface,
-    "--fg": T.fg,
-    "--muted": T.muted,
-    "--border": T.border,
-    "--accent": T.accent,
-    "--mat": T.mat,
-    "--grid-opacity": T.gridOpacity,
-    "--vignette-opacity": T.vignetteOpacity,
-    duration: DURATION.theme,
-    ease: EASE.gsapOut,
-    onComplete: () => markPaneSettled(),
-  });
-}
-
 export function Pane({
   workspace,
   workspacePinned,
@@ -114,10 +93,21 @@ export function Pane({
   sparkWrapper,
 }: PaneProps) {
   const rootRef = useRef<HTMLDivElement>(null);
-  const lens = useLens();
+  const displayLens = useDisplayLens();
   const initialized = useRef(false);
 
   useSyncWorkspaceLens(workspace);
+
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    bindConductor({ root });
+    const syncPhase = () => {
+      root.dataset.phase = getPaneState().phase;
+    };
+    syncPhase();
+    return subscribePane(syncPhase);
+  }, []);
 
   useEffect(() => {
     if (initialized.current) return;
@@ -126,29 +116,8 @@ export function Pane({
     initLensFromWorkspace(boot);
     setLens(boot);
     const root = rootRef.current;
-    if (root) {
-      const T = LENS_THEME[getPaneState().lens];
-      gsap.set(root, {
-        "--bg": T.bg,
-        "--surface": T.surface,
-        "--fg": T.fg,
-        "--muted": T.muted,
-        "--border": T.border,
-        "--accent": T.accent,
-        "--mat": T.mat,
-        "--grid-opacity": T.gridOpacity,
-        "--vignette-opacity": T.vignetteOpacity,
-      });
-    }
+    if (root) snapLensTheme(root, getPaneState().lens);
   }, [workspace]);
-
-  useEffect(() => {
-    const root = rootRef.current;
-    if (!root) return;
-    return registerLensSideEffect((to) => {
-      applyLensTheme(root, to);
-    });
-  }, []);
 
   useEffect(() => {
     setPresenceMode(modeToPresence(orchestratorMode));
@@ -156,7 +125,7 @@ export function Pane({
     post?.({ type: "mode", mode: modeToPresence(orchestratorMode) });
   }, [orchestratorMode]);
 
-  const bench = lens === "bench";
+  const bench = displayLens === "bench";
 
   const inner = (
     <div
@@ -212,4 +181,4 @@ export function Pane({
   return wrapped;
 }
 
-export { useLens as usePaneLens };
+export { useLens as usePaneLens, useDisplayLens };

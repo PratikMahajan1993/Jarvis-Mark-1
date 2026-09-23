@@ -66,16 +66,17 @@ body {
 .orch-root {
   background-color: var(--bg);
   color: var(--fg);
-  transition:
-    background-color 1.05s cubic-bezier(0.22, 1, 0.36, 1),
-    color 1.05s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.orch-root[data-phase="moving"] .pane-dock {
+  contain: layout style;
+}
+
+.orch-root[data-phase="moving"] [data-panel] {
+  contain: layout paint style;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .orch-root {
-    transition: none !important;
-  }
-
   .orch-core,
   .orch-core-halo,
   .orch-core-nucleus,
@@ -103,6 +104,34 @@ body {
   min-height: 0;
   min-width: 0;
 }
+
+/* Lens slot map — grid-area only (depth stays on motion). */
+.pane-dock[data-lens="watch"] [data-panel="voice"] { grid-area: 3 / 4 / 6 / 10; }
+.pane-dock[data-lens="watch"] [data-panel="notes"] { grid-area: 1 / 1 / 9 / 4; }
+.pane-dock[data-lens="watch"] [data-panel="weather"] { grid-area: 1 / 10 / 3 / 13; }
+.pane-dock[data-lens="watch"] [data-panel="tasks"] { grid-area: 3 / 10 / 9 / 13; }
+.pane-dock[data-lens="watch"] [data-panel="agents"] { grid-area: 6 / 4 / 8 / 10; }
+.pane-dock[data-lens="watch"] [data-panel="activity"] { grid-area: 6 / 1 / 9 / 4; }
+.pane-dock[data-lens="watch"] [data-panel="stage"] { grid-area: 1 / 1 / 7 / 9; }
+.pane-dock[data-lens="watch"] [data-panel="sheet"] { grid-area: 1 / 9 / 9 / 13; }
+
+.pane-dock[data-lens="converse"] [data-panel="voice"] { grid-area: 3 / 4 / 6 / 10; }
+.pane-dock[data-lens="converse"] [data-panel="notes"] { grid-area: 1 / 1 / 9 / 4; }
+.pane-dock[data-lens="converse"] [data-panel="weather"] { grid-area: 1 / 10 / 3 / 13; }
+.pane-dock[data-lens="converse"] [data-panel="tasks"] { grid-area: 3 / 10 / 9 / 13; }
+.pane-dock[data-lens="converse"] [data-panel="agents"] { grid-area: 7 / 4 / 9 / 11; }
+.pane-dock[data-lens="converse"] [data-panel="activity"] { grid-area: 6 / 1 / 9 / 4; }
+.pane-dock[data-lens="converse"] [data-panel="stage"] { grid-area: 1 / 1 / 7 / 9; }
+.pane-dock[data-lens="converse"] [data-panel="sheet"] { grid-area: 1 / 9 / 9 / 13; }
+
+.pane-dock[data-lens="bench"] [data-panel="voice"] { grid-area: 7 / 1 / 9 / 9; }
+.pane-dock[data-lens="bench"] [data-panel="notes"] { grid-area: 1 / 1 / 9 / 2; }
+.pane-dock[data-lens="bench"] [data-panel="weather"] { grid-area: 1 / 10 / 3 / 13; }
+.pane-dock[data-lens="bench"] [data-panel="tasks"] { grid-area: 3 / 10 / 9 / 13; }
+.pane-dock[data-lens="bench"] [data-panel="agents"] { grid-area: 1 / 2 / 2 / 5; }
+.pane-dock[data-lens="bench"] [data-panel="activity"] { grid-area: 6 / 1 / 9 / 4; }
+.pane-dock[data-lens="bench"] [data-panel="stage"] { grid-area: 1 / 1 / 7 / 9; }
+.pane-dock[data-lens="bench"] [data-panel="sheet"] { grid-area: 1 / 9 / 9 / 13; }
 
 .slot-centre-low {
   grid-area: 3 / 4 / 6 / 10;
@@ -209,13 +238,11 @@ body {
     linear-gradient(rgba(125, 255, 224, 0.04) 1px, transparent 1px),
     linear-gradient(90deg, rgba(125, 255, 224, 0.04) 1px, transparent 1px);
   background-size: 48px 48px;
-  transition: opacity 0.6s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .pane-vignette {
   opacity: var(--vignette-opacity, 0.8);
   background: radial-gradient(circle, transparent 40%, rgba(0, 0, 0, 0.8) 100%);
-  transition: opacity 0.6s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .slot-left-peek {

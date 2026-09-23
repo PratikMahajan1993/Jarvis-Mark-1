@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import { createSubstrate, type SubstrateHandle } from "@/substrate/createSubstrate";
 import type { Lens, SubstrateIn, SubstrateOut } from "@/substrate/protocol";
-import { getPaneState, subscribePane } from "@/lib/pane/paneStore";
+import { getPaneState, markWorkerSettled } from "@/lib/pane/paneStore";
 import { lensForWorkspace } from "@/lib/pane/lenses";
 import { isHudWorkspace } from "@/components/orchestrator/hudWorkspace";
 
@@ -41,7 +41,10 @@ function publishOut(msg: SubstrateOut, mode: "worker" | "inline") {
     next.contextLost = false;
   }
   if (msg.type === "stats") next.stats = msg;
-  if (msg.type === "settled") next.settled = msg;
+      if (msg.type === "settled") {
+        next.settled = msg;
+        markWorkerSettled(msg.lens);
+      }
   if (msg.type === "contextLost") next.contextLost = true;
   window.__JARVIS_SUBSTRATE__ = next;
 }
@@ -194,17 +197,7 @@ export function Substrate() {
     };
     mq.addEventListener("change", onMq);
 
-    const onLensStore = () => {
-      handle.post({
-        type: "lens",
-        lens: getPaneState().lens,
-        t0: performance.timeOrigin + performance.now(),
-      });
-    };
-    const unsub = subscribePane(onLensStore);
-
     return () => {
-      unsub();
       ro.disconnect();
       if (resizeRaf) cancelAnimationFrame(resizeRaf);
       if (pointerRaf) cancelAnimationFrame(pointerRaf);

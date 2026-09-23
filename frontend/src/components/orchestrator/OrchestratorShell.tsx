@@ -42,7 +42,6 @@ import ClickSpark from "@/components/react-bits/ClickSpark";
 import GradientText from "@/components/react-bits/GradientText";
 import SpotlightCard from "@/components/react-bits/SpotlightCard";
 import { ActivityStream } from "./ActivityStream";
-import { CommandBaton } from "./CommandBaton";
 import { ConversationRail, type RailConversation } from "./ConversationRail";
 import { DraftComposeModal } from "./DraftComposeModal";
 import { HitlModal } from "./HitlModal";
@@ -71,7 +70,8 @@ import {
 } from "./hudWorkspace";
 import { TurnStageLine } from "./TurnStageLine";
 import { Pane } from "@/components/pane/Pane";
-import { usePane } from "@/lib/pane/paneStore";
+import { useDisplayLens, useLens } from "@/lib/pane/paneStore";
+import { useValueWhenSettled } from "@/lib/pane/useLensSettled";
 
 const AMBIENT_SESSION = "default";
 
@@ -166,6 +166,55 @@ function VoiceLine({ text, dimmed }: { text: string; dimmed?: boolean }) {
 /** Maps the FSM's macro-state onto the visual mode JarvisCore/Orchestra already render.
  * SPEAKING maps to "busy" — same visual treatment as THINKING/EXECUTING, just correctly
  * covering the TTS-playback window that the old flag-based code left unaccounted for. */
+function LensSparkShell({ children }: { children: React.ReactNode }) {
+  const lens = useLens();
+  const sparkColor = lens === "watch" ? "#FF6F37" : "#7dffe0";
+  return (
+    <ClickSpark className="relative flex h-screen flex-col overflow-hidden" sparkColor={sparkColor}>
+      {children}
+    </ClickSpark>
+  );
+}
+
+function BenchStagePanel({
+  scene,
+  focusTitle,
+  focus,
+  voice,
+  voiceVisible,
+  dimmed,
+}: {
+  scene: Scene;
+  focusTitle: string;
+  focus: Record<string, unknown>;
+  voice: string;
+  voiceVisible: boolean;
+  dimmed: boolean;
+}) {
+  const gatedScene = useValueWhenSettled(scene);
+  return (
+    <div className="relative h-full min-h-0 w-full overflow-hidden">
+      <EngineeringDesk
+        scene={gatedScene}
+        focusTitle={focusTitle}
+        focus={focus}
+        voice={voice}
+        voiceVisible={voiceVisible}
+        dimmed={dimmed}
+      />
+    </div>
+  );
+}
+
+function BenchQuotePanel({ scene }: { scene: Scene }) {
+  const gatedScene = useValueWhenSettled(scene);
+  return (
+    <div className="flex h-full min-h-0 flex-col overflow-hidden p-2">
+      <QuoteStack scene={gatedScene} />
+    </div>
+  );
+}
+
 function BenchAgentDots({ agents }: { agents: AgentNode[] }) {
   return (
     <div className="flex items-center gap-1.5">
@@ -194,14 +243,14 @@ function TasksDockPanel({
   onDismiss: (id: string) => void;
   onAction: (task: SuggestedTask, actionId: string) => void;
 }) {
-  const lens = usePane((s) => s.lens);
+  const displayLens = useDisplayLens();
   if (hitl) {
     return <div className="h-full min-h-[120px]" aria-hidden />;
   }
   return (
     <div className="flex h-full max-h-full min-h-0 flex-col overflow-hidden p-2">
       <SuggestedTasksPanel
-        variant={lens === "watch" ? "findings" : "suggested"}
+        variant={displayLens === "watch" ? "findings" : "suggested"}
         tasks={tasks}
         onDismiss={onDismiss}
         onAction={onAction}
@@ -219,15 +268,15 @@ function AgentsDockPanel({
   activity: ActivityItem[];
   hitl: boolean;
 }) {
-  const lens = usePane((s) => s.lens);
-  if (lens === "watch") {
+  const displayLens = useDisplayLens();
+  if (displayLens === "watch") {
     return (
       <div className="flex h-full min-h-[80px] items-end justify-center pb-2">
         <AgentOrbit agents={agents} activity={activity} dimmed={hitl} />
       </div>
     );
   }
-  if (lens === "converse") {
+  if (displayLens === "converse") {
     return (
       <div className="flex h-full w-full items-end justify-center pb-1">
         <Orchestra agents={agents} dimmed={hitl} />
@@ -264,7 +313,8 @@ function VoiceDockPanel({
   onLedgerTurnComplete: (output: ChatResponse) => void;
   onLedgerTurnFailed: (message: string) => void;
 }) {
-  const activeLens = usePane((s) => s.lens);
+  const activeLens = useDisplayLens();
+  const gatedScene = useValueWhenSettled(scene);
 
   if (activeLens === "watch") {
     const line = (voiceVisible && voice ? voice : focusTitle).slice(0, 120);
@@ -296,12 +346,12 @@ function VoiceDockPanel({
       >
         <VoiceLine text={voice} dimmed={Boolean(hitlAction)} />
       </div>
-      {sceneHasBoardContent(scene) ? (
+      {sceneHasBoardContent(gatedScene) ? (
         <SpotlightCard
           className="orch-board mt-4 w-full max-w-full rounded-2xl border border-[color:var(--border)] bg-black/35"
           bodyClassName="max-h-[32vh] overflow-y-auto p-4"
         >
-          <SceneBoard scene={scene} compact />
+          <SceneBoard scene={gatedScene} compact />
         </SpotlightCard>
       ) : null}
       {sending ? (
@@ -421,6 +471,18 @@ export function OrchestratorShell() {
     },
     [setWorkspaceExplicit],
   );
+
+  const persistWorkspaceIntent = useCallback((next: HudWorkspace) => {
+    const from = workspaceRef.current;
+    if (from === next) return;
+    workspaceRef.current = next;
+    persistWorkspace(next);
+    liveLog(
+      "workspace",
+      { from, to: next, pinned: workspacePinnedRef.current, reason: "switcher" },
+      { sessionId: sessionRef.current },
+    );
+  }, []);
 
   const toggleWorkspacePin = useCallback(() => {
     setWorkspacePinned((prev) => {
@@ -1282,10 +1344,7 @@ export function OrchestratorShell() {
   );
 
   const shellTree = (
-    <ClickSpark
-      className="relative flex h-screen flex-col overflow-hidden"
-      sparkColor={workspace === "monitor" ? "#FF6F37" : "#7dffe0"}
-    >
+    <LensSparkShell>
       <Pane
         workspace={workspace}
         workspacePinned={workspacePinned}
@@ -1300,7 +1359,7 @@ export function OrchestratorShell() {
         onComposeChange={setCompose}
         onComposeSubmit={(value) => void send(value)}
         onMic={() => void startMic()}
-        onSelectWorkspace={(ws) => setWorkspaceExplicit(ws, "switcher")}
+        onSelectWorkspace={persistWorkspaceIntent}
         onTogglePin={toggleWorkspacePin}
         onOpenPrefs={() => setPrefsOpen(true)}
         className="flex-1"
@@ -1358,22 +1417,16 @@ export function OrchestratorShell() {
             </div>
           ),
           stage: (
-            <div className="relative h-full min-h-0 w-full overflow-hidden">
-              <EngineeringDesk
-                scene={scene}
-                focusTitle={focusTitle}
-                focus={conversationFocus}
-                voice={voice}
-                voiceVisible={voiceVisible}
-                dimmed={Boolean(hitlAction)}
-              />
-            </div>
+            <BenchStagePanel
+              scene={scene}
+              focusTitle={focusTitle}
+              focus={conversationFocus}
+              voice={voice}
+              voiceVisible={voiceVisible}
+              dimmed={Boolean(hitlAction)}
+            />
           ),
-          sheet: (
-            <div className="flex h-full min-h-0 flex-col overflow-hidden p-2">
-              <QuoteStack scene={scene} />
-            </div>
-          ),
+          sheet: <BenchQuotePanel scene={scene} />,
         }}
       />
 
@@ -1420,19 +1473,20 @@ export function OrchestratorShell() {
         onDecide={(id, approved, fields) => void decide(id, approved, fields)}
       />
 
-    </ClickSpark>
+    </LensSparkShell>
   );
 
-  if (isJarvisPerfMode()) {
-    return (
-      <>
-        <Profiler id="OrchestratorShell" onRender={recordOrchestratorShellCommit}>
-          {shellTree}
-        </Profiler>
-        <PerfOverlay />
-      </>
-    );
-  }
-
-  return shellTree;
+  return (
+    <>
+      {isJarvisPerfMode() ? (
+        <>
+          <Profiler id="OrchestratorShell" onRender={recordOrchestratorShellCommit}>
+            <span data-orch-shell-probe hidden aria-hidden />
+          </Profiler>
+          <PerfOverlay />
+        </>
+      ) : null}
+      {shellTree}
+    </>
+  );
 }
