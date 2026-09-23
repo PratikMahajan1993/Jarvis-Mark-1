@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import threading
 import time
+import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -84,6 +85,69 @@ def _save_hermes_session(session_id: str, hermes_id: str) -> None:
             data = {}
     data[session_id] = hermes_id
     path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+
+def _quote_conversation_key(session_id: str) -> str:
+    return f"quote:{session_id}"
+
+
+def _load_sessions_data() -> dict[str, Any]:
+    path = _sessions_path()
+    if not path.exists():
+        return {}
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def _write_sessions_data(data: dict[str, Any]) -> None:
+    path = _sessions_path()
+    settings.data_dir.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+
+def _load_quote_conversation_title(session_id: str) -> str | None:
+    value = _load_sessions_data().get(_quote_conversation_key(session_id))
+    return str(value) if value else None
+
+
+def _save_quote_conversation_title(session_id: str, title: str) -> None:
+    data = _load_sessions_data()
+    data[_quote_conversation_key(session_id)] = title
+    _write_sessions_data(data)
+
+
+def _new_quote_conversation_title() -> str:
+    return f"jarvis-quote-{uuid.uuid4().hex[:12]}"
+
+
+_NON_QUOTE_CONVERSATION_KINDS = frozenset(
+    {"shop_read", "shop_write", "shop_bind", "shop_create", "briefing"}
+)
+
+
+def _turn_uses_default_hermes_conversation(message: str) -> bool:
+    kind = classify(message).kind
+    if kind.startswith("mail_"):
+        return True
+    if kind.startswith("calendar_"):
+        return True
+    return kind in _NON_QUOTE_CONVERSATION_KINDS
+
+
+def hermes_conversation_title(message: str, session_id: str) -> str:
+    """Hermes gateway conversation + X-Hermes-Session-Id for this turn."""
+    from ..intent import is_quote_start
+
+    if is_quote_start(message):
+        title = _new_quote_conversation_title()
+        _save_quote_conversation_title(session_id, title)
+        return title
+    saved = _load_quote_conversation_title(session_id)
+    if saved and not _turn_uses_default_hermes_conversation(message):
+        return saved
+    return hermes_session_title(session_id)
 
 
 def hermes_session_title(session_id: str) -> str:
@@ -516,7 +580,7 @@ def _gateway_chat(
 def _run_via_gateway(message: str, session_id: str, casual: bool) -> tuple[str, str, int]:
     """Warm API path. Returns (speak, session_label, elapsed_ms)."""
     base = hermes_gateway_url()
-    title = hermes_session_title(session_id)
+    title = hermes_conversation_title(message, session_id) if not casual else hermes_session_title(session_id)
     headers = {
         "Authorization": f"Bearer {settings.hermes_api_key}",
         "Content-Type": "application/json",
@@ -547,16 +611,11 @@ def _run_via_gateway(message: str, session_id: str, casual: bool) -> tuple[str, 
     try:
         with httpx.Client(timeout=timeout) as client:
             r = client.post(f"{base}/v1/responses", headers=headers, json=body)
-    except httpx.TimeoutException:
-        # Fall through — chat path still warm even when Responses stalls.
-        return _gateway_chat(
-            base=base,
-            headers=headers,
-            message=message,
-            session_id=session_id,
-            casual=False,
-            timeout=timeout,
-        )
+    except httpx.TimeoutException as exc:
+        elapsed_ms = int((time.monotonic() - started) * 1000)
+        raise RuntimeError(
+            f"Hermes timed out after {timeout:.0f}s ({elapsed_ms}ms)"
+        ) from exc
     elapsed_ms = int((time.monotonic() - started) * 1000)
     if r.status_code >= 400:
         detail = (r.text or "")[:500]
@@ -566,14 +625,7 @@ def _run_via_gateway(message: str, session_id: str, casual: bool) -> tuple[str, 
     hermes_id = str(payload.get("id") or title)
     if speak:
         return speak, hermes_id, elapsed_ms
-    return _gateway_chat(
-        base=base,
-        headers=headers,
-        message=message,
-        session_id=session_id,
-        casual=False,
-        timeout=timeout,
-    )
+    raise RuntimeError("Hermes returned no speakable text from responses API")
 
 
 def _run_via_cli(message: str, session_id: str, casual: bool) -> tuple[str, str | None, int]:
