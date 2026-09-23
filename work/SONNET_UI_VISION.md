@@ -601,7 +601,7 @@ Desk-only checks: Voicebox-driven `PresenceMode` timing, Hermes-fed findings gla
 
 ## 5. UI/UX Cursor Rules & Skills
 
-Create `.cursor/rules/frontend-uiux.mdc` with exactly the following contents. (This branch keeps scoped rules under `.cursor/rules/frontend/` with numeric prefixes; if the owner prefers that convention, the identical file lives at `.cursor/rules/frontend/22-frontend-uiux.mdc` — the frontmatter globs are unchanged either way.)
+The checked-in Cursor rule is `.cursor/rules/frontend/22-frontend-uiux.mdc` (word-capped enforceable subset; globs unchanged). Do not paste rules from this doc — edit the mdc when locks change. The block below is the full design narrative kept here for reference; it expands sections the mdc compresses.
 
 ````mdc
 ---

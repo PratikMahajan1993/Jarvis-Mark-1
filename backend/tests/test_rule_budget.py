@@ -41,6 +41,7 @@ EXPECTED_RULE_FILES = {
     "backend/13-turn-ledger.mdc",
     "frontend/20-hud-shell.mdc",
     "frontend/21-react-bits.mdc",
+    "frontend/22-frontend-uiux.mdc",
     *DOMAIN_EXPANDED,
     "domain/32-master-data.mdc",
     "domain/33-knowledge-rag.mdc",
