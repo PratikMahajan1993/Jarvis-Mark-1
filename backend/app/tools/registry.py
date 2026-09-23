@@ -185,6 +185,19 @@ def execute_tool(name: str, args: dict[str, Any], session_id: str) -> dict[str, 
             detail=f"unknown:{name}",
             status="error",
         )
+        if name.startswith("quote_"):
+            unknown_result = {"ok": False, "error": f"Unknown tool: {name}"}
+            try:
+                from ..quote_run_log import record as quote_record
+
+                quote_record(
+                    kind="tool",
+                    session_id=session_id,
+                    fields={"name": name, "args": args, "result": unknown_result},
+                )
+            except Exception:
+                pass
+            return unknown_result
         return {"ok": False, "error": f"Unknown tool: {name}"}
     try:
         record_mission_step(
@@ -208,6 +221,17 @@ def execute_tool(name: str, args: dict[str, Any], session_id: str) -> dict[str, 
             detail=str(result.get("data", result))[:800],
             status="ok" if result.get("ok", True) else "error",
         )
+        if name.startswith("quote_"):
+            try:
+                from ..quote_run_log import record as quote_record
+
+                quote_record(
+                    kind="tool",
+                    session_id=session_id,
+                    fields={"name": name, "args": args, "result": result},
+                )
+            except Exception:
+                pass
         return result
     except TypeError as exc:
         db.add_audit(session_id, name, str(exc), "error")

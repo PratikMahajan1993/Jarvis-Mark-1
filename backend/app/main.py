@@ -493,7 +493,27 @@ async def api_chat(payload: ChatRequest, request: Request) -> dict:
         )
     except Exception:
         pass
+    try:
+        from .quote_run_log import record as quote_record
+
+        quote_record(
+            kind="chat_in",
+            session_id=payload.session_id,
+            fields={"message": message},
+        )
+    except Exception:
+        pass
     classification = try_obvious_casual(message) or await classify_intent(message)
+    try:
+        from .quote_run_log import record as quote_record, route_fields
+
+        quote_record(
+            kind="route",
+            session_id=payload.session_id,
+            fields=route_fields(classification),
+        )
+    except Exception:
+        pass
 
     if classification.intent == "ui_command":
         result = handle_ui_command(message, payload.session_id, classification)
@@ -518,6 +538,16 @@ async def api_chat(payload: ChatRequest, request: Request) -> dict:
             session_id=payload.session_id,
             latency_ms=int((time.perf_counter() - t0) * 1000),
             fields=chat_out_fields(data),
+        )
+    except Exception:
+        pass
+    try:
+        from .quote_run_log import chat_out_fields as quote_chat_out_fields, record as quote_record
+
+        quote_record(
+            kind="chat_out",
+            session_id=payload.session_id,
+            fields=quote_chat_out_fields(data, latency_ms=int((time.perf_counter() - t0) * 1000)),
         )
     except Exception:
         pass
@@ -596,6 +626,21 @@ def api_confirm(payload: ConfirmRequest, request: Request) -> dict:
                 "speak": str(data.get("speak") or "").strip(),
                 "pending": chat_out_fields(data).get("pending"),
             },
+        )
+    except Exception:
+        pass
+    try:
+        from .quote_run_log import confirm_fields, record as quote_record
+
+        quote_record(
+            kind="confirm",
+            session_id=payload.session_id,
+            fields=confirm_fields(
+                decision="Authorize" if payload.approved else "Reject",
+                action_id=payload.action_id,
+                data=data,
+                latency_ms=int((time.perf_counter() - t0) * 1000),
+            ),
         )
     except Exception:
         pass

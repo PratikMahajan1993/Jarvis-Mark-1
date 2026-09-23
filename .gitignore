@@ -14,6 +14,7 @@ backend/exports/
 /exports/
 work/LAST_TURNS.md
 work/LIVE_TEST.md
+work/QUOTE_RUN.md
 data/live_test.jsonl
 **/live_test.jsonl
 *.db

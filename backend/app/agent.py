@@ -1109,24 +1109,60 @@ def _run_agent(message: str, session_id: str = "default", route=None) -> ChatRes
         db.add_message(session_id, "assistant", result.speak or "")
         return result
 
-    if route_intent == "casual_chat" and intent.kind == "chat" and not is_drawing_session(session_id):
-        return _run_casual_gemini(message, session_id, prefs)
-
     # Hermes-first when gateway is warm; Gemini legacy only on miss/unavailable.
     use_hermes = app_settings.hermes_enabled and hermes_available()
     router_casual = route_intent == "casual_chat"
 
+    hermes_last_error: list[str | None] = [None]
+
+    def _log_brain(**fields: Any) -> None:
+        try:
+            from .quote_run_log import record as quote_record
+
+            quote_record(kind="brain", session_id=session_id, fields=fields)
+        except Exception:
+            pass
+
+    if route_intent == "casual_chat" and intent.kind == "chat" and not is_drawing_session(session_id):
+        import time as _time
+
+        _cg_t0 = _time.perf_counter()
+        _cg_resp = _run_casual_gemini(message, session_id, prefs)
+        _log_brain(
+            brain="casual_gemini",
+            model=app_settings.gemini_model,
+            latency_ms=int((_time.perf_counter() - _cg_t0) * 1000),
+        )
+        return _cg_resp
+
     def _hermes_reply(*, force_casual: bool | None = None) -> ChatResponse | None:
         if not use_hermes:
             return None
+        import time as _time
+
         casual_flag = force_casual if force_casual is not None else (True if router_casual else None)
+        t0 = _time.perf_counter()
         try:
             result = run_hermes_turn(message, session_id, casual=casual_flag)
             db.add_message(session_id, "assistant", result.speak or result.reply or "")
             db.add_audit(session_id, "hermes", (result.speak or "")[:400], "ok")
+            _log_brain(
+                brain="hermes",
+                model="hermes-agent",
+                latency_ms=int((_time.perf_counter() - t0) * 1000),
+            )
+            hermes_last_error[0] = None
             return result
         except Exception as exc:
-            db.add_audit(session_id, "hermes", str(exc)[:400], "error")
+            err = str(exc)
+            db.add_audit(session_id, "hermes", err[:400], "error")
+            hermes_last_error[0] = err
+            _log_brain(
+                brain="hermes",
+                model="hermes-agent",
+                latency_ms=int((_time.perf_counter() - t0) * 1000),
+                error=err,
+            )
             return None
 
     from .snapshot import refresh as snapshot_refresh
@@ -1161,6 +1197,8 @@ def _run_agent(message: str, session_id: str = "default", route=None) -> ChatRes
         hit = _hermes_reply(force_casual=False)
         if hit is not None:
             return hit
+        if use_hermes and hermes_last_error[0] is None:
+            hermes_last_error[0] = "returned none"
 
     # Local mail/calendar/briefing: skip Hermes when snapshot-ready (unless already tried above)
     if local_fast and mail_pref_ok and route_intent != "tool_ops":
@@ -1175,6 +1213,8 @@ def _run_agent(message: str, session_id: str = "default", route=None) -> ChatRes
         hit = _hermes_reply(force_casual=True if router_casual else None)
         if hit is not None:
             return hit
+        if use_hermes and hermes_last_error[0] is None:
+            hermes_last_error[0] = "returned none"
 
     # Soft fallback / Hermes-down: definitional RFQ must be chat, never reason_rfq.
     if is_rfq_definition(message):
@@ -1187,9 +1227,33 @@ def _run_agent(message: str, session_id: str = "default", route=None) -> ChatRes
             "Which drawing should I quote — an inbox attachment, a file on the desk, or a photo?"
         )
         db.add_message(session_id, "assistant", speak)
+        fb_fields: dict[str, Any] = {
+            "brain": "quote_fallback",
+            "model": "none",
+            "speak": speak,
+        }
+        if hermes_last_error[0]:
+            fb_fields["error"] = hermes_last_error[0]
+        elif not use_hermes:
+            fb_fields["error"] = "hermes unavailable"
+        _log_brain(**fb_fields)
         return _chat_response(session_id, speak=speak)
 
-    return _run_agent_legacy(message, session_id, prefs=prefs, intent=intent, heard=heard)
+    import time as _time
+
+    from .brain import provider as brain_provider
+
+    _leg_t0 = _time.perf_counter()
+    _leg_resp = _run_agent_legacy(message, session_id, prefs=prefs, intent=intent, heard=heard)
+    prov = brain_provider()
+    leg_model = app_settings.gemini_model if prov == "gemini" else app_settings.ollama_model
+    _log_brain(
+        brain="legacy",
+        provider=prov,
+        model=leg_model,
+        latency_ms=int((_time.perf_counter() - _leg_t0) * 1000),
+    )
+    return _leg_resp
 
 
 def _run_agent_legacy(
