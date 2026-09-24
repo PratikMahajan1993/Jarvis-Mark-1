@@ -71,7 +71,8 @@ import {
 } from "./hudWorkspace";
 import { TurnStageLine } from "./TurnStageLine";
 import { Pane } from "@/components/pane/Pane";
-import { useDisplayLens, useLens } from "@/lib/pane/paneStore";
+import { useDisplayLens, useLens, usePane } from "@/lib/pane/paneStore";
+import { useWatchFindingsGlance } from "@/components/pane/useWatchFindingsGlance";
 import { useValueWhenSettled } from "@/lib/pane/useLensSettled";
 
 const AMBIENT_SESSION = "default";
@@ -192,6 +193,8 @@ function TasksDockPanel({
   onAction: (task: SuggestedTask, actionId: string) => void;
 }) {
   const displayLens = useDisplayLens();
+  const watchFindings = displayLens === "watch" && !hitl;
+  useWatchFindingsGlance(tasks, watchFindings);
   if (hitl) {
     return <div className="h-full min-h-[120px]" aria-hidden />;
   }
@@ -217,10 +220,16 @@ function AgentsDockPanel({
   hitl: boolean;
 }) {
   const displayLens = useDisplayLens();
+  const presenceMode = usePane((s) => s.mode);
   if (displayLens === "watch") {
     return (
       <div className="flex h-full items-end justify-center pb-3">
-        <AgentOrbit agents={agents} activity={activity} dimmed={hitl} />
+        <AgentOrbit
+          agents={agents}
+          activity={activity}
+          dimmed={hitl}
+          idlePresence={!hitl && presenceMode === "idle"}
+        />
       </div>
     );
   }

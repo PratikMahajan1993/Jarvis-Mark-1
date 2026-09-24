@@ -23,6 +23,7 @@ import { StatusCluster } from "./StatusCluster";
 import { Substrate } from "./Substrate";
 import { useSyncWorkspaceLens } from "./LensTabs";
 import { Vignette } from "./Vignette";
+import { usePaneIdleDim } from "./usePaneIdleDim";
 
 export type PanePanels = {
   voice: ReactNode;
@@ -96,6 +97,7 @@ export function Pane({
   const displayLens = useDisplayLens();
   const initialized = useRef(false);
 
+  usePaneIdleDim(rootRef, orchestratorMode, listening);
   useSyncWorkspaceLens(workspace);
 
   useEffect(() => {

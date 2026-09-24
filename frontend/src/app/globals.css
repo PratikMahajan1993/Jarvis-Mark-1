@@ -32,6 +32,11 @@
   inherits: true;
   initial-value: oklch(74% 0.15 160);
 }
+@property --pane-brightness {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 1;
+}
 
 :root {
   color-scheme: dark;
@@ -64,8 +69,10 @@ body {
 /* ---- Orchestrator (Open Design) ------------------------------------ */
 
 .orch-root {
+  --pane-brightness: 1;
   background-color: var(--bg);
   color: var(--fg);
+  filter: brightness(var(--pane-brightness));
 }
 
 .orch-root[data-phase="moving"] .pane-dock {

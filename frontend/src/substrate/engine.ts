@@ -11,6 +11,7 @@ import {
   LENS_SUBSTRATE,
   type Lens,
   type SubstrateCanvas,
+  type PresenceMode,
   type SubstrateIn,
   type SubstrateOut,
 } from "./protocol";
@@ -35,6 +36,8 @@ const RECOVER_HOLD_MS = 5000;
 const QUALITY_COOLDOWN_MS = 2000;
 const PILOT_SCALE = 0.15;
 const WEIGHT_EPS = 0.01;
+const BREATH_PERIOD_S = 7;
+const BREATH_AMP = 0.06;
 
 function generateNoiseTexture(size = EYE_NOISE_SIZE): Uint8Array {
   const data = new Uint8Array(size * size * 4);
@@ -131,8 +134,11 @@ export class SubstrateEngine {
   private settledPosted = false;
 
   private lens: Lens = "watch";
+  private presenceMode: PresenceMode = "idle";
   private springs: Springs = springsFromPreset("watch");
   private mouse = { x: 0, y: 0, tx: 0, ty: 0 };
+  private pointerTarget = { x: 0, y: 0 };
+  private glance: { x: number; y: number; until: number } | null = null;
 
   private frameDeltas: number[] = [];
   private lastStatsAt = 0;
@@ -170,10 +176,16 @@ export class SubstrateEngine {
         this.setLens(msg.lens, false);
         break;
       case "pointer":
-        this.mouse.tx = msg.x;
-        this.mouse.ty = msg.y;
+        this.pointerTarget.x = msg.x;
+        this.pointerTarget.y = msg.y;
+        if (!this.glance) {
+          this.mouse.tx = msg.x;
+          this.mouse.ty = msg.y;
+        }
         break;
       case "glance":
+        if (this.reducedMotion) break;
+        this.glance = { x: msg.x, y: msg.y, until: performance.now() + msg.ms };
         this.mouse.tx = msg.x;
         this.mouse.ty = msg.y;
         break;
@@ -190,6 +202,7 @@ export class SubstrateEngine {
         this.applyQualityOverride(msg.scale, msg.fps);
         break;
       case "mode":
+        this.presenceMode = msg.mode;
         break;
       default:
         break;
@@ -492,6 +505,15 @@ export class SubstrateEngine {
       stepSpring(this.springs.dim, dt, HERO_SPRING);
     }
 
+    if (this.glance && performance.now() >= this.glance.until) {
+      this.glance = null;
+      this.mouse.tx = this.pointerTarget.x;
+      this.mouse.ty = this.pointerTarget.y;
+    } else if (this.glance) {
+      this.mouse.tx = this.glance.x;
+      this.mouse.ty = this.glance.y;
+    }
+
     if (!this.frozen) {
       this.mouse.x += (this.mouse.tx - this.mouse.x) * 0.05;
       this.mouse.y += (this.mouse.ty - this.mouse.y) * 0.05;
@@ -540,7 +562,14 @@ export class SubstrateEngine {
 
     // Continuous frame clock — no 30 Hz quant (that hold-and-jump made the iris flake).
     const tMs = this.frozen || this.reducedMotion ? this.frozenTime || time : time;
-    this.presenceProgram.uniforms.uTime.value = tMs * 0.001;
+    const tSec = tMs * 0.001;
+    this.presenceProgram.uniforms.uTime.value = tSec;
+
+    let intensity = STOCK_EYE.intensity;
+    if (!this.reducedMotion && eye > WEIGHT_EPS && this.lens === "watch") {
+      intensity *= 1 + BREATH_AMP * Math.sin((2 * Math.PI * tSec) / BREATH_PERIOD_S);
+    }
+    this.presenceProgram.uniforms.uIntensity.value = intensity;
 
     const pilot = scale < PILOT_SCALE;
     const glW = gl.canvas.width;
