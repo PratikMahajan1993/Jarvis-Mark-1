@@ -99,6 +99,18 @@ def test_rm_basis_over_30_warns_draft_blocks_send(monkeypatch):
     assert send["stop"] is True
 
 
+def test_malformed_rm_basis_date_fails_closed(monkeypatch):
+    """LOGIC-4b: a present but unparseable basis date is a BLOCKER, same as empty."""
+    monkeypatch.setattr(quote_mod, "_quote_calendar_today", lambda: date(2026, 3, 5))
+    session = "q5b-rm-malformed"
+    _minimal_send_ready(session, basis_date="not-a-date")
+    result = verify_quote(session_id=session, stage="send")
+    by_id = {c["id"]: c for c in result["checks"]}
+    assert by_id["rm_basis_date"]["pass"] is False
+    assert by_id["rm_basis_date"]["severity"] == "BLOCKER"
+    assert result["stop"] is True
+
+
 def test_undated_rm_basis_still_blocker(monkeypatch):
     monkeypatch.setattr(quote_mod, "_quote_calendar_today", lambda: date(2026, 3, 5))
     session = "q5b-rm-undated"

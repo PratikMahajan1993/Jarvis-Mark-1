@@ -392,6 +392,7 @@ def _instructions(casual: bool, session_id: str, message: str = "") -> str:
         return (
             "You are Jarvis: dry, sharp, wickedly witty British aide. "
             f"{CASUAL_PERSONA} "
+            "Bare greetings use the same lines as social_fallback in casual_voice. "
             "Reply in one or two short spoken sentences unless they ask to expand. Do not use tools."
         )
     base = (

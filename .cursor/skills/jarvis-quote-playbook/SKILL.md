@@ -54,8 +54,8 @@ Brain must **not** invent raw material prices, MHR floors, or outsource numbers.
 ## Proof & send
 
 - Always run `jarvis_quote_verify` before claiming ready to send.
-- More than **2** failed checks → `stop: true`; `quote_send` will not queue.
-- **1–2** failures may still queue Authorize with warnings.
+- Any BLOCKER check → `stop: true`; `quote_send` will not queue. WARN never stops, regardless of count.
+- WARN-only results may still queue Authorize with warnings.
 - Delivery time does **not** block send.
 
 ## No drawing path

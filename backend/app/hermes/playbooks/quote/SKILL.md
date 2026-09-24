@@ -61,8 +61,8 @@ Customer email (draft for send tool): short formal body, **total quoted cost in 
 ## Proof and send
 
 - Always `jarvis_quote_verify` before saying ready to send.
-- `stop: true` when more than 2 checks fail — fix process; do not queue send.
-- 1–2 fails: owner may edit and re-verify; send may still queue with loud warnings.
+- `stop: true` when any check is a BLOCKER — fix process; do not queue send. WARN never stops, regardless of count.
+- WARN-only: owner may edit and re-verify; send may still queue with loud warnings.
 - `jarvis_quote_send` attaches verify snapshot, refuses when `stop: true`, never sets `sent: true`.
 
 ## Toolbox
@@ -71,6 +71,7 @@ Customer email (draft for send tool): short formal body, **total quoted cost in 
 | --- | --- |
 | `files/INDEX.md` | File map |
 | `files/mhr-demo.md` | DEMO minimum MHR by machine type |
+| `files/mhr-demo-attestation.md` | Owner sign-off for those demo floors. Blank cells block proof. |
 | `files/rate-rules.md` | Where prices may come from |
 | `files/tone-rules.md` | Customer email/PDF tone |
 | `files/quote-template.md` | Quotation sections |

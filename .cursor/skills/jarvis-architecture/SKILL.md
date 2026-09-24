@@ -20,7 +20,7 @@ description: >
 - **API:** FastAPI `backend/app/main.py` → agent/tools/conversations
 - **Brain:** Hermes gateway `http://127.0.0.1:8642` preferred; Gemini/Ollama fallback
 - **TTS:** Voicebox `http://127.0.0.1:17493` — Jarvis calls **`/generate`**, browser plays WAV from `/api/tts`
-- **Memory:** SQLite + LanceDB; dual-write with Honcho when Hermes remembers
+- **Memory:** SQLite under `data/memory/` is the source of truth. Search reads the local LanceDB mirror when it is available, and SQLite when it is not.
 
 ## Ownership
 

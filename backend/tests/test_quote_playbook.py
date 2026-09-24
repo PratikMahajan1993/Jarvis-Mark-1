@@ -278,7 +278,8 @@ def test_quote_build_tool_round_trips_scope_and_mhr_into_verify():
     verify = verify_quote(session_id=session)
     by_id = {c["id"]: c for c in verify["checks"]}
     assert by_id["scope_labour_no_rm"]["pass"] is True
-    assert by_id["mhr_demo_floor"]["pass"] is True
+    assert by_id["mhr_demo_floor"]["pass"] is False
+    assert "not owner-attested" in by_id["mhr_demo_floor"]["evidence"]
     assert by_id["unit_prices"]["pass"] is True
 
 

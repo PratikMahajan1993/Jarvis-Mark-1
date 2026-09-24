@@ -20,6 +20,7 @@ _PLAYBOOK_ROOT = Path(__file__).resolve().parent / "hermes" / "playbooks" / "quo
 PLAYBOOK_NOTES_PATH = _PLAYBOOK_ROOT / "notes.md"
 CLIENT_NAMES_PATH = _PLAYBOOK_ROOT / "files" / "client-names.md"
 MHR_DEMO_PATH = _PLAYBOOK_ROOT / "files" / "mhr-demo.md"
+MHR_ATTEST_PATH = _PLAYBOOK_ROOT / "files" / "mhr-demo-attestation.md"
 
 _RM_ROW_RE = re.compile(r"raw\s*material|\brm\b|material\s*supply|material\s*purchase", re.I)
 
@@ -142,6 +143,25 @@ def _parse_mhr_demo_mins() -> dict[str, float]:
         if rate is not None:
             mins[parts[0].strip().lower()] = rate
     return mins
+
+
+def _parse_mhr_attestation() -> dict[str, tuple[str, str]]:
+    """Owner sign-off for the markdown MHR fallback. Empty means not attested."""
+    path = MHR_ATTEST_PATH
+    if not path.is_file():
+        return {}
+    signed: dict[str, tuple[str, str]] = {}
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if "|" not in line:
+            continue
+        parts = [p.strip() for p in line.strip().strip("|").split("|")]
+        if len(parts) < 3:
+            continue
+        head = parts[0].lower()
+        if not head or head in {"machine type", "---"} or set(head) <= {"-"}:
+            continue
+        signed[parts[0].strip().lower()] = (parts[1].strip(), parts[2].strip())
+    return signed
 
 
 def _row_item_text(row: list[Any]) -> str:
@@ -411,8 +431,8 @@ def _rm_basis_date_check(
     if age is None:
         return _check(
             "rm_basis_date",
-            True,
-            basis_date[:40],
+            False,
+            f"Raw-material basis date is not a valid date ({basis_date[:40]})",
             "last_quote_rm_basis_date",
         )
     if age <= 24:
@@ -952,7 +972,9 @@ def verify_quote(*, session_id: str, stage: str = "draft") -> dict[str, Any]:
                     )
             else:
                 demo_mins = _parse_mhr_demo_mins()
+                attestation = _parse_mhr_attestation()
                 floor = demo_mins.get(machine.lower())
+                signed_by, signed_on = attestation.get(machine.lower(), ("", ""))
                 if floor is None:
                     checks.append(
                         _check(
@@ -962,13 +984,22 @@ def verify_quote(*, session_id: str, stage: str = "draft") -> dict[str, Any]:
                             "mhr-demo.md",
                         )
                     )
+                elif not signed_by or not signed_on:
+                    checks.append(
+                        _check(
+                            "mhr_demo_floor",
+                            False,
+                            f"{machine} MHR floor {floor} is not owner-attested (mhr-demo-attestation.md)",
+                            "mhr-demo-attestation.md",
+                        )
+                    )
                 elif mhr_rate >= floor:
                     checks.append(
                         _check(
                             "mhr_demo_floor",
                             True,
-                            f"{machine} rate {mhr_rate} ≥ demo minimum {floor}",
-                            "mhr-demo.md",
+                            f"{machine} rate {mhr_rate} ≥ demo minimum {floor}, attested {signed_on} by {signed_by}",
+                            "mhr-demo-attestation.md",
                         )
                     )
                 else:

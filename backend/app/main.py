@@ -15,7 +15,14 @@ from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Resp
 from pydantic import BaseModel
 
 from . import db
-from .agent import next_thought, resolve_pending, run_agent, run_attachment_reply, run_attachment_save
+from .agent import (
+    next_thought,
+    reconcile_external_effects_on_boot,
+    resolve_pending,
+    run_agent,
+    run_attachment_reply,
+    run_attachment_save,
+)
 from .briefing import build_briefing, build_glance
 from .config import settings
 from .connectors.calendar import live as calendar_live, seed_calendar
@@ -110,6 +117,7 @@ app.add_middleware(
 
 def startup() -> None:
     db.init_db()
+    reconcile_external_effects_on_boot()
     if not gmail_live():
         seed_mailbox()
         ensure_demo_people()

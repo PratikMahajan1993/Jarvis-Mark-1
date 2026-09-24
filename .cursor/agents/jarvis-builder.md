@@ -31,7 +31,7 @@ if assigned — but prefer the coordinator routing those to specialists next tim
 
 - Tools own mail, calendar, files, Drive, search. Brain does not invent facts.
 - HITL for send mail, Task for Gemini, calendar writes, quote send, broad wipe.
-- Files only under `backend/exports`.
+- Files only under `<repo>/exports/`.
 - Max 3 expanded Open notes.
 - React Bits = accents from `frontend/src/components/react-bits/` only.
 

@@ -79,6 +79,8 @@ class Settings(BaseSettings):
     voicebox_profile: str = "Mark"
     voicebox_timeout_sec: float = 45.0
 
+    # Five forks. Defaults stay False until the next session turns them on.
+    # Flip conditions and fallback removal: work/FLAG_LEDGER.md.
     # Turn ledger (accept-then-work); dark until HUD reconciles against server rows.
     turn_ledger_enabled: bool = False
 

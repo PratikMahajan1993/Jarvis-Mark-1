@@ -9,9 +9,11 @@ alwaysApply: true
 - Brain: Hermes gateway :8642 for shop work; Gemini for casual and vision; Ollama last.
 - TTS: Voicebox :17493, `POST /generate` only (never `/speak`).
 - Data: `<repo>/data/jarvis.db`. Written files: `<repo>/exports/` only.
-- One shell: `OrchestratorShell`. Turn state is a server ledger projected by
-  `frontend/src/lib/orchestratorFsm.ts`. Workspaces (`casual|monitor|engineering`)
-  are a separate layer and never collapse into turn state.
+- One shell: `OrchestratorShell`. Turn state is synchronous by default. The
+  server ledger behind `turn_ledger_enabled` (off by default) is future work,
+  not yet load-bearing; `orchestratorFsm.ts` projects it only when on. Workspaces
+  (`casual|monitor|engineering`) are a separate layer and never collapse
+  into turn state.
 - Tools own mail, calendar, files, and every number. The model never invents a
   price, rate, dimension, mail, or calendar fact. No source → ask.
 - Authorize (HITL) before any external or destructive act: send mail, calendar

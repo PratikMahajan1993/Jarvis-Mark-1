@@ -127,13 +127,51 @@ def upsert(
     return {"id": doc_id, "namespace": ns, "key": key, "text": text, "meta": meta}
 
 
-def search(
-    query: str,
-    *,
-    namespace: str | None = None,
-    limit: int = 8,
-) -> list[dict[str, Any]]:
-    _ensure_schema()
+def _lance_table():
+    ldb = _get_lance()
+    if ldb is None:
+        return None
+    try:
+        try:
+            names = set(ldb.list_tables())
+        except Exception:
+            names = set(ldb.table_names())
+        if "jarvis_memory" not in names:
+            return None
+        return ldb.open_table("jarvis_memory")
+    except Exception:
+        return None
+
+
+def _lance_delete(predicate: str) -> None:
+    table = _lance_table()
+    if table is None:
+        return
+    try:
+        table.delete(predicate)
+    except Exception:
+        pass
+
+
+def _hit_from_row(row: dict[str, Any], score: float) -> dict[str, Any]:
+    meta: dict[str, Any] = {}
+    raw_meta = row.get("meta") or "{}"
+    try:
+        meta = json.loads(raw_meta) if isinstance(raw_meta, str) else dict(raw_meta)
+    except (json.JSONDecodeError, TypeError, ValueError):
+        meta = {}
+    return {
+        "id": row.get("id"),
+        "namespace": row.get("namespace"),
+        "key": row.get("key"),
+        "text": row.get("text") or "",
+        "meta": meta,
+        "score": round(score, 4),
+        "updated_at": row.get("updated_at"),
+    }
+
+
+def _sqlite_search(query: str, *, namespace: str | None, limit: int) -> list[dict[str, Any]]:
     qvec = embed_text(query)
     with db.connect() as conn:
         if namespace:
@@ -150,28 +188,45 @@ def search(
             vec = json.loads(item.get("vector") or "[]")
         except json.JSONDecodeError:
             vec = []
-        score = cosine(qvec, vec)
-        meta = {}
-        try:
-            meta = json.loads(item.get("meta") or "{}")
-        except json.JSONDecodeError:
-            meta = {}
-        scored.append(
-            (
-                score,
-                {
-                    "id": item["id"],
-                    "namespace": item["namespace"],
-                    "key": item["key"],
-                    "text": item["text"],
-                    "meta": meta,
-                    "score": round(score, 4),
-                    "updated_at": item.get("updated_at"),
-                },
-            )
-        )
-    scored.sort(key=lambda x: x[0], reverse=True)
+        scored.append((cosine(qvec, vec), _hit_from_row(item, cosine(qvec, vec))))
+    scored.sort(key=lambda pair: pair[0], reverse=True)
     return [item for _, item in scored[: max(1, min(limit, 50))]]
+
+
+def _lance_search(query: str, *, namespace: str | None, limit: int) -> list[dict[str, Any]] | None:
+    table = _lance_table()
+    if table is None:
+        return None
+    try:
+        q = table.search(embed_text(query)).limit(max(1, min(limit, 50)))
+        if namespace:
+            ns = namespace.strip().lower().replace("'", "")
+            q = q.where(f"namespace = '{ns}'")
+        rows = q.to_list()
+    except Exception:
+        return None
+    hits: list[dict[str, Any]] = []
+    for row in rows:
+        distance = row.get("_distance")
+        try:
+            score = 1.0 / (1.0 + float(distance)) if distance is not None else 0.0
+        except (TypeError, ValueError):
+            score = 0.0
+        hits.append(_hit_from_row(row, score))
+    return hits
+
+
+def search(
+    query: str,
+    *,
+    namespace: str | None = None,
+    limit: int = 8,
+) -> list[dict[str, Any]]:
+    _ensure_schema()
+    lance_hits = _lance_search(query, namespace=namespace, limit=limit)
+    if lance_hits:
+        return lance_hits
+    return _sqlite_search(query, namespace=namespace, limit=limit)
 
 
 def forget(
@@ -201,6 +256,14 @@ def forget(
             deleted = cur.rowcount or 0
         else:
             return {"ok": False, "error": "Specify doc_id, or namespace+key, or wipe_namespace"}
+    if doc_id:
+        _lance_delete(f"id = '{doc_id.replace(chr(39), '')}'")
+    elif wipe_namespace and namespace:
+        ns = namespace.strip().lower().replace("'", "")
+        _lance_delete(f"namespace = '{ns}'")
+    elif namespace and key:
+        ns = namespace.strip().lower().replace("'", "")
+        _lance_delete(f"namespace = '{ns}' AND key = '{key.replace(chr(39), '')}'")
     return {"ok": True, "deleted": deleted}
 
 

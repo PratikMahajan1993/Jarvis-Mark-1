@@ -19,3 +19,7 @@ One WebGL context in `frontend/src/substrate/` (worker + shim); never a second c
 ## State and bench
 
 `lib/pane/paneStore.ts` external store (`useSyncExternalStore`); no lens in React context or turn FSM. Heavy work gates on `useLensSettled()`. Bench: `stage`, `strip`, `sheet` only; tabbed sheet, not stacked cards. Provenance glyphs ● ◉ ◐ ○ — no guess numerals. Proof strip mirrors `quote_verify`; Authorize / Reject only. `DrawingViewer` wrapped by `DrawingStage`, not forked.
+
+## Canvas
+
+`/canvas` (`CanvasShell`) stays a separate route with its own boards API. It is not a fourth lens and is not part of the pane. The single-pane rules above govern `OrchestratorShell` only. Leave the board as its own surface.

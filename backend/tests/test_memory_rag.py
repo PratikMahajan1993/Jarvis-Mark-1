@@ -29,6 +29,8 @@ def test_memory_upsert_search_forget():
     deleted = forget(namespace="people", key="koso-deepak")
     assert deleted["ok"]
     assert deleted["deleted"] >= 1
+    again = search("KOSO Deepak quote drawings", namespace="people", limit=5)
+    assert all(hit.get("key") != "koso-deepak" for hit in again)
 
 
 def test_memory_tools_via_registry():

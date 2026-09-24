@@ -797,31 +797,9 @@ def _looks_like_error(text: str) -> bool:
 
 
 def _social_reply(message: str, prefs: dict[str, Any]) -> str:
-    text = prepare(message)
-    cleaned = re.sub(r"[!.?,]", "", (text or "").strip())
-    cleaned = re.sub(r"\s+", " ", cleaned).lower()
-    who = prefs.get("display_name") or "Sir"
-    replies = {
-        "how are you": f"In order, {who}. What do you need?",
-        "how are you doing": f"In order, {who}. What do you need?",
-        "thanks": "Of course.",
-        "thank you": "Of course.",
-        "thanks jarvis": "Of course.",
-        "who are you": "Jarvis. Your aide.",
-        "hello": "Yes?",
-        "hi": "Yes?",
-        "hey": "Yes?",
-        "good morning": "Good morning.",
-        "good evening": "Good evening.",
-        "good afternoon": "Good afternoon.",
-        "don't reply": "Understood. I will not reply.",
-        "dont reply": "Understood. I will not reply.",
-        "do not reply": "Understood. I will not reply.",
-        "do not send this email": "Understood. I will not send it.",
-        "don't send": "Understood. I will not send it.",
-        "dont send": "Understood. I will not send it.",
-    }
-    return replies.get(cleaned, "")
+    from .casual_voice import social_fallback
+
+    return social_fallback(message, prefs)
 
 
 def _speak_from_scene(scene: Scene | None, used_tools: bool) -> str:
