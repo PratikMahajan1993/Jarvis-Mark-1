@@ -164,15 +164,23 @@ export function Pane({
         agentsSlot={panels.agentsStatus}
       />
       {!bench ? (
-        <CommandBaton
-          value={compose}
-          onChange={onComposeChange}
-          onSubmit={onComposeSubmit}
-          onMic={onMic}
-          listening={listening}
-          disabled={batonDisabled}
-          hidden={batonHidden}
-        />
+        <div
+          className="pointer-events-none absolute inset-x-[calc(var(--inset,16px)+(100%-2*var(--inset,16px))*3/12+var(--gutter,12px))] bottom-[calc(var(--strip,72px)*0.18)] z-20 flex justify-center"
+          aria-hidden={batonHidden}
+        >
+          <div className="pointer-events-auto">
+            <CommandBaton
+              value={compose}
+              onChange={onComposeChange}
+              onSubmit={onComposeSubmit}
+              onMic={onMic}
+              listening={listening}
+              disabled={batonDisabled}
+              hidden={batonHidden}
+              absolute={false}
+            />
+          </div>
+        </div>
       ) : null}
     </div>
   );

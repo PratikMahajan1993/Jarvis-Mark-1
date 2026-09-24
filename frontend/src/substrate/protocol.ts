@@ -43,7 +43,8 @@ export const LENS_SUBSTRATE: Record<
   }
 > = {
   watch: { eye: 1, orb: 0, center: [0.5, 0.5], scale: 1, accent: [1.0, 0.435, 0.216], dim: 1 },
-  converse: { eye: 0, orb: 1, center: [0.5, 0.5], scale: 1, accent: [0.49, 1.0, 0.878], dim: 1 },
+  /* Converse: softer mint presence so DOM rings read over the orb, not a white lamp. */
+  converse: { eye: 0, orb: 1, center: [0.5, 0.5], scale: 0.88, accent: [0.49, 1.0, 0.878], dim: 0.28 },
   bench: {
     eye: 0,
     orb: 1,

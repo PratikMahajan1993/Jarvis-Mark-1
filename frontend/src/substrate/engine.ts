@@ -24,10 +24,10 @@ import {
   type SpringState,
 } from "./spring";
 
-const EYE_NOISE_SIZE = 128;
-const EYE_FRAME_MS = 1000 / 30;
+const EYE_NOISE_SIZE = 256;
 const STATS_MS = 1000;
-const QUALITY_SCALES = [0.6, 0.5, 0.4] as const;
+/* Idle Watch stays at 1.0; degrade notches stay above the old chunky 0.6 floor. */
+const QUALITY_SCALES = [1.0, 0.8, 0.65] as const;
 const QUALITY_FPS: readonly (30 | 60)[] = [60, 30, 30];
 const P95_DEGRADE_MS = 20;
 const P95_RECOVER_MS = 14;
@@ -65,8 +65,9 @@ function generateNoiseTexture(size = EYE_NOISE_SIZE): Uint8Array {
       let v = 0;
       let amp = 0.4;
       let totalAmp = 0;
-      for (let o = 0; o < 8; o++) {
-        const f = 32 * (1 << o);
+      // Freqs ≤ half the texture (256 → 128). Start ~8, five octaves — no sub-texel hash static.
+      for (let o = 0; o < 5; o++) {
+        const f = 8 * (1 << o);
         v += amp * noise(x, y, f, o * 31);
         totalAmp += amp;
         amp *= 0.65;
@@ -404,7 +405,7 @@ export class SubstrateEngine {
     this.lastQualityChangeAt = performance.now();
     this.recoverCandidateSince = 0;
     this.applyRendererSize();
-    // Leaving forced mode when returning to default 0.6 / 60 so adaptive can run again.
+    // Leaving forced mode when returning to default EYE_INTERNAL_SCALE / 60 so adaptive can run again.
     if (Math.abs(scale - EYE_INTERNAL_SCALE) < 1e-6 && fps === 60) {
       this.qualityForced = false;
       this.qualityNotch = 0;
@@ -470,7 +471,7 @@ export class SubstrateEngine {
     const tick = (time: number) => {
       this.raf = requestAnimationFrame(tick);
       if (this.disposed || this.contextLost || this.hidden) return;
-      const minFrame = Math.max(EYE_FRAME_MS, 1000 / this.effectiveFpsCap());
+      const minFrame = 1000 / this.effectiveFpsCap();
       if (this.lastFrame && time - this.lastFrame < minFrame) return;
       const dt = this.lastFrame ? (time - this.lastFrame) / 1000 : 1 / 30;
       this.lastFrame = time;
@@ -538,9 +539,9 @@ export class SubstrateEngine {
     this.presenceProgram.uniforms.uDim.value = dim;
     this.presenceProgram.uniforms.uMouse.value = [this.mouse.x, this.mouse.y];
 
+    // Continuous frame clock — no 30 Hz quant (that hold-and-jump made the iris flake).
     const tMs = this.frozen || this.reducedMotion ? this.frozenTime || time : time;
-    const quant = Math.floor(tMs / EYE_FRAME_MS) * EYE_FRAME_MS;
-    this.presenceProgram.uniforms.uTime.value = quant * 0.001;
+    this.presenceProgram.uniforms.uTime.value = tMs * 0.001;
 
     const pilot = scale < PILOT_SCALE;
     const glW = gl.canvas.width;

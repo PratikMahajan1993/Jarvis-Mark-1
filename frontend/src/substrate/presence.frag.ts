@@ -127,14 +127,19 @@ void main() {
     // Same centre / fit as the eye. Soft falloff so scale 0.07 reads as a clear mint pilot bead.
     vec2 ou = (gl_FragCoord.xy - centerPx) / (uResolution.y * fit);
     float r = length(ou);
-    float nucleus = exp(-r * r * 6.0);
-    float bloom = exp(-r * r * 1.1) * 0.85;
-    float halo = exp(-r * r * 0.28) * 0.4;
-    float ring = smoothstep(1.0, 0.5, r) * smoothstep(0.12, 0.45, r) * 0.4;
+    // Bench pilot is tiny (scale ~0.07) — keep a lit floor. Full-size converse honors uDim
+    // so the mint orb does not blow out into a white disk under the DOM rings.
+    float benchPilot = step(uPresenceScale, 0.2);
+    float nucleusGain = mix(0.35, 1.8, benchPilot);
+    float bloomGain = mix(0.32, 0.85, benchPilot);
+    float haloGain = mix(0.12, 0.4, benchPilot);
+    float nucleus = exp(-r * r * 7.5) * nucleusGain;
+    float bloom = exp(-r * r * 1.35) * bloomGain;
+    float halo = exp(-r * r * 0.35) * haloGain;
+    float ring = smoothstep(1.0, 0.5, r) * smoothstep(0.14, 0.48, r) * mix(0.7, 0.4, benchPilot);
     float breath = 0.92 + 0.08 * sin(uTime * 1.4);
-    // Bench dim is 0.35 — keep a readable floor so the pilot stays lit through the mat hole.
-    float lit = max(uDim, 0.75);
-    float energy = (nucleus * 1.8 + bloom + halo + ring) * lit * breath;
+    float lit = mix(uDim, max(uDim, 0.75), benchPilot);
+    float energy = (nucleus + bloom + halo + ring) * lit * breath;
     vec3 col = uAccent * energy;
     float a = clamp(energy, 0.0, 1.0) * uOrb;
     orbOut = vec4(col * uOrb, a);
@@ -156,13 +161,13 @@ export const STOCK_EYE = {
   scale: 0.8,
   noiseScale: 1,
   pupilFollow: 1,
-  flameSpeed: 1,
+  flameSpeed: 0.4,
   backgroundColor: "#120F17",
   lightMode: false,
 } as const;
 
-/** Internal pixels vs CSS size — Appendix A (was 0.55 in DOM EvilEye). */
-export const EYE_INTERNAL_SCALE = 0.6;
+/** Internal pixels vs CSS size — 1.0 keeps Watch iris edges sharp (was 0.6 upscale). */
+export const EYE_INTERNAL_SCALE = 1.0;
 
 export function hexToVec3(hex: string): [number, number, number] {
   const h = hex.replace("#", "");

@@ -13,6 +13,21 @@ const DEPTH_Z: Record<number, string> = {
   3: "z-[11]",
 };
 
+function isEmptyBody(node: ReactNode): boolean {
+  if (node == null || node === false || node === true) return true;
+  if (typeof node === "string" || typeof node === "number") return String(node).trim() === "";
+  if (Array.isArray(node)) return node.every(isEmptyBody);
+  return false;
+}
+
+/** Chrome over the substrate — dots / voice line / activity orb — never a frost slab. */
+function isBarePanel(id: PanelId, lens: string): boolean {
+  if (id === "voice" && (lens === "converse" || lens === "watch")) return true;
+  if (id === "agents" && (lens === "converse" || lens === "watch")) return true;
+  if (id === "activity" && (lens === "converse" || lens === "watch")) return true;
+  return false;
+}
+
 export function PanePanel({
   id,
   children,
@@ -34,7 +49,11 @@ export function PanePanel({
     frozenBody.current = children;
   }
   const body = phase === "moving" ? frozenBody.current : children;
+  const emptyOptional = (id === "activity" || id === "weather") && isEmptyBody(body);
+  const bare = isBarePanel(id, lens) || emptyOptional;
+  const hidden = parked || emptyOptional;
   const depthKey = String(depth);
+  const allowHits = id === "agents" || id === "activity" || (id === "voice" && lens === "bench");
 
   useLayoutEffect(() => {
     if (phase !== "moving" || depth !== 0) return;
@@ -48,8 +67,13 @@ export function PanePanel({
       layoutId={`panel-${id}`}
       data-panel={id}
       data-depth={depth}
+      data-bare={bare ? "1" : undefined}
+      data-empty={emptyOptional ? "1" : undefined}
       className={[
-        "pane-frost pointer-events-auto min-h-0 min-w-0 overflow-hidden",
+        bare
+          ? "min-h-0 min-w-0 overflow-visible bg-transparent shadow-none"
+          : "pane-frost min-h-0 min-w-0 overflow-hidden",
+        allowHits && !hidden ? "pointer-events-auto" : "pointer-events-none",
         DEPTH_Z[depth] ?? "z-[11]",
         className,
       ]
@@ -58,15 +82,25 @@ export function PanePanel({
       style={{
         willChange,
         transformStyle: "preserve-3d",
-        visibility: parked ? "hidden" : "visible",
-        contentVisibility: parked ? "hidden" : "visible",
+        visibility: hidden ? "hidden" : "visible",
+        contentVisibility: hidden ? "hidden" : "visible",
+        ...(bare
+          ? {
+              borderRadius: 0,
+              background: "transparent",
+              boxShadow: "none",
+              /* Depth variants force opacity/pointerEvents — keep bare chrome clear. */
+              pointerEvents: (allowHits && !hidden ? "auto" : "none") as "auto" | "none",
+              ...(emptyOptional ? { opacity: 0 } : null),
+            }
+          : null),
       }}
       variants={DEPTH_VARIANTS}
       animate={depthKey}
       transition={phase === "moving" ? { duration: 0 } : SPRING.pane}
       initial={false}
-      aria-hidden={parked}
-      inert={parked ? true : undefined}
+      aria-hidden={hidden}
+      inert={hidden ? true : undefined}
       onLayoutAnimationComplete={() => {
         if (depth === 0 && phase === "settled") {
           onHeroLayoutComplete?.();
@@ -74,7 +108,7 @@ export function PanePanel({
         }
       }}
     >
-      <motion.div layout={false} className="h-full min-h-0">
+      <motion.div layout={false} className="h-full min-h-0 overflow-visible">
         {body}
       </motion.div>
     </motion.div>

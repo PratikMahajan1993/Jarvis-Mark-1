@@ -37,9 +37,7 @@ import {
   stopListening,
 } from "@/lib/voice";
 import { SceneBoard } from "../SceneBoard";
-import BlurText from "@/components/react-bits/BlurText";
 import ClickSpark from "@/components/react-bits/ClickSpark";
-import GradientText from "@/components/react-bits/GradientText";
 import SpotlightCard from "@/components/react-bits/SpotlightCard";
 import { ConverseStrip } from "@/components/bench/ConverseStrip";
 import { DrawingStage } from "@/components/bench/DrawingStage";
@@ -48,6 +46,7 @@ import { ActivityStream } from "./ActivityStream";
 import { CommandBaton } from "./CommandBaton";
 import { ConversationRail, type RailConversation } from "./ConversationRail";
 import { DraftComposeModal } from "./DraftComposeModal";
+import { JarvisCore } from "./JarvisCore";
 import { HitlModal } from "./HitlModal";
 import { AgentOrbit } from "./monitor/AgentOrbit";
 import { Orchestra } from "./Orchestra";
@@ -135,39 +134,6 @@ function mapDeskItems(
   }));
 }
 
-function VoiceLine({ text, dimmed }: { text: string; dimmed?: boolean }) {
-  const compact = text.length > 220 || text.split("\n").length > 4;
-  // BlurText animates each word as inline-block; on long/multi-line replies that
-  // breaks layout into scattered floating tokens — use plain text instead.
-  const animate = !dimmed && !compact;
-  return (
-    <h1
-      className={[
-        "orch-voice mx-auto max-h-[42vh] max-w-[min(800px,90vw)] overflow-y-auto text-center font-display font-normal leading-snug tracking-[-0.01em] whitespace-pre-wrap break-words transition-all duration-[600ms]",
-        compact ? "text-[1.35rem]" : "text-[2.25rem]",
-        dimmed ? "opacity-20 blur-[2px]" : "",
-      ]
-        .filter(Boolean)
-        .join(" ")}
-    >
-      {animate ? (
-        <BlurText
-          key={text}
-          text={text}
-          delay={70}
-          stepDuration={0.24}
-          className="inline"
-        />
-      ) : (
-        text
-      )}
-    </h1>
-  );
-}
-
-/** Maps the FSM's macro-state onto the visual mode JarvisCore/Orchestra already render.
- * SPEAKING maps to "busy" — same visual treatment as THINKING/EXECUTING, just correctly
- * covering the TTS-playback window that the old flag-based code left unaccounted for. */
 function LensSparkShell({ children }: { children: React.ReactNode }) {
   const lens = useLens();
   const sparkColor = lens === "watch" ? "#FF6F37" : "#7dffe0";
@@ -253,14 +219,14 @@ function AgentsDockPanel({
   const displayLens = useDisplayLens();
   if (displayLens === "watch") {
     return (
-      <div className="flex h-full min-h-[80px] items-end justify-center pb-2">
+      <div className="flex h-full items-end justify-center pb-3">
         <AgentOrbit agents={agents} activity={activity} dimmed={hitl} />
       </div>
     );
   }
   if (displayLens === "converse") {
     return (
-      <div className="flex h-full w-full items-end justify-center pb-1">
+      <div className="flex h-full w-full items-end justify-center pb-2">
         <Orchestra agents={agents} dimmed={hitl} />
       </div>
     );
@@ -279,6 +245,7 @@ function VoiceDockPanel({
   error,
   focusTitle,
   prefsName,
+  orchestratorMode,
   onLedgerTurnComplete,
   onLedgerTurnFailed,
   compose,
@@ -299,6 +266,7 @@ function VoiceDockPanel({
   error: string;
   focusTitle: string;
   prefsName: string;
+  orchestratorMode: OrchestratorMode;
   onLedgerTurnComplete: (output: ChatResponse) => void;
   onLedgerTurnFailed: (message: string) => void;
   compose: string;
@@ -315,9 +283,11 @@ function VoiceDockPanel({
   if (activeLens === "watch") {
     const line = (voiceVisible && voice ? voice : focusTitle).slice(0, 120);
     return (
-      <p className="px-4 py-3 text-center font-display text-lg leading-snug text-[color:var(--fg)]/90">
-        {line}
-      </p>
+      <div className="flex h-full min-h-0 items-end justify-center pb-1">
+        <p className="max-w-[min(520px,90%)] px-3 text-center font-display text-base leading-snug text-[color:var(--fg)]/90 [text-shadow:0_1px_10px_rgba(0,0,0,0.55)]">
+          {line}
+        </p>
+      </div>
     );
   }
 
@@ -342,49 +312,58 @@ function VoiceDockPanel({
     );
   }
 
+  /* Converse: open center — substrate orb + DOM rings; always a short idle line. */
+  const line = (showCenterVoice && voice ? voice : IDLE_VOICE).trim() || IDLE_VOICE;
+  const shortLine = line.length > 96 || line.includes("\n") ? `${line.slice(0, 96).trim()}…` : line;
   return (
-    <main className="pointer-events-auto flex h-full min-h-0 flex-col items-center justify-start overflow-y-auto px-4 py-4">
-      <div
-        className={[
-          "transition-all duration-[600ms]",
-          showCenterVoice ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-2.5 opacity-0",
-        ].join(" ")}
-        aria-hidden={!showCenterVoice}
-      >
-        <VoiceLine text={voice} dimmed={Boolean(hitlAction)} />
+    <div className="pointer-events-none relative flex h-full min-h-0 w-full items-center justify-center overflow-visible">
+      <JarvisCore mode={orchestratorMode} />
+      <div className="pointer-events-none relative z-[2] max-w-[min(420px,70%)] px-4 text-center">
+        <p
+          className={[
+            "font-display text-[1.35rem] leading-snug tracking-[-0.01em] text-[color:var(--fg)] [text-shadow:0_1px_12px_rgba(0,0,0,0.65)]",
+            hitlAction ? "opacity-20 blur-[2px]" : "",
+          ]
+            .filter(Boolean)
+            .join(" ")}
+        >
+          {shortLine}
+        </p>
       </div>
       {sceneHasBoardContent(gatedScene) ? (
-        <SpotlightCard
-          className="orch-board mt-4 w-full max-w-full rounded-2xl border border-[color:var(--border)] bg-black/35"
-          bodyClassName="max-h-[32vh] overflow-y-auto p-4"
-        >
-          <SceneBoard scene={gatedScene} compact />
-        </SpotlightCard>
+        <div className="pointer-events-auto absolute inset-x-4 bottom-2 z-[3] max-h-[28%] overflow-hidden">
+          <SpotlightCard
+            className="orch-board w-full rounded-2xl border border-[color:var(--border)] bg-black/35"
+            bodyClassName="max-h-[22vh] overflow-y-auto p-3"
+          >
+            <SceneBoard scene={gatedScene} compact />
+          </SpotlightCard>
+        </div>
       ) : null}
       {sending ? (
-        <div className="orch-sending mt-6 flex flex-col items-center gap-3" aria-live="polite">
+        <div className="pointer-events-none absolute bottom-6 z-[3] flex flex-col items-center gap-2" aria-live="polite">
           <div className="orch-sending-ring" />
           <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--accent)]/80">
             Transmitting…
           </p>
         </div>
       ) : null}
-      <TurnStageLine
-        turnId={ledgerTurnId}
-        onComplete={onLedgerTurnComplete}
-        onFailed={onLedgerTurnFailed}
-      />
+      <div className="pointer-events-none absolute bottom-2 left-1/2 z-[3] -translate-x-1/2">
+        <TurnStageLine
+          turnId={ledgerTurnId}
+          onComplete={onLedgerTurnComplete}
+          onFailed={onLedgerTurnFailed}
+        />
+      </div>
       {error ? (
-        <p className="mt-3 max-w-lg text-center font-mono text-xs text-red-300/80">{error}</p>
+        <p className="pointer-events-none absolute bottom-10 z-[3] max-w-md px-4 text-center font-mono text-xs text-red-300/80">
+          {error}
+        </p>
       ) : null}
-      <p className="mt-4 font-mono text-[10px] uppercase tracking-[0.2em] text-[color:var(--muted)]/55">
-        <GradientText className="font-mono text-[10px] uppercase tracking-[0.2em]" animationSpeed={9}>
-          {prefsName}
-        </GradientText>
-        <span className="mx-2 text-[color:var(--muted)]/40">·</span>
-        {focusTitle}
-      </p>
-    </main>
+      <span className="sr-only">
+        {prefsName} · {focusTitle}
+      </span>
+    </div>
   );
 }
 
@@ -1383,6 +1362,7 @@ export function OrchestratorShell() {
               error={error}
               focusTitle={focusTitle}
               prefsName={prefs?.assistant_name || "Jarvis"}
+              orchestratorMode={mode}
               onLedgerTurnComplete={onLedgerTurnComplete}
               onLedgerTurnFailed={onLedgerTurnFailed}
               compose={compose}
@@ -1413,11 +1393,11 @@ export function OrchestratorShell() {
               onNewDiscussion={() => void startNewDiscussion()}
             />
           ),
-          weather: (
+          weather: weatherLine ? (
             <div className="p-2">
               <WeatherCard line={weatherLine} />
             </div>
-          ),
+          ) : null,
           tasks: (
             <TasksDockPanel tasks={suggested} hitl={hitl} onDismiss={taskDismiss} onAction={taskAction} />
           ),
@@ -1425,11 +1405,7 @@ export function OrchestratorShell() {
             <AgentsDockPanel agents={agents} activity={activity} hitl={Boolean(hitlAction)} />
           ),
           agentsStatus: <BenchAgentDots agents={agents} />,
-          activity: (
-            <div className="p-2">
-              <ActivityStream items={activity} />
-            </div>
-          ),
+          activity: activity.length > 0 ? <ActivityStream items={activity} /> : null,
           stage: (
             <BenchStagePanel
               scene={scene}

@@ -105,24 +105,71 @@ body {
   min-width: 0;
 }
 
-/* Lens slot map — grid-area only (depth stays on motion). */
-.pane-dock[data-lens="watch"] [data-panel="voice"] { grid-area: 3 / 4 / 6 / 10; }
-.pane-dock[data-lens="watch"] [data-panel="notes"] { grid-area: 1 / 1 / 9 / 4; }
+/* Lens slot map — grid-area only (depth stays on motion).
+ * Watch/Converse left rail: notes (rows 1–5) and activity (rows 6–8) share
+ * no cells; the 12px grid gap is the gutter between them.
+ * Converse agents stop at col 10 so they never enter the tasks rail. */
+/* Watch voice sits under the eye (row 6), not over the pupil. */
+.pane-dock[data-lens="watch"] [data-panel="voice"] { grid-area: 6 / 4 / 7 / 10; }
+.pane-dock[data-lens="watch"] [data-panel="notes"] { grid-area: 1 / 1 / 6 / 4; }
 .pane-dock[data-lens="watch"] [data-panel="weather"] { grid-area: 1 / 10 / 3 / 13; }
 .pane-dock[data-lens="watch"] [data-panel="tasks"] { grid-area: 3 / 10 / 9 / 13; }
-.pane-dock[data-lens="watch"] [data-panel="agents"] { grid-area: 6 / 4 / 8 / 10; }
+/* Agents sit under the eye (rows 7–8), not over the pupil. */
+.pane-dock[data-lens="watch"] [data-panel="agents"] { grid-area: 7 / 4 / 9 / 10; }
 .pane-dock[data-lens="watch"] [data-panel="activity"] { grid-area: 6 / 1 / 9 / 4; }
 .pane-dock[data-lens="watch"] [data-panel="stage"] { grid-area: 1 / 1 / 7 / 9; }
 .pane-dock[data-lens="watch"] [data-panel="sheet"] { grid-area: 1 / 9 / 9 / 13; }
 
 .pane-dock[data-lens="converse"] [data-panel="voice"] { grid-area: 3 / 4 / 6 / 10; }
-.pane-dock[data-lens="converse"] [data-panel="notes"] { grid-area: 1 / 1 / 9 / 4; }
+.pane-dock[data-lens="converse"] [data-panel="notes"] { grid-area: 1 / 1 / 6 / 4; }
 .pane-dock[data-lens="converse"] [data-panel="weather"] { grid-area: 1 / 10 / 3 / 13; }
 .pane-dock[data-lens="converse"] [data-panel="tasks"] { grid-area: 3 / 10 / 9 / 13; }
-.pane-dock[data-lens="converse"] [data-panel="agents"] { grid-area: 7 / 4 / 9 / 11; }
+.pane-dock[data-lens="converse"] [data-panel="agents"] { grid-area: 7 / 4 / 9 / 10; }
 .pane-dock[data-lens="converse"] [data-panel="activity"] { grid-area: 6 / 1 / 9 / 4; }
 .pane-dock[data-lens="converse"] [data-panel="stage"] { grid-area: 1 / 1 / 7 / 9; }
 .pane-dock[data-lens="converse"] [data-panel="sheet"] { grid-area: 1 / 9 / 9 / 13; }
+
+/* Voice / agents over the substrate are bare chrome — never a frost slab. */
+.pane-dock[data-lens="converse"] [data-panel="voice"],
+.pane-dock[data-lens="watch"] [data-panel="voice"],
+.pane-dock[data-lens="converse"] [data-panel="agents"],
+.pane-dock[data-lens="watch"] [data-panel="agents"] {
+  background: transparent !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  overflow: visible !important;
+}
+
+/* Converse voice: open center; keep JarvisCore rings, hide duplicate nucleus. */
+.pane-dock[data-lens="converse"] [data-panel="voice"] {
+  overflow: visible !important;
+}
+.pane-dock[data-lens="converse"] [data-panel="voice"] .orch-core,
+.pane-dock[data-lens="converse"] [data-panel="voice"] .orch-core-halo,
+.pane-dock[data-lens="converse"] [data-panel="voice"] .orch-core-nucleus {
+  opacity: 0 !important;
+}
+.pane-dock[data-lens="converse"] [data-panel="voice"] canvas {
+  opacity: 0;
+}
+.pane-dock[data-lens="converse"] [data-panel="voice"] .orch-hud {
+  opacity: 0.62;
+}
+.pane-dock[data-lens="converse"] [data-panel="voice"] .orch-hud-active {
+  opacity: 0.9;
+}
+
+/* Empty optional panels stay invisible (no frost rectangle).
+ * Depth variants set visibility:visible — force-hide empty chrome. */
+.pane-dock [data-panel="weather"][data-empty="1"],
+.pane-dock [data-panel="activity"][data-empty="1"] {
+  visibility: hidden !important;
+  opacity: 0 !important;
+  content-visibility: hidden !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  pointer-events: none !important;
+}
 
 .pane-dock[data-lens="bench"] [data-panel="voice"] { grid-area: 7 / 1 / 9 / 9; }
 .pane-dock[data-lens="bench"] [data-panel="notes"] { grid-area: 1 / 1 / 9 / 2; }
@@ -156,7 +203,7 @@ body {
 }
 
 .slot-left-rail {
-  grid-area: 1 / 1 / 9 / 4;
+  grid-area: 1 / 1 / 6 / 4;
 }
 
 .slot-left-peek {
@@ -172,11 +219,11 @@ body {
 }
 
 .slot-under-centre {
-  grid-area: 6 / 4 / 8 / 10;
+  grid-area: 7 / 4 / 9 / 10;
 }
 
 .slot-bottom-centre {
-  grid-area: 7 / 4 / 9 / 11;
+  grid-area: 7 / 4 / 9 / 10;
 }
 
 .slot-bottom-left {
