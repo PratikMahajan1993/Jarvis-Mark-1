@@ -1,0 +1,67 @@
+{
+  "capturedAt": "2026-09-24T16:45:00.245Z",
+  "hudUrl": "http://127.0.0.1:3000/?perf=1",
+  "switchCount": 20,
+  "rafHistogram": {
+    "0-8": 23,
+    "8-16": 4886,
+    "16-20": 129,
+    "20-33": 14,
+    "33+": 28
+  },
+  "rafP95Ms": 8.5,
+  "longTasks": [
+    {
+      "duration": 492,
+      "startTime": 2743.399999999907,
+      "name": "self"
+    },
+    {
+      "duration": 363,
+      "startTime": 4226.100000000093,
+      "name": "self"
+    },
+    {
+      "duration": 65,
+      "startTime": 4735.700000000186,
+      "name": "self"
+    },
+    {
+      "duration": 107,
+      "startTime": 4864.899999999907,
+      "name": "self"
+    },
+    {
+      "duration": 388,
+      "startTime": 4973.100000000093,
+      "name": "self"
+    },
+    {
+      "duration": 208,
+      "startTime": 5385.200000000186,
+      "name": "self"
+    },
+    {
+      "duration": 150,
+      "startTime": 5602.200000000186,
+      "name": "self"
+    },
+    {
+      "duration": 90,
+      "startTime": 5837.600000000093,
+      "name": "self"
+    },
+    {
+      "duration": 72,
+      "startTime": 5942.200000000186,
+      "name": "self"
+    },
+    {
+      "duration": 95,
+      "startTime": 16039.100000000093,
+      "name": "self"
+    }
+  ],
+  "webglContextCount": 1,
+  "orchestratorShellCommits": 5
+}

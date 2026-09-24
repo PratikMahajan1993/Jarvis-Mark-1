@@ -11,10 +11,12 @@ export function AgentOrbit({
   agents,
   activity = [],
   dimmed = false,
+  idlePresence = false,
 }: {
   agents: AgentNode[];
   activity?: ActivityItem[];
   dimmed?: boolean;
+  idlePresence?: boolean;
   active?: boolean;
 }) {
   const count = agents.length;
@@ -23,8 +25,8 @@ export function AgentOrbit({
   return (
     <div
       className={[
-        "agent-orbit pointer-events-none absolute inset-x-0 top-[84%] z-[11] flex items-start justify-center gap-12 px-8 transition-opacity duration-[800ms] ease-[cubic-bezier(0.22,1,0.36,1)]",
-        dimmed ? "opacity-35" : "opacity-100",
+        "agent-orbit pointer-events-none relative z-[11] flex w-full items-end justify-center gap-10 px-4 transition-opacity duration-[800ms] ease-[cubic-bezier(0.22,1,0.36,1)]",
+        dimmed ? "opacity-35" : idlePresence ? "opacity-[0.42]" : "opacity-100",
       ].join(" ")}
       aria-hidden
     >

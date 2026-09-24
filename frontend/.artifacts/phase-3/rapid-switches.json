@@ -1,0 +1,40 @@
+{
+  "recordedAt": "2026-09-23T23:10:04.066Z",
+  "sequence": [
+    "monitor",
+    "casual",
+    "engineering"
+  ],
+  "headless": {
+    "switchBurstMs": 326.5,
+    "longTasksOver50ms": 3,
+    "rafP95Ms": 633.3000000000029,
+    "webglContextCount": 1,
+    "orchestratorShellCommitsDelta": 0,
+    "longTasks": [
+      {
+        "duration": 138,
+        "startTime": 17016,
+        "name": "self"
+      },
+      {
+        "duration": 75,
+        "startTime": 17504.09999999404,
+        "name": "self"
+      },
+      {
+        "duration": 139,
+        "startTime": 18530.59999999404,
+        "name": "self"
+      }
+    ]
+  },
+  "desk": {
+    "switchBurstMs": 40.20000001788139,
+    "longTasksOver50ms": 0,
+    "rafP95Ms": 25,
+    "webglContextCount": 1,
+    "orchestratorShellCommitsDelta": 0,
+    "longTasks": []
+  }
+}

@@ -1,6 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+import { Profiler, useCallback, useEffect, useReducer, useRef, useState } from "react";
+import { PerfOverlay } from "@/components/pane/PerfOverlay";
+import { isJarvisPerfMode, recordOrchestratorShellCommit } from "@/lib/pane/perf";
+import "@/lib/pane/perf";
 import { api, apiBase } from "@/lib/api";
 import { liveLog } from "@/lib/liveLog";
 import type { ChatResponse, Conversation, PendingAction, Preferences, Scene } from "@/lib/types";
@@ -34,18 +37,18 @@ import {
   stopListening,
 } from "@/lib/voice";
 import { SceneBoard } from "../SceneBoard";
-import BlurText from "@/components/react-bits/BlurText";
 import ClickSpark from "@/components/react-bits/ClickSpark";
-import GradientText from "@/components/react-bits/GradientText";
 import SpotlightCard from "@/components/react-bits/SpotlightCard";
+import { ConverseStrip } from "@/components/bench/ConverseStrip";
+import { DrawingStage } from "@/components/bench/DrawingStage";
+import { QuoteSheet, quoteSheetRowsForScene } from "@/components/bench/QuoteSheet";
 import { ActivityStream } from "./ActivityStream";
 import { CommandBaton } from "./CommandBaton";
 import { ConversationRail, type RailConversation } from "./ConversationRail";
 import { DraftComposeModal } from "./DraftComposeModal";
-import { HitlModal } from "./HitlModal";
 import { JarvisCore } from "./JarvisCore";
-import { EngineeringDesk } from "./engineering/EngineeringDesk";
-import { MonitorDesk } from "./monitor/MonitorDesk";
+import { HitlModal } from "./HitlModal";
+import { AgentOrbit } from "./monitor/AgentOrbit";
 import { Orchestra } from "./Orchestra";
 import { SuggestedTasksPanel, type SuggestedTask } from "./SuggestedTasksPanel";
 import {
@@ -57,22 +60,33 @@ import {
 import { PreferencesPanel } from "./PreferencesPanel";
 import { WeatherCard } from "./WeatherCard";
 import {
-  chromeOn,
   initialWorkspaceFromBootstrap,
+  isHudWorkspace,
   loadStoredWorkspace,
   loadStoredWorkspacePinned,
   persistWorkspace,
   persistWorkspacePinned,
-  presenceOn,
   talkJumpWorkspace,
-  useWorkspaceLayers,
   type HudWorkspace,
 } from "./hudWorkspace";
-import { HudChrome, HudPresence } from "./hudMorph";
-import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 import { TurnStageLine } from "./TurnStageLine";
+import { Pane } from "@/components/pane/Pane";
+import { useDisplayLens, useLens, usePane } from "@/lib/pane/paneStore";
+import { useWatchFindingsGlance } from "@/components/pane/useWatchFindingsGlance";
+import { useValueWhenSettled } from "@/lib/pane/useLensSettled";
 
 const AMBIENT_SESSION = "default";
+
+/** Screenshot / verify override: ?lens=monitor|casual|engineering */
+function workspaceFromLensQuery(): HudWorkspace | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const v = new URLSearchParams(window.location.search).get("lens");
+    return isHudWorkspace(v) ? v : null;
+  } catch {
+    return null;
+  }
+}
 const FOCUS_STORAGE_KEY = "jarvis.activeConversationId";
 const IDLE_VOICE = "Awaiting instruction.";
 const EMPTY_SCENE: Scene = { title: "", widgets: [] };
@@ -121,39 +135,247 @@ function mapDeskItems(
   }));
 }
 
-function VoiceLine({ text, dimmed }: { text: string; dimmed?: boolean }) {
-  const compact = text.length > 220 || text.split("\n").length > 4;
-  // BlurText animates each word as inline-block; on long/multi-line replies that
-  // breaks layout into scattered floating tokens — use plain text instead.
-  const animate = !dimmed && !compact;
+function LensSparkShell({ children }: { children: React.ReactNode }) {
+  const lens = useLens();
+  const sparkColor = lens === "watch" ? "#FF6F37" : "#7dffe0";
   return (
-    <h1
-      className={[
-        "orch-voice mx-auto max-h-[42vh] max-w-[min(800px,90vw)] overflow-y-auto text-center font-display font-normal leading-snug tracking-[-0.01em] whitespace-pre-wrap break-words transition-all duration-[600ms]",
-        compact ? "text-[1.35rem]" : "text-[2.25rem]",
-        dimmed ? "opacity-20 blur-[2px]" : "",
-      ]
-        .filter(Boolean)
-        .join(" ")}
-    >
-      {animate ? (
-        <BlurText
-          key={text}
-          text={text}
-          delay={70}
-          stepDuration={0.24}
-          className="inline"
-        />
-      ) : (
-        text
-      )}
-    </h1>
+    <ClickSpark className="relative flex h-screen flex-col overflow-hidden" sparkColor={sparkColor}>
+      {children}
+    </ClickSpark>
   );
 }
 
-/** Maps the FSM's macro-state onto the visual mode JarvisCore/Orchestra already render.
- * SPEAKING maps to "busy" — same visual treatment as THINKING/EXECUTING, just correctly
- * covering the TTS-playback window that the old flag-based code left unaccounted for. */
+function BenchStagePanel({
+  scene,
+  focus,
+}: {
+  scene: Scene;
+  focus: Record<string, unknown>;
+}) {
+  const gatedScene = useValueWhenSettled(scene);
+  const pinRows = quoteSheetRowsForScene(gatedScene);
+  return (
+    <DrawingStage scene={gatedScene} focus={focus} pinRows={pinRows} />
+  );
+}
+
+function BenchQuotePanel({ scene }: { scene: Scene }) {
+  const gatedScene = useValueWhenSettled(scene);
+  return <QuoteSheet scene={gatedScene} />;
+}
+
+function BenchAgentDots({ agents }: { agents: AgentNode[] }) {
+  return (
+    <div className="flex items-center gap-1.5">
+      {agents.slice(0, 4).map((agent) => (
+        <span
+          key={agent.id}
+          className={[
+            "h-1.5 w-1.5 rounded-full bg-[color:var(--muted)]",
+            agent.state ? "bg-[color:var(--accent)] shadow-[0_0_6px_color-mix(in_oklch,var(--accent)_50%,transparent)]" : "",
+          ].join(" ")}
+          title={agent.code}
+        />
+      ))}
+    </div>
+  );
+}
+
+function TasksDockPanel({
+  tasks,
+  hitl,
+  onDismiss,
+  onAction,
+}: {
+  tasks: SuggestedTask[];
+  hitl: boolean;
+  onDismiss: (id: string) => void;
+  onAction: (task: SuggestedTask, actionId: string) => void;
+}) {
+  const displayLens = useDisplayLens();
+  const watchFindings = displayLens === "watch" && !hitl;
+  useWatchFindingsGlance(tasks, watchFindings);
+  if (hitl) {
+    return <div className="h-full min-h-[120px]" aria-hidden />;
+  }
+  return (
+    <div className="flex h-full max-h-full min-h-0 flex-col overflow-hidden p-2">
+      <SuggestedTasksPanel
+        variant={displayLens === "watch" ? "findings" : "suggested"}
+        tasks={tasks}
+        onDismiss={onDismiss}
+        onAction={onAction}
+      />
+    </div>
+  );
+}
+
+function AgentsDockPanel({
+  agents,
+  activity,
+  hitl,
+}: {
+  agents: AgentNode[];
+  activity: ActivityItem[];
+  hitl: boolean;
+}) {
+  const displayLens = useDisplayLens();
+  const presenceMode = usePane((s) => s.mode);
+  if (displayLens === "watch") {
+    return (
+      <div className="flex h-full items-end justify-center pb-3">
+        <AgentOrbit
+          agents={agents}
+          activity={activity}
+          dimmed={hitl}
+          idlePresence={!hitl && presenceMode === "idle"}
+        />
+      </div>
+    );
+  }
+  if (displayLens === "converse") {
+    return (
+      <div className="flex h-full w-full items-end justify-center pb-2">
+        <Orchestra agents={agents} dimmed={hitl} />
+      </div>
+    );
+  }
+  return null;
+}
+
+function VoiceDockPanel({
+  voice,
+  voiceVisible,
+  showCenterVoice,
+  hitlAction,
+  scene,
+  sending,
+  ledgerTurnId,
+  error,
+  focusTitle,
+  prefsName,
+  orchestratorMode,
+  onLedgerTurnComplete,
+  onLedgerTurnFailed,
+  compose,
+  listening,
+  batonDisabled,
+  batonHidden,
+  onComposeChange,
+  onComposeSubmit,
+  onMic,
+}: {
+  voice: string;
+  voiceVisible: boolean;
+  showCenterVoice: boolean;
+  hitlAction: PendingAction | null;
+  scene: Scene;
+  sending: boolean;
+  ledgerTurnId: string | null;
+  error: string;
+  focusTitle: string;
+  prefsName: string;
+  orchestratorMode: OrchestratorMode;
+  onLedgerTurnComplete: (output: ChatResponse) => void;
+  onLedgerTurnFailed: (message: string) => void;
+  compose: string;
+  listening: boolean;
+  batonDisabled?: boolean;
+  batonHidden?: boolean;
+  onComposeChange: (value: string) => void;
+  onComposeSubmit: (value: string) => void;
+  onMic: () => void;
+}) {
+  const activeLens = useDisplayLens();
+  const gatedScene = useValueWhenSettled(scene);
+
+  if (activeLens === "watch") {
+    const line = (voiceVisible && voice ? voice : focusTitle).slice(0, 120);
+    return (
+      <div className="flex h-full min-h-0 items-end justify-center pb-1">
+        <p className="max-w-[min(520px,90%)] px-3 text-center font-display text-base leading-snug text-[color:var(--fg)]/90 [text-shadow:0_1px_10px_rgba(0,0,0,0.55)]">
+          {line}
+        </p>
+      </div>
+    );
+  }
+
+  if (activeLens === "bench") {
+    const line = voiceVisible ? voice : focusTitle;
+    return (
+      <ConverseStrip
+        line={line}
+        baton={
+          <CommandBaton
+            value={compose}
+            onChange={onComposeChange}
+            onSubmit={onComposeSubmit}
+            onMic={onMic}
+            listening={listening}
+            disabled={batonDisabled}
+            hidden={batonHidden}
+            absolute={false}
+          />
+        }
+      />
+    );
+  }
+
+  /* Converse: open center — substrate orb + DOM rings; always a short idle line. */
+  const line = (showCenterVoice && voice ? voice : IDLE_VOICE).trim() || IDLE_VOICE;
+  const shortLine = line.length > 96 || line.includes("\n") ? `${line.slice(0, 96).trim()}…` : line;
+  return (
+    <div className="pointer-events-none relative flex h-full min-h-0 w-full items-center justify-center overflow-visible">
+      <JarvisCore mode={orchestratorMode} />
+      <div className="pointer-events-none relative z-[2] max-w-[min(420px,70%)] px-4 text-center">
+        <p
+          className={[
+            "font-display text-[1.35rem] leading-snug tracking-[-0.01em] text-[color:var(--fg)] [text-shadow:0_1px_12px_rgba(0,0,0,0.65)]",
+            hitlAction ? "opacity-20 blur-[2px]" : "",
+          ]
+            .filter(Boolean)
+            .join(" ")}
+        >
+          {shortLine}
+        </p>
+      </div>
+      {sceneHasBoardContent(gatedScene) ? (
+        <div className="pointer-events-auto absolute inset-x-4 bottom-2 z-[3] max-h-[28%] overflow-hidden">
+          <SpotlightCard
+            className="orch-board w-full rounded-2xl border border-[color:var(--border)] bg-black/35"
+            bodyClassName="max-h-[22vh] overflow-y-auto p-3"
+          >
+            <SceneBoard scene={gatedScene} compact />
+          </SpotlightCard>
+        </div>
+      ) : null}
+      {sending ? (
+        <div className="pointer-events-none absolute bottom-6 z-[3] flex flex-col items-center gap-2" aria-live="polite">
+          <div className="orch-sending-ring" />
+          <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--accent)]/80">
+            Transmitting…
+          </p>
+        </div>
+      ) : null}
+      <div className="pointer-events-none absolute bottom-2 left-1/2 z-[3] -translate-x-1/2">
+        <TurnStageLine
+          turnId={ledgerTurnId}
+          onComplete={onLedgerTurnComplete}
+          onFailed={onLedgerTurnFailed}
+        />
+      </div>
+      {error ? (
+        <p className="pointer-events-none absolute bottom-10 z-[3] max-w-md px-4 text-center font-mono text-xs text-red-300/80">
+          {error}
+        </p>
+      ) : null}
+      <span className="sr-only">
+        {prefsName} · {focusTitle}
+      </span>
+    </div>
+  );
+}
+
 function modeToOrchestratorMode(state: JarvisState): OrchestratorMode {
   switch (state.mode) {
     case "LISTENING":
@@ -190,7 +412,9 @@ export function OrchestratorShell() {
   const [prefsOpen, setPrefsOpen] = useState(false);
   const [googleStatus, setGoogleStatus] = useState<GoogleConnectStatus | null>(null);
   const [googleConnectOpen, setGoogleConnectOpen] = useState(false);
-  const [workspace, setWorkspaceState] = useState<HudWorkspace>("monitor");
+  const [workspace, setWorkspaceState] = useState<HudWorkspace>(
+    () => workspaceFromLensQuery() ?? "monitor",
+  );
   const [workspacePinned, setWorkspacePinned] = useState(false);
   const [ledgerTurnId, setLedgerTurnId] = useState<string | null>(null);
 
@@ -242,6 +466,18 @@ export function OrchestratorShell() {
     },
     [setWorkspaceExplicit],
   );
+
+  const persistWorkspaceIntent = useCallback((next: HudWorkspace) => {
+    const from = workspaceRef.current;
+    if (from === next) return;
+    workspaceRef.current = next;
+    persistWorkspace(next);
+    liveLog(
+      "workspace",
+      { from, to: next, pinned: workspacePinnedRef.current, reason: "switcher" },
+      { sessionId: sessionRef.current },
+    );
+  }, []);
 
   const toggleWorkspacePin = useCallback(() => {
     setWorkspacePinned((prev) => {
@@ -914,11 +1150,14 @@ export function OrchestratorShell() {
         const stored = loadStoredWorkspace();
         workspacePinnedRef.current = pinned;
         setWorkspacePinned(pinned);
-        const initialWs = initialWorkspaceFromBootstrap({
-          restoredCategory: restored?.category,
-          pinned,
-          stored,
-        });
+        const lensWs = workspaceFromLensQuery();
+        const initialWs =
+          lensWs ??
+          initialWorkspaceFromBootstrap({
+            restoredCategory: restored?.category,
+            pinned,
+            stored,
+          });
         setWorkspaceState(initialWs);
         workspaceRef.current = initialWs;
         persistWorkspace(initialWs);
@@ -1074,228 +1313,116 @@ export function OrchestratorShell() {
     [focusConversation, pushLog, send, setWorkspaceExplicit],
   );
 
-  const layers = useWorkspaceLayers(workspace);
-  const monitorTheme = layers.theme === "monitor";
-  const prevMorphRef = useRef({ theme: layers.theme, chrome: layers.chrome });
+  const taskDismiss = useCallback((id: string) => {
+    void api.setSuggestedTaskStatus(id, "dismissed").catch(() => null);
+    setSuggested((prev) => prev.filter((t) => t.id !== id));
+  }, []);
 
-  useEffect(() => {
-    const prev = prevMorphRef.current;
-    if (prev.theme !== layers.theme) {
-      liveLog(
-        "morph",
-        { layer: "theme", from: prev.theme, to: layers.theme },
-        { sessionId: sessionRef.current },
-      );
-      prev.theme = layers.theme;
-    }
-    if (prev.chrome !== layers.chrome) {
-      liveLog(
-        "morph",
-        { layer: "chrome", from: prev.chrome, to: layers.chrome },
-        { sessionId: sessionRef.current },
-      );
-      prev.chrome = layers.chrome;
-    }
-  }, [layers.theme, layers.chrome]);
+  const taskAction = useCallback(
+    (task: SuggestedTask, actionId: string) => {
+      if (task.kind === "rfq" && actionId === "engineering") {
+        void openWorkflowFromTask(task);
+      } else if (actionId === "calendar" || actionId === "meeting") {
+        void send(`Create a calendar event for: ${task.title}`);
+      } else if (actionId === "chat" || actionId === "review") {
+        void (async () => {
+          setWorkspaceExplicit("casual");
+          const row = await api.startDiscussion(task.title.slice(0, 80));
+          await focusConversation(row, { announce: true });
+          void send(`Let's discuss: ${task.title}. ${task.detail || ""}`);
+        })();
+      } else {
+        void send(`${actionId} for suggested task: ${task.title}`);
+      }
+    },
+    [focusConversation, openWorkflowFromTask, send, setWorkspaceExplicit],
+  );
 
-  return (
-    <ClickSpark
-      className={[
-        "orch-root relative flex h-screen flex-col overflow-hidden",
-        layers.morphReady ? "hud-morph-ready" : "",
-      ].join(" ")}
-      sparkColor={monitorTheme ? "#FF6F37" : "#7dffe0"}
-      data-workspace={layers.theme}
-    >
-      <div className="orch-vignette" />
-      <HudPresence id="monitor" layers={layers} keepMounted>
-        <MonitorDesk
-          mode={mode}
-          agents={agents}
-          activity={activity}
-          orbitOn={chromeOn("monitor", layers)}
-        />
-      </HudPresence>
-      <HudPresence id="engineering" layers={layers}>
-        <EngineeringDesk
-          scene={scene}
-          focusTitle={focusTitle}
-          focus={conversationFocus}
-          voice={voice}
-          voiceVisible={voiceVisible}
-          dimmed={Boolean(hitlAction)}
-        />
-      </HudPresence>
-      <HudPresence id="casual" layers={layers} keepMounted>
-        <JarvisCore mode={mode} playing={presenceOn("casual", layers)} />
-      </HudPresence>
-
-      <ActivityStream items={activity} />
-
-      <WorkspaceSwitcher
+  const shellTree = (
+    <LensSparkShell>
+      <Pane
         workspace={workspace}
-        pinned={workspacePinned}
+        workspacePinned={workspacePinned}
+        orchestratorMode={mode}
+        assistantName={prefs?.assistant_name || "Jarvis"}
+        focusTitle={focusTitle}
         dimmed={hitl}
-        onSelect={(ws) => setWorkspaceExplicit(ws, "switcher")}
-        onTogglePin={toggleWorkspacePin}
-      />
-
-      <button
-        type="button"
-        onClick={() => setPrefsOpen(true)}
-        className="pointer-events-auto absolute right-4 top-4 z-[12] rounded-full border border-[color:var(--border)] bg-black/40 px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-[color:var(--muted)] backdrop-blur-md transition hover:border-[color:var(--accent)]/40 hover:text-[color:var(--accent)]"
-        title="Preferences — Connect Gmail, voice, and connectors"
-      >
-        Prefs
-      </button>
-
-      <HudChrome id="casual" layers={layers}>
-        <ConversationRail
-          items={desk}
-          openCount={desk.length}
-          maxOpen={MAX_OPEN_CONVERSATIONS}
-          ambientActive={activeSession === AMBIENT_SESSION && !activeConversationId}
-          dimmed={hitl}
-          hidden={dockHidden}
-          onSelectAmbient={() => void focusAmbient()}
-          onSelect={(id) => {
-            void (async () => {
-              const rows = await refreshDesk(activeConversationId);
-              const row = rows.find((item) => item.id === id);
-              if (row) await focusConversation(row, { announce: true });
-            })();
-          }}
-          onNewDiscussion={() => void startNewDiscussion()}
-        />
-      </HudChrome>
-
-      <HudChrome id="casual" layers={layers} className="relative z-[1] flex flex-1 flex-col">
-        <main className="pointer-events-auto flex flex-1 flex-col items-center justify-center px-16">
-          <div
-            className={[
-              "transition-all duration-[600ms]",
-              showCenterVoice
-                ? "translate-y-0 opacity-100"
-                : "pointer-events-none translate-y-2.5 opacity-0",
-            ].join(" ")}
-            aria-hidden={!showCenterVoice}
-          >
-            <VoiceLine text={voice} dimmed={Boolean(hitlAction)} />
-          </div>
-          {sceneHasBoardContent(scene) ? (
-            <SpotlightCard
-              className="orch-board mt-8 w-full max-w-[min(720px,92vw)] rounded-2xl border border-[color:var(--border)] bg-black/35 backdrop-blur-md"
-              bodyClassName="max-h-[38vh] overflow-y-auto p-4"
-            >
-              <SceneBoard scene={scene} compact />
-            </SpotlightCard>
-          ) : null}
-          {sending ? (
-            <div className="orch-sending mt-10 flex flex-col items-center gap-3" aria-live="polite">
-              <div className="orch-sending-ring" />
-              <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--accent)]/80">
-                Transmitting…
-              </p>
-            </div>
-          ) : null}
-          <TurnStageLine
-            turnId={ledgerTurnId}
-            onComplete={onLedgerTurnComplete}
-            onFailed={onLedgerTurnFailed}
-          />
-          {error ? (
-            <p className="mt-4 max-w-lg text-center font-mono text-xs text-red-300/80">{error}</p>
-          ) : null}
-          <p className="mt-6 font-mono text-[10px] uppercase tracking-[0.2em] text-[color:var(--muted)]/55">
-            <GradientText className="font-mono text-[10px] uppercase tracking-[0.2em]" animationSpeed={9}>
-              {prefs?.assistant_name || "Jarvis"}
-            </GradientText>
-            <span className="mx-2 text-[color:var(--muted)]/40">·</span>
-            {focusTitle}
-          </p>
-        </main>
-      </HudChrome>
-      {layers.incoming !== "casual" && error ? (
-        <p className="pointer-events-auto absolute left-1/2 top-[3.5rem] z-[2] -translate-x-1/2 font-mono text-xs text-red-300/80">
-          {error}
-        </p>
-      ) : null}
-
-      <HudChrome id="casual" layers={layers}>
-        <Orchestra agents={agents} dimmed={hitl} />
-      </HudChrome>
-
-      <HudChrome id="casual" layers={layers} className="pointer-events-none absolute right-4 top-24 z-10 flex max-h-[calc(100vh-11rem)] w-[min(360px,92vw)] flex-col gap-3">
-        {!hitl && (weatherLine || suggested.length) ? (
-          <aside className="pointer-events-auto flex max-h-[calc(100vh-11rem)] flex-col gap-3">
-            <WeatherCard line={weatherLine} />
-            <SuggestedTasksPanel
-              variant="suggested"
-              tasks={suggested}
-              onDismiss={(id) => {
-                void api.setSuggestedTaskStatus(id, "dismissed").catch(() => null);
-                setSuggested((prev) => prev.filter((t) => t.id !== id));
-              }}
-              onAction={(task, actionId) => {
-                if (task.kind === "rfq" && actionId === "engineering") {
-                  void openWorkflowFromTask(task);
-                } else if (actionId === "calendar" || actionId === "meeting") {
-                  void send(`Create a calendar event for: ${task.title}`);
-                } else if (actionId === "chat" || actionId === "review") {
-                  void (async () => {
-                    setWorkspaceExplicit("casual");
-                    const row = await api.startDiscussion(task.title.slice(0, 80));
-                    await focusConversation(row, { announce: true });
-                    void send(`Let's discuss: ${task.title}. ${task.detail || ""}`);
-                  })();
-                } else {
-                  void send(`${actionId} for suggested task: ${task.title}`);
-                }
-              }}
-            />
-          </aside>
-        ) : null}
-      </HudChrome>
-
-      <HudChrome id="monitor" layers={layers} className="pointer-events-none absolute right-4 top-24 z-10 flex max-h-[calc(100vh-11rem)] w-[min(360px,92vw)] flex-col gap-3">
-        {!hitl && suggested.length > 0 ? (
-          <aside className="pointer-events-auto flex max-h-[calc(100vh-11rem)] flex-col gap-3">
-            <SuggestedTasksPanel
-              variant="findings"
-              tasks={suggested}
-              onDismiss={(id) => {
-                void api.setSuggestedTaskStatus(id, "dismissed").catch(() => null);
-                setSuggested((prev) => prev.filter((t) => t.id !== id));
-              }}
-              onAction={(task, actionId) => {
-                if (task.kind === "rfq" && actionId === "engineering") {
-                  void openWorkflowFromTask(task);
-                } else if (actionId === "calendar" || actionId === "meeting") {
-                  void send(`Create a calendar event for: ${task.title}`);
-                } else if (actionId === "chat" || actionId === "review") {
-                  void (async () => {
-                    setWorkspaceExplicit("casual");
-                    const row = await api.startDiscussion(task.title.slice(0, 80));
-                    await focusConversation(row, { announce: true });
-                    void send(`Let's discuss: ${task.title}. ${task.detail || ""}`);
-                  })();
-                } else {
-                  void send(`${actionId} for suggested task: ${task.title}`);
-                }
-              }}
-            />
-          </aside>
-        ) : null}
-      </HudChrome>
-
-      <CommandBaton
-        value={compose}
-        onChange={setCompose}
-        onSubmit={(value) => void send(value)}
-        onMic={() => void startMic()}
+        batonHidden={hitl}
+        batonDisabled={busy || hitl}
+        compose={compose}
         listening={listening}
-        disabled={busy || hitl}
-        hidden={hitl}
+        onComposeChange={setCompose}
+        onComposeSubmit={(value) => void send(value)}
+        onMic={() => void startMic()}
+        onSelectWorkspace={persistWorkspaceIntent}
+        onTogglePin={toggleWorkspacePin}
+        onOpenPrefs={() => setPrefsOpen(true)}
+        className="flex-1"
+        panels={{
+          voice: (
+            <VoiceDockPanel
+              voice={voice}
+              voiceVisible={voiceVisible}
+              showCenterVoice={showCenterVoice}
+              hitlAction={hitlAction}
+              scene={scene}
+              sending={sending}
+              ledgerTurnId={ledgerTurnId}
+              error={error}
+              focusTitle={focusTitle}
+              prefsName={prefs?.assistant_name || "Jarvis"}
+              orchestratorMode={mode}
+              onLedgerTurnComplete={onLedgerTurnComplete}
+              onLedgerTurnFailed={onLedgerTurnFailed}
+              compose={compose}
+              listening={listening}
+              batonDisabled={busy || hitl}
+              batonHidden={hitl}
+              onComposeChange={setCompose}
+              onComposeSubmit={(value) => void send(value)}
+              onMic={() => void startMic()}
+            />
+          ),
+          notes: (
+            <ConversationRail
+              items={desk}
+              openCount={desk.length}
+              maxOpen={MAX_OPEN_CONVERSATIONS}
+              ambientActive={activeSession === AMBIENT_SESSION && !activeConversationId}
+              dimmed={hitl}
+              hidden={dockHidden}
+              onSelectAmbient={() => void focusAmbient()}
+              onSelect={(id) => {
+                void (async () => {
+                  const rows = await refreshDesk(activeConversationId);
+                  const row = rows.find((item) => item.id === id);
+                  if (row) await focusConversation(row, { announce: true });
+                })();
+              }}
+              onNewDiscussion={() => void startNewDiscussion()}
+            />
+          ),
+          weather: weatherLine ? (
+            <div className="p-2">
+              <WeatherCard line={weatherLine} />
+            </div>
+          ) : null,
+          tasks: (
+            <TasksDockPanel tasks={suggested} hitl={hitl} onDismiss={taskDismiss} onAction={taskAction} />
+          ),
+          agents: (
+            <AgentsDockPanel agents={agents} activity={activity} hitl={Boolean(hitlAction)} />
+          ),
+          agentsStatus: <BenchAgentDots agents={agents} />,
+          activity: activity.length > 0 ? <ActivityStream items={activity} /> : null,
+          stage: (
+            <BenchStagePanel
+              scene={scene}
+              focus={conversationFocus}
+            />
+          ),
+          sheet: <BenchQuotePanel scene={scene} />,
+        }}
       />
 
       <HitlModal
@@ -1340,6 +1467,21 @@ export function OrchestratorShell() {
         }}
         onDecide={(id, approved, fields) => void decide(id, approved, fields)}
       />
-    </ClickSpark>
+
+    </LensSparkShell>
+  );
+
+  return (
+    <>
+      {isJarvisPerfMode() ? (
+        <>
+          <Profiler id="OrchestratorShell" onRender={recordOrchestratorShellCommit}>
+            <span data-orch-shell-probe hidden aria-hidden />
+          </Profiler>
+          <PerfOverlay />
+        </>
+      ) : null}
+      {shellTree}
+    </>
   );
 }

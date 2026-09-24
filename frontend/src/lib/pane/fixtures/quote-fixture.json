@@ -1,0 +1,183 @@
+{
+  "meta": {
+    "rfqId": "RFQ-FAKE-9001",
+    "customer": "Round Numbers Machining Co.",
+    "part": "Widget Bracket MK-II",
+    "material": "EN8 (proposed)",
+    "orderQty": 10,
+    "due": "2026-04-15",
+    "currency": "INR"
+  },
+  "rows": [
+    {
+      "label": "EN8 round bar — nested blank",
+      "group": "raw",
+      "basis": "12 kg × supplier_rm_quotes#42",
+      "amount": 18000,
+      "currency": "INR",
+      "provenance": "tool",
+      "region": { "page": 1, "x": 0.22, "y": 0.28, "w": 0.18, "h": 0.14 }
+    },
+    {
+      "label": "CNC mill — op 10 facing",
+      "group": "machining",
+      "basis": "1.5 h × ₹850/h (machine_hour_rates#7)",
+      "amount": 1275,
+      "currency": "INR",
+      "provenance": "tool"
+    },
+    {
+      "label": "CNC mill — op 20 pocket (cycle time)",
+      "group": "machining",
+      "basis": "4.0 h proposed — cycletime est.",
+      "amount": 3400,
+      "currency": "INR",
+      "provenance": "pending",
+      "region": { "page": 1, "x": 0.55, "y": 0.42, "w": 0.2, "h": 0.16 }
+    },
+    {
+      "label": "Margin & overhead",
+      "group": "margin",
+      "basis": "18% on direct (owner accepted)",
+      "amount": 4000,
+      "currency": "INR",
+      "provenance": "confirmed"
+    },
+    {
+      "label": "Zn-Ni plating — Acme Fabricators LLP",
+      "group": "outsource",
+      "basis": "awaiting vendor quote",
+      "amount": null,
+      "currency": "INR",
+      "provenance": "missing"
+    },
+    {
+      "label": "Soft jaws & fixture amortization",
+      "group": "tooling",
+      "qty": 1,
+      "amount": 5000,
+      "currency": "INR",
+      "provenance": "confirmed",
+      "region": { "page": 1, "x": 0.38, "y": 0.68, "w": 0.16, "h": 0.12 }
+    }
+  ],
+  "failingCheckIds": [
+    "unit_prices",
+    "material",
+    "drawing",
+    "pdf",
+    "delivery"
+  ],
+  "verify": {
+    "ok": true,
+    "passed": false,
+    "failed_count": 4,
+    "warn_count": 1,
+    "stop": true,
+    "verdict": "block",
+    "checks": [
+      {
+        "id": "rows_exist",
+        "pass": true,
+        "evidence": "6 row(s) in artifact fixture-quote-demo",
+        "source": "last_quote_rows",
+        "severity": "BLOCKER"
+      },
+      {
+        "id": "unit_prices",
+        "pass": false,
+        "evidence": "Outsource row Zn-Ni plating has no priced unit — provenance missing",
+        "source": "last_quote_rows",
+        "severity": "BLOCKER"
+      },
+      {
+        "id": "material",
+        "pass": false,
+        "evidence": "Material empty or TBD (EN8 (proposed))",
+        "source": "last_quote_material",
+        "severity": "BLOCKER"
+      },
+      {
+        "id": "drawing",
+        "pass": false,
+        "evidence": "No drawing filename in session memory",
+        "source": "last_quote_drawing",
+        "severity": "BLOCKER"
+      },
+      {
+        "id": "pdf",
+        "pass": false,
+        "evidence": "No quote PDF artifact on disk for this session",
+        "source": "last_quote_pdf",
+        "severity": "BLOCKER"
+      },
+      {
+        "id": "mhr_floor",
+        "pass": true,
+        "evidence": "Quoted machining rates ≥ machine_hour_rates floor as of quote date",
+        "source": "machine_hour_rates",
+        "severity": "BLOCKER"
+      },
+      {
+        "id": "delivery",
+        "pass": false,
+        "evidence": "Delivery days empty at draft — owner must type before send",
+        "source": "last_quote_delivery_days",
+        "severity": "WARN"
+      }
+    ],
+    "scene": {
+      "title": "Quote proof",
+      "widgets": [
+        {
+          "type": "checklist",
+          "title": "Quote proof",
+          "items": [
+            {
+              "label": "rows_exist",
+              "pass": true,
+              "evidence": "6 row(s) in artifact fixture-quote-demo",
+              "severity": "BLOCKER"
+            },
+            {
+              "label": "unit_prices",
+              "pass": false,
+              "evidence": "Outsource row Zn-Ni plating has no priced unit — provenance missing",
+              "severity": "BLOCKER"
+            },
+            {
+              "label": "material",
+              "pass": false,
+              "evidence": "Material empty or TBD (EN8 (proposed))",
+              "severity": "BLOCKER"
+            },
+            {
+              "label": "drawing",
+              "pass": false,
+              "evidence": "No drawing filename in session memory",
+              "severity": "BLOCKER"
+            },
+            {
+              "label": "pdf",
+              "pass": false,
+              "evidence": "No quote PDF artifact on disk for this session",
+              "severity": "BLOCKER"
+            },
+            {
+              "label": "mhr_floor",
+              "pass": true,
+              "evidence": "Quoted machining rates ≥ machine_hour_rates floor as of quote date",
+              "severity": "BLOCKER"
+            },
+            {
+              "label": "delivery",
+              "pass": false,
+              "evidence": "Delivery days empty at draft — owner must type before send",
+              "severity": "WARN"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

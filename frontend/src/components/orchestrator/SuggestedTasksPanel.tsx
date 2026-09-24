@@ -135,14 +135,13 @@ export function SuggestedTasksPanel({
   onDismiss: (taskId: string) => void;
   variant?: "suggested" | "findings";
 }) {
-  if (!tasks.length) return null;
-
   const heading = variant === "findings" ? "Findings" : "Suggested";
 
   return (
     <section
       className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden"
       aria-label={variant === "findings" ? "Agent findings" : "Suggested tasks"}
+      data-tasks-panel
     >
       <div className="shrink-0 px-0.5">
         <GradientText
@@ -152,10 +151,19 @@ export function SuggestedTasksPanel({
           {heading}
         </GradientText>
       </div>
-      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overflow-x-hidden pr-1 [scrollbar-width:thin] [scrollbar-color:rgba(125,255,224,0.25)_transparent]">
-        {tasks.map((task) => (
-          <TaskCard key={task.id} task={task} onAction={onAction} onDismiss={onDismiss} />
-        ))}
+      <div
+        data-tasks-scroll
+        className="min-h-0 flex-1 space-y-3 overflow-y-auto overflow-x-hidden pr-1 [scrollbar-width:thin] [scrollbar-color:rgba(125,255,224,0.25)_transparent]"
+      >
+        {tasks.length ? (
+          tasks.map((task) => (
+            <TaskCard key={task.id} task={task} onAction={onAction} onDismiss={onDismiss} />
+          ))
+        ) : (
+          <p className="px-1 font-mono text-[10px] uppercase tracking-[0.14em] text-[color:var(--muted)]/55">
+            Nothing queued
+          </p>
+        )}
       </div>
     </section>
   );

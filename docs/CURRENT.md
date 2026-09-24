@@ -12,10 +12,12 @@ Short as-built snapshot. Conversation record (intent, not full spec): `work/ARCH
 
 ## HUD
 
-- Single shell: `OrchestratorShell` (`frontend/src/components/orchestrator/`).
-- **Workspaces** (orthogonal to turn FSM): `casual` | `monitor` | `engineering` — see `hudWorkspace.ts`.
-- **Talk-jump:** `talkJumpWorkspace` returns `null` unless current workspace is **monitor**. Quote/drawing words from Monitor can jump to Engineering; the same words on **Casual stay Casual**.
-- **HITL:** `HitlModal` — **Authorize / Reject**. On load and session switch, `loadSessionSurface` restores the first pending row for that session (including calendar/mail/quote) on every workspace.
+- **Single pane:** one `OrchestratorShell` hosts a always-mounted `Pane` (`frontend/src/components/pane/Pane.tsx`) — no per-workspace desk trees or presence crossfade. Intent still persists as **`casual` | `monitor` | `engineering`** in `hudWorkspace.ts`; the pane maps that once to lenses **Converse | Watch | Bench** (tabs + `paneStore`).
+- **Substrate:** one `<canvas>` / one WebGL2 context in a worker (`frontend/src/substrate/`, `Substrate.tsx` + `createSubstrate.ts`). Lens changes tween shader weights (Eye / Orb / pilot light); contexts are not created or destroyed on switch. Idle **Watch** internal render scale is **0.55** (Evil Eye dpr baseline; adaptive quality steps down from there).
+- **Bench (engineering):** drawing stage (`BenchStagePanel` / pdf.js viewer) and quote sheet (`BenchQuotePanel` / `QuoteSheet`) stay mounted at depth; lens only moves slot and depth.
+- **Talk-jump:** `talkJumpWorkspace` returns `null` unless the current workspace is **monitor**. Quote/drawing words from Monitor can jump to Engineering; the same words on **Casual stay Casual** (no auto-jump).
+- **HITL:** `HitlModal` — **Authorize / Reject** unchanged. On load and session switch, `loadSessionSurface` restores the first pending row for that session (calendar/mail/quote) on every workspace.
+- **Perf gate:** from `frontend/`, `npm run perf` (`scripts/perf-gate.mjs`) — headless Chrome, `?perf=1`, 20 workspace switches. Latest desk run: `work/perf/phase-6.json`. The pre-pane baseline stays in `work/perf/baseline-overhaul.json`. Thresholds in `work/SONNET_UI_VISION.md` §2.7: on this desk run **rAF p95 8.5 ms** (pass), **10 long tasks, all over 50 ms**, mostly during initial load (gate fail), **1 WebGL context**, **5** `OrchestratorShell` profiler commits over the run.
 
 ## Sessions & data (`<repo>/data/`)
 
