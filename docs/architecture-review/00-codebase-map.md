@@ -1,7 +1,7 @@
 # Codebase map (reconnaissance)
 
-**Branch:** `overhaul` (HEAD `cdc7e77` — chore removing unused `HudShell`).  
-**Scope:** Read-only audit of `/workspace` as implemented on this branch.  
+**Branch:** `overhaul` (HEAD `41542be` — dispatch rule now permits explicitly authorized direct work).
+**Scope:** Fresh source-based reconnaissance of `/workspace` as implemented on this branch, rechecked 2026-09-24.
 **Uncertainty marker:** *Unknown — requires further investigation.*
 
 ---
@@ -44,7 +44,7 @@
 
 | Concern | Primary modules | Notes |
 | --- | --- | --- |
-| HTTP surface | `main.py` | ~40+ `/api/*` routes (health, chat, confirm, mail, calendar, RFQ, canvas, knowledge, vision bench, metrics, turns ledger, Google OAuth, TTS, etc.) |
+| HTTP surface | `main.py` | 68 `/api/*` route decorators (health, chat, confirm, mail, calendar, RFQ, canvas, knowledge, vision bench, metrics, turns ledger, Google OAuth, TTS, etc.) |
 | Chat orchestration | `agent.py`, `think.py`, `understand.py` | `run_agent()` → `_run_agent()`; `brain_lock(session_id)` in `conversations.py` |
 | Intent (legacy/fast path) | `intent.py` | Regex/heuristic `Intent`, `Route`, `classify()`, `is_quote_start()`, `SAFETY_DENY_PHRASES` |
 | Semantic router | `semantic_router.py` | Gemini structured `IntentClassification`; `handle_ui_command()`; used when turn ledger **off** |

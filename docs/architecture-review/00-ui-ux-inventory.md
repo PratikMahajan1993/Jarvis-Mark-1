@@ -1,6 +1,6 @@
 # UI / UX inventory (reconnaissance)
 
-**Branch:** `overhaul`. Read-only survey of HUD routes, components, states, and journeys.  
+**Branch:** `overhaul` (`41542be`). Fresh source-based survey of HUD routes, components, states, and journeys, rechecked 2026-09-24.
 **Uncertainty:** *Unknown — requires further investigation.*
 
 ---

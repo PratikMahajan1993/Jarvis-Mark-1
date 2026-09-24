@@ -3,6 +3,8 @@
 Prioritized areas for **follow-up investigation** based on this audit. Observations only — no redesign or fix prescriptions.  
 **Uncertainty:** items marked *Unknown — requires further investigation.*
 
+**Freshness:** rechecked against `overhaul` at `41542be` on 2026-09-24. The ranking is investigation priority only, not a quality ranking.
+
 ---
 
 ## Priority legend

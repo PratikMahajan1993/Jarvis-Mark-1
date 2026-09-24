@@ -1,6 +1,6 @@
 # AI instruction inventory (reconnaissance)
 
-Inventory of repository-local instructions for humans and Cursor agents: rules, skills, agent prompts, playbooks, and key product docs that steer development. **Observations only** — no remediation proposals.
+Inventory of repository-local instructions for humans and Cursor agents: rules, skills, agent prompts, playbooks, and key product docs that steer development. **Observations only** — no remediation proposals. Rechecked against the current `overhaul` checkout at `41542be` on 2026-09-24.
 
 **Uncertainty:** *Unknown — requires further investigation.*
 
@@ -23,6 +23,8 @@ Inventory of repository-local instructions for humans and Cursor agents: rules, 
 ---
 
 ## 2. Cursor rules (`.cursor/rules/`)
+
+The checkout contains **16 tracked `.mdc` rule files**: one root rule plus four backend, three frontend, five domain, and three operations rules. The nested files are included below; a shallow directory listing can misleadingly show only the root file.
 
 **Always-on:**
 
