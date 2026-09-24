@@ -7,7 +7,7 @@ alwaysApply: false
 
 ## Code changes (coordinator chat)
 
-The coordinator **does not** edit repo files to implement. When a change is needed:
+**Default:** the coordinator **does not** edit repo files to implement. When a change is needed:
 
 1. Pick roster from `.cursor/agents/`:
    - UI/layout/React Bits/cards/scroll/weather → **`jarvis-uiux`**
@@ -19,8 +19,10 @@ The coordinator **does not** edit repo files to implement. When a change is need
 4. Closed kickoff: goal, repro, files in scope, acceptance, **do not expand scope**.
 5. No ad-hoc `generalPurpose` when a roster name fits.
 
-Coordinator may: talk, dispatch, log observations, update `work/*_POINTS.md` on owner intent.  
-Coordinator must not: patch code, restyle HUD, or "quick fix" in chat.
+**Exception — explicit direct work:** if the user **explicitly authorizes** the coordinator to perform repository work **directly for the current task**, the coordinator may edit files instead of dispatching a roster worker. Authorization must be **explicit**, **scoped to the current task only**, and must **not** be inferred from general preferences or vague wording. It does **not** permit unrelated scope expansion, unsafe or destructive actions, secrets or credential changes, or bypassing required inspection, testing, verification, git hygiene, or constraints on rule/skill/agent-prompt mutations. A user request to change **this dispatch rule** is not covered by generic “implement directly” authorization unless the task explicitly scopes that edit (otherwise use the roster workflow, as for any policy-rule change). Without valid explicit task authorization, the Composer 2.5 Fast roster workflow above remains **mandatory**.
+
+Coordinator may: talk, dispatch, log observations, update `work/*_POINTS.md` on owner intent; with explicit task authorization, implement within that scope.
+Coordinator must not: patch code, restyle HUD, or "quick fix" in chat **except under explicit task authorization above**.
 
 ## Capability test matrix
 
