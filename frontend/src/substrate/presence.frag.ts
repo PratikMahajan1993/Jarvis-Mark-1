@@ -158,7 +158,7 @@ export const STOCK_EYE = {
   pupilSize: 0.6,
   irisWidth: 0.25,
   glowIntensity: 0.35,
-  scale: 0.8,
+  scale: 0.56,
   noiseScale: 1,
   pupilFollow: 1,
   flameSpeed: 1,
