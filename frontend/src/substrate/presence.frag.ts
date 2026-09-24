@@ -83,12 +83,10 @@ void main() {
     float innerEye = distanceMask - 0.1 * 2.0;
     innerEye *= noiseB.r * 2.0;
 
-    // Closing lid feel as orb rises: pupil grows toward a shut eye.
-    float lid = mix(1.0, 1.85, clamp(uOrb, 0.0, 1.0));
-    vec2 pupilOffset = uMouse * uPupilFollow * 0.12 * (1.0 - uOrb);
+    vec2 pupilOffset = uMouse * uPupilFollow * 0.12;
     vec2 pupilUv = uv - pupilOffset;
     float pupil = 1.0 - length(pupilUv * vec2(9.0, 2.3));
-    pupil *= uPupilSize * lid;
+    pupil *= uPupilSize;
     pupil = clamp(pupil, 0.0, 1.0);
     pupil /= 0.35;
 
@@ -118,8 +116,12 @@ void main() {
       color = eyeEnergy;
     }
 
-    float alpha = smoothstep(1.18, 0.72, length(uv)) * uEye;
-    eyeOut = vec4(color * uEye, alpha);
+    float alpha = smoothstep(1.18, 0.72, length(uv));
+    if (uOrb < 0.01) {
+      eyeOut = vec4(mix(uBgColor, color, alpha), 1.0);
+    } else {
+      eyeOut = vec4(color * uEye, alpha * uEye);
+    }
   }
 
   vec4 orbOut = vec4(0.0);
@@ -166,8 +168,8 @@ export const STOCK_EYE = {
   lightMode: false,
 } as const;
 
-/** Internal pixels vs CSS size — 1.0 keeps Watch iris edges sharp (was 0.6 upscale). */
-export const EYE_INTERNAL_SCALE = 1.0;
+/** Internal pixels vs CSS size — matches EvilEye.tsx dpr (fire upscales cleanly). */
+export const EYE_INTERNAL_SCALE = 0.55;
 
 export function hexToVec3(hex: string): [number, number, number] {
   const h = hex.replace("#", "");

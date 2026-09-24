@@ -24,10 +24,10 @@ import {
   type SpringState,
 } from "./spring";
 
-const EYE_NOISE_SIZE = 256;
+const EYE_NOISE_SIZE = 128;
 const STATS_MS = 1000;
-/* Idle Watch stays at 1.0; degrade notches stay above the old chunky 0.6 floor. */
-const QUALITY_SCALES = [1.0, 0.8, 0.65] as const;
+/* Idle Watch at EvilEye dpr (0.55); degrade steps down from there. */
+const QUALITY_SCALES = [0.55, 0.45, 0.4] as const;
 const QUALITY_FPS: readonly (30 | 60)[] = [60, 30, 30];
 const P95_DEGRADE_MS = 20;
 const P95_RECOVER_MS = 14;
@@ -65,9 +65,8 @@ function generateNoiseTexture(size = EYE_NOISE_SIZE): Uint8Array {
       let v = 0;
       let amp = 0.4;
       let totalAmp = 0;
-      // Freqs ≤ half the texture (256 → 128). Start ~8, five octaves — no sub-texel hash static.
-      for (let o = 0; o < 5; o++) {
-        const f = 8 * (1 << o);
+      for (let o = 0; o < 8; o++) {
+        const f = 32 * (1 << o);
         v += amp * noise(x, y, f, o * 31);
         totalAmp += amp;
         amp *= 0.65;
