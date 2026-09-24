@@ -157,11 +157,11 @@ export const STOCK_EYE = {
   intensity: 1.5,
   pupilSize: 0.6,
   irisWidth: 0.25,
-  glowIntensity: 0.3,
+  glowIntensity: 0.35,
   scale: 0.8,
   noiseScale: 1,
   pupilFollow: 1,
-  flameSpeed: 0.4,
+  flameSpeed: 1,
   backgroundColor: "#120F17",
   lightMode: false,
 } as const;
