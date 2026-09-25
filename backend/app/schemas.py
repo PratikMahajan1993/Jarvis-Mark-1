@@ -110,6 +110,19 @@ class MarkedDrawingSave(BaseModel):
     image_base64: str = ""
 
 
+class DrawingChatView(BaseModel):
+    """Chat-owned drawing window. Markup stays on the engineering bench."""
+
+    open: bool = True
+    notes: str = ""
+    filename: str = ""
+    local_name: str = ""
+    local_path: str = ""
+    mime: str = ""
+    conversation_id: str = ""
+    session_id: str = ""
+
+
 class ChatResponse(BaseModel):
     speak: str
     scene: Scene
@@ -129,6 +142,7 @@ class ChatResponse(BaseModel):
     target_agent: str | None = None
     route_intent: str | None = None
     ui_action: dict[str, Any] | None = None
+    drawing_chat: DrawingChatView | None = None
 
 
 class ConversationCreate(BaseModel):

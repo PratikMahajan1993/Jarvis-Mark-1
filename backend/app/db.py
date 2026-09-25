@@ -169,6 +169,45 @@ def list_memories(session_id: str, limit: int = 20) -> list[dict[str, str]]:
     return [dict(row) for row in rows]
 
 
+def remember_dropped_drawing(
+    *,
+    sha256: str,
+    filename: str,
+    stored_name: str,
+    path: str,
+    mime: str,
+    byte_size: int,
+) -> dict[str, str]:
+    """One row per file fingerprint. A repeat drop keeps the first row."""
+    created = utc_now()
+    with connect() as conn:
+        existing = conn.execute(
+            "SELECT id, sha256, filename, stored_name, path, mime, byte_size, created_at FROM dropped_drawings WHERE sha256 = ?",
+            (sha256,),
+        ).fetchone()
+        if existing:
+            return dict(existing)
+        row_id = sha256[:16]
+        conn.execute(
+            """
+            INSERT INTO dropped_drawings (
+              id, sha256, filename, stored_name, path, mime, byte_size, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (row_id, sha256, filename, stored_name, path, mime, byte_size, created),
+        )
+    return {
+        "id": row_id,
+        "sha256": sha256,
+        "filename": filename,
+        "stored_name": stored_name,
+        "path": path,
+        "mime": mime,
+        "byte_size": byte_size,
+        "created_at": created,
+    }
+
+
 def add_artifact(artifact_id: str, kind: str, name: str, path: str) -> dict[str, str]:
     created = utc_now()
     with connect() as conn:

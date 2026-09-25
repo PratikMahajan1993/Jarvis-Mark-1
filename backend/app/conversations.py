@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import re
 import threading
@@ -14,7 +15,7 @@ from .agents import agent_status_payload
 from .config import settings
 from .hud_state import load_hud, remember_hud
 from .ollama_client import OllamaError
-from .schemas import AgentStatus, ChatResponse, Scene
+from .schemas import AgentStatus, ChatResponse, DrawingChatView, Scene
 
 COMMAND_SESSION = "default"
 AMBIENT_SESSION = "default"
@@ -85,9 +86,42 @@ _DRAWING_SYSTEM = (
 )
 
 
+_CLOSE_DRAWING_RE = re.compile(
+    r"\b(?:close|hide|dismiss)\b(?:\s+\w+){0,4}\s+\b(?:drawing|window|viewer|sheet)\b"
+    r"|\bclose (?:it|this)\b",
+    re.I,
+)
+_OPEN_DRAWING_RE = re.compile(
+    r"\b(?:open|show|view|look at|pull up|review|zoom)\b.{0,48}\b(?:drawing|drawings|sheet|blueprint|pdf)\b",
+    re.I,
+)
+_SHOP_LEAVE_RE = re.compile(
+    r"\b(?:quote|rfq|send|draft|mail|e-mail|email|calendar|invoice)\b",
+    re.I,
+)
+
+
+def asks_to_close_drawing(message: str) -> bool:
+    return bool(_CLOSE_DRAWING_RE.search(message or ""))
+
+
+def wants_drawing_window(message: str) -> bool:
+    text = message or ""
+    if _SHOP_LEAVE_RE.search(text):
+        return False
+    return bool(_OPEN_DRAWING_RE.search(text))
+
+
+def leaves_drawing_for_shop(message: str) -> bool:
+    return bool(_SHOP_LEAVE_RE.search(message or ""))
+
+
 def is_drawing_session(session_id: str) -> bool:
     row = db.get_conversation_by_session(session_id)
-    return bool(row and row.get("category") == "drawing" and row.get("status") != "archived")
+    if not row or row.get("category") != "drawing" or row.get("status") == "archived":
+        return False
+    focus = row.get("focus") if isinstance(row.get("focus"), dict) else {}
+    return focus.get("viewing") is not False
 
 
 def public_row(row: dict[str, Any]) -> dict[str, Any]:
@@ -312,6 +346,190 @@ def prime_drawing(conversation_id: str) -> dict[str, Any]:
     return public_row(updated or row)
 
 
+def _drawing_chat_view(row: dict[str, Any] | None, notes: str, *, open: bool) -> DrawingChatView:
+    focus = row.get("focus") if row and isinstance(row.get("focus"), dict) else {}
+    filename = str(focus.get("filename") or focus.get("local_name") or "")
+    return DrawingChatView(
+        open=open,
+        notes=notes,
+        filename=filename,
+        local_name=str(focus.get("local_name") or filename),
+        local_path=str(focus.get("local_path") or ""),
+        mime=str(focus.get("mime") or ""),
+        conversation_id=str(row.get("id") or "") if row else "",
+        session_id=str(row.get("session_id") or "") if row else "",
+    )
+
+
+def _vision_block_reason(row: dict[str, Any]) -> str | None:
+    """Cloud vision stays deny-by-default. A dropped file is a temporary owner hand-off."""
+    focus = row.get("focus") if isinstance(row.get("focus"), dict) else {}
+    if focus.get("impromptu_vision"):
+        return None
+    customer_id = str(focus.get("customer_id") or "").strip()
+    if not settings.masterdata_enabled or not customer_id:
+        return (
+            "I will not send this sheet to the cloud. "
+            "There is no attested vision consent for this customer, so I will not invent sizes."
+        )
+    from .vision.gate import _customer_vision_consent_error
+
+    err = _customer_vision_consent_error(customer_id)
+    if err:
+        return f"{err} I will not invent sizes."
+    return None
+
+
+def _drawing_row_by_id(conversation_id: str) -> dict[str, Any] | None:
+    return db.get_conversation(conversation_id)
+
+
+def resolve_drawing_for_chat(message: str, session_id: str) -> dict[str, Any] | None:
+    """Pick the sheet for a chat window. Named match wins, otherwise the newest drawing."""
+    current = db.get_conversation_by_session(session_id)
+    if current and current.get("category") == "drawing" and current.get("status") != "archived":
+        return current
+    named = match_named(message or "")
+    if named and named.get("category") == "drawing" and named.get("id"):
+        row = _drawing_row_by_id(str(named["id"]))
+        if row:
+            return row
+    low = (message or "").lower()
+    for row in db.list_conversations():
+        if row.get("category") != "drawing" or row.get("status") == "archived":
+            continue
+        focus = row.get("focus") if isinstance(row.get("focus"), dict) else {}
+        name = str(focus.get("filename") or focus.get("local_name") or row.get("title") or "").lower()
+        stem = Path(name).stem.lower()
+        if stem and len(stem) >= 4 and stem in low:
+            return row
+    for row in db.list_conversations():
+        if row.get("category") == "drawing" and row.get("status") != "archived":
+            return row
+    return None
+
+
+def begin_drawing_chat(message: str, desk_session: str) -> ChatResponse:
+    """Open the drawing window from whatever note the desk is on. The lens stays put."""
+    target = resolve_drawing_for_chat(message, desk_session)
+    if not target:
+        speak = "Which drawing should I open? I will not guess a sheet."
+        scene = {"title": "Drawing", "widgets": []}
+        return ChatResponse(
+            speak=speak,
+            reply=speak,
+            scene=Scene.model_validate(scene),
+            pending=[],
+            agents=[AgentStatus(**item) for item in agent_status_payload({})],
+            drawing_chat=DrawingChatView(open=False, notes=speak),
+        )
+    focus = dict(target.get("focus") or {})
+    focus["viewing"] = True
+    db.update_conversation(target["id"], focus=focus, minimized=False, status="ready")
+    result = chat_drawing(str(target["session_id"]), message)
+    result.ui_action = {"action": "focus_drawing", "conversation_id": target["id"]}
+    return result
+
+
+_DRAWING_DROPS = {".pdf", ".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff"}
+
+
+def _drawing_by_sha(digest: str) -> dict[str, Any] | None:
+    for row in db.list_conversations():
+        if row.get("category") != "drawing" or row.get("status") == "archived":
+            continue
+        focus = row.get("focus") if isinstance(row.get("focus"), dict) else {}
+        if str(focus.get("file_sha256") or "") == digest:
+            return row
+    return None
+
+
+def ingest_dropped_drawing(filename: str, data: bytes) -> ChatResponse:
+    """Save a dropped sheet once, or reopen the same bytes. The drop is a test look."""
+    name = Path(filename or "drawing").name
+    suffix = Path(name).suffix.lower()
+    if suffix not in _DRAWING_DROPS or not data:
+        speak = "Drop a PDF or an image of the drawing."
+        scene = {"title": "Drawing", "widgets": []}
+        return ChatResponse(
+            speak=speak,
+            reply=speak,
+            scene=Scene.model_validate(scene),
+            pending=[],
+            agents=[AgentStatus(**item) for item in agent_status_payload({})],
+            drawing_chat=DrawingChatView(open=False, notes=speak),
+        )
+    digest = hashlib.sha256(data).hexdigest()
+    mime = "application/pdf" if suffix == ".pdf" else "image/png"
+    existing = _drawing_by_sha(digest)
+    if existing:
+        focus = dict(existing.get("focus") or {})
+        path = Path(str(focus.get("local_path") or ""))
+        if not path.is_file():
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(data)
+        focus["viewing"] = True
+        focus["impromptu_vision"] = True
+        focus["file_sha256"] = digest
+        db.update_conversation(existing["id"], focus=focus, minimized=False, status="ready")
+        target = db.get_conversation(existing["id"]) or existing
+        stored_name = path.name
+    else:
+        folder = settings.exports_dir / "drawings"
+        folder.mkdir(parents=True, exist_ok=True)
+        path = folder / f"{digest}{suffix}"
+        if not path.is_file():
+            path.write_bytes(data)
+        stored_name = path.name
+        focus = {
+            "filename": name,
+            "local_name": stored_name,
+            "local_path": str(path),
+            "mime": mime,
+            "file_sha256": digest,
+            "viewing": True,
+            "impromptu_vision": True,
+        }
+        created = create("drawing", Path(name).stem or "Drawing", focus, status="ready")
+        db.add_artifact(str(created["id"]), "drawing", name, str(path))
+        target = db.get_conversation(str(created["id"])) or created
+    db.remember_dropped_drawing(
+        sha256=digest,
+        filename=name,
+        stored_name=stored_name,
+        path=str(path),
+        mime=mime,
+        byte_size=len(data),
+    )
+    result = chat_drawing(
+        str(target["session_id"]),
+        "Look at this drawing. Say only what you can actually see.",
+    )
+    result.ui_action = {"action": "focus_drawing", "conversation_id": str(target["id"])}
+    return result
+
+
+def close_drawing_view(session_id: str) -> ChatResponse:
+    row = db.get_conversation_by_session(session_id)
+    speak = "Drawing closed."
+    if row:
+        focus = dict(row.get("focus") or {})
+        focus["viewing"] = False
+        db.update_conversation(row["id"], focus=focus)
+        db.add_message(session_id, "assistant", speak)
+        db.touch_conversation(row["id"])
+    scene = {"title": "", "widgets": []}
+    remember_hud(session_id, {"speak": speak, "reply": speak, "scene": scene, "pending": []})
+    return ChatResponse(
+        speak=speak,
+        reply=speak,
+        scene=Scene.model_validate(scene),
+        pending=[],
+        agents=[AgentStatus(**item) for item in agent_status_payload({})],
+        drawing_chat=_drawing_chat_view(row, "", open=False),
+    )
+
+
 def chat_drawing(session_id: str, message: str) -> ChatResponse:
     row = db.get_conversation_by_session(session_id)
     if not row:
@@ -328,28 +546,36 @@ def chat_drawing(session_id: str, message: str) -> ChatResponse:
     if grounding:
         system += f"\nWhat you already saw:\n{grounding}"
     used = (row.get("model") or settings.gemini_model).strip()
-    try:
-        response = _chat_drawing_media(row, history, message, system, used)
-        speak = (response.get("content") or "").strip()
-        speak = re.sub(r"<think>.*?</think>", "", speak, flags=re.S).strip()
-        speak = speak[:600] or "I have the drawing. What do you need?"
-    except OllamaError as exc:
-        speak = "I could not read the drawing just then."
-        db.add_audit(session_id, "conversation", str(exc)[:400], "error")
+    blocked = _vision_block_reason(row)
+    if blocked:
+        speak = blocked
+    else:
+        try:
+            response = _chat_drawing_media(row, history, message, system, used, owner_spend=True)
+            speak = (response.get("content") or "").strip()
+            speak = re.sub(r"<think>.*?</think>", "", speak, flags=re.S).strip()
+            speak = speak[:600] or "I have the drawing. What do you need?"
+        except OllamaError as exc:
+            speak = "I could not read the drawing just then."
+            db.add_audit(session_id, "conversation", str(exc)[:400], "error")
     db.add_message(session_id, "assistant", speak)
+    notes = speak
+    focus = row.get("focus") if isinstance(row.get("focus"), dict) else {}
+    if focus.get("impromptu_vision") and not blocked:
+        notes = "Unattested test look. You handed Jarvis this file.\n\n" + speak
     scene = {
-        "title": row.get("title") or "Drawing",
-        "subtitle": "In focus",
-        "widgets": [{"type": "quote", "text": speak, "cite": "Jarvis"}],
+        "title": "",
+        "widgets": [],
     }
-    remember_hud(session_id, {"speak": speak, "reply": speak, "scene": scene, "pending": []})
+    remember_hud(session_id, {"speak": speak, "reply": notes, "scene": scene, "pending": []})
     db.touch_conversation(row["id"])
     return ChatResponse(
         speak=speak,
-        reply=speak,
+        reply=notes,
         scene=Scene.model_validate(scene),
         pending=[],
         agents=[AgentStatus(**item) for item in agent_status_payload({})],
+        drawing_chat=_drawing_chat_view(row, notes, open=True),
     )
 
 
@@ -419,12 +645,14 @@ def _chat_drawing_media(
     message: str,
     system: str,
     preferred: str,
+    *,
+    owner_spend: bool = False,
 ) -> dict[str, Any]:
     last: OllamaError | None = None
     for media, kind in _media_variants(row):
         try:
             response = _chat_with_fallback(
-                history, message, media, system, preferred, owner_spend=False
+                history, message, media, system, preferred, owner_spend=owner_spend
             )
             if kind == "image/png":
                 _mark_raster(row)

@@ -1054,10 +1054,24 @@ def _run_agent(message: str, session_id: str = "default", route=None) -> ChatRes
     intent = classify(message)
     if route_intent == "casual_chat":
         intent = Intent("chat")
-    if route_intent == "vision_task" and is_drawing_session(session_id) and intent.kind == "chat":
+    from .conversations import (
+        asks_to_close_drawing,
+        begin_drawing_chat,
+        close_drawing_view,
+        leaves_drawing_for_shop,
+        wants_drawing_window,
+    )
+
+    if is_drawing_session(session_id) and asks_to_close_drawing(message):
+        return close_drawing_view(session_id)
+    if (
+        is_drawing_session(session_id)
+        and intent.kind == "chat"
+        and not leaves_drawing_for_shop(message)
+    ):
         return chat_drawing(session_id, message)
-    if is_drawing_session(session_id) and intent.kind == "chat":
-        return chat_drawing(session_id, message)
+    if wants_drawing_window(message):
+        return begin_drawing_chat(message, session_id)
 
     # Fill / revise focused email compose from chat before other routing
     if waiting:
@@ -1248,9 +1262,9 @@ def _run_agent_legacy(
     memories = db.list_memories(session_id)
     inbox = db.list_inbox_files(6)
     tools = _enabled_tools(prefs)
-    from .conversations import chat_drawing, is_drawing_session
+    from .conversations import chat_drawing, is_drawing_session, leaves_drawing_for_shop
 
-    if is_drawing_session(session_id) and intent.kind == "chat":
+    if is_drawing_session(session_id) and intent.kind == "chat" and not leaves_drawing_for_shop(message):
         return chat_drawing(session_id, message)
     skip_brain = _skip_brain(intent.kind, message)
     if skip_brain:

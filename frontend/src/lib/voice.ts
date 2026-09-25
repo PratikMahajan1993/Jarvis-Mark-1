@@ -658,7 +658,7 @@ export function speak(
   text: string,
   enabled = true,
   onEnd?: () => void,
-  options?: { force?: boolean },
+  options?: { force?: boolean; voiceboxOnly?: boolean },
 ) {
   if (!enabled || !text || typeof window === "undefined") {
     onEnd?.();
@@ -688,13 +688,16 @@ export function speak(
   // Bridge: if Voicebox is cold, start browser speech quickly; cut over to Mark
   // only if Voicebox arrives within ~1.4s of the bridge. Late arrivals must not
   // play — otherwise the user hears the full line again ~10–20s later.
+  const voiceboxOnly = Boolean(options?.voiceboxOnly);
   const BRIDGE_CUTOVER_MS = 1400;
   let bridgeStartedAt = 0;
-  const bridgeTimer = window.setTimeout(() => {
-    if (seq !== speakSeq || activeAudio) return;
-    bridgeStartedAt = Date.now();
-    speakBrowser(text);
-  }, 160);
+  const bridgeTimer = voiceboxOnly
+    ? 0
+    : window.setTimeout(() => {
+        if (seq !== speakSeq || activeAudio) return;
+        bridgeStartedAt = Date.now();
+        speakBrowser(text);
+      }, 160);
 
   void (async () => {
     const blob = await fetchVoicebox(text, seq);
@@ -703,7 +706,7 @@ export function speak(
 
     if (blob) {
       const bridgeLate =
-        bridgeStartedAt > 0 && Date.now() - bridgeStartedAt >= BRIDGE_CUTOVER_MS;
+        !voiceboxOnly && bridgeStartedAt > 0 && Date.now() - bridgeStartedAt >= BRIDGE_CUTOVER_MS;
       if (bridgeLate) {
         // Browser already carried (or finished) the line; keep cache warm, no replay.
         handOffToBrowserEnd(onEnd);
@@ -714,6 +717,19 @@ export function speak(
         activeSpeech = null;
       }
       playVoiceboxBlob(blob, onEnd);
+      return;
+    }
+
+    if (voiceboxOnly) {
+      await new Promise((resolve) => window.setTimeout(resolve, 400));
+      if (seq !== speakSeq) return;
+      const retry = await fetchVoicebox(text, seq);
+      if (seq !== speakSeq) return;
+      if (retry) {
+        playVoiceboxBlob(retry, onEnd);
+        return;
+      }
+      onEnd?.();
       return;
     }
 

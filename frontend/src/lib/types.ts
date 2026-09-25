@@ -166,6 +166,16 @@ export type ChatResponse = {
   target_agent?: string | null;
   route_intent?: string | null;
   ui_action?: Record<string, unknown> | null;
+  drawing_chat?: {
+    open: boolean;
+    notes?: string;
+    filename?: string;
+    local_name?: string;
+    local_path?: string;
+    mime?: string;
+    conversation_id?: string;
+    session_id?: string;
+  } | null;
 };
 
 export type Preferences = {

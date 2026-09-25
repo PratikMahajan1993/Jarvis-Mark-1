@@ -73,6 +73,24 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ message, session_id: sessionId }),
     }),
+  dropDrawing: async (file: File) => {
+    const body = new FormData();
+    body.append("file", file);
+    const response = await fetch(`${apiBase()}/api/chat/drawing`, {
+      method: "POST",
+      body,
+      headers: mutatingAuthHeaders("POST"),
+    });
+    if (!response.ok) {
+      throw new Error(`Drop failed (${response.status})`);
+    }
+    return (await response.json()) as ChatResponse;
+  },
+  closeDrawing: (sessionId = "default") =>
+    json<ChatResponse>("/api/chat/drawing/close", {
+      method: "POST",
+      body: JSON.stringify({ message: "close the drawing", session_id: sessionId }),
+    }),
   getTurn: (turnId: string) =>
     json<{
       id: string;

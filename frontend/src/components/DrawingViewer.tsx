@@ -42,6 +42,8 @@ export function DrawingViewer({
   voiceCommand,
   voiceSeq = 0,
   embedded = false,
+  chatMode = false,
+  notes = "",
 }: {
   attachment: MailAttachment;
   onClose: () => void;
@@ -51,6 +53,9 @@ export function DrawingViewer({
   voiceSeq?: number;
   /** Fills parent container instead of full-screen HUD overlay. */
   embedded?: boolean;
+  /** Chat window: zoom and pan only. Markup stays on the bench. */
+  chatMode?: boolean;
+  notes?: string;
 }) {
   const [mode, setMode] = useState<Mode>("pan");
   const [pen, setPen] = useState<PenColor>("cyan");
@@ -58,6 +63,7 @@ export function DrawingViewer({
   const [numPages, setNumPages] = useState(1);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [loadError, setLoadError] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [pageSize, setPageSize] = useState({ w: 800, h: 600 });
@@ -118,9 +124,14 @@ export function DrawingViewer({
     }
   }, [pageNum]);
 
+  const whisperRef = useRef(onWhisper);
+  whisperRef.current = onWhisper;
+  const sourceUrl = fileUrl(attachment);
+
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
+    setLoadError("");
     setStrokes([]);
     setCrop(null);
     setCropDraft(null);
@@ -130,9 +141,8 @@ export function DrawingViewer({
 
     const load = async () => {
       try {
-        const url = fileUrl(attachment);
-        if (!url) throw new Error("No local file");
-        const response = await fetch(url);
+        if (!sourceUrl) throw new Error("No local file");
+        const response = await fetch(sourceUrl);
         if (!response.ok) throw new Error("Drawing missing");
         const data = await response.arrayBuffer();
         if (isPdf(attachment)) {
@@ -162,7 +172,10 @@ export function DrawingViewer({
           await renderPage();
         }
       } catch {
-        if (!cancelled) onWhisper("I could not open that drawing.");
+        if (!cancelled) {
+          setLoadError("I could not open that drawing.");
+          whisperRef.current("I could not open that drawing.");
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -171,7 +184,9 @@ export function DrawingViewer({
     return () => {
       cancelled = true;
     };
-  }, [attachment, onWhisper, renderPage]);
+    // Reload only when the file URL changes. Speech and zoom must not fetch it again.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sourceUrl]);
 
   useEffect(() => {
     void renderPage();
@@ -343,14 +358,16 @@ export function DrawingViewer({
     }
   };
 
-  const title = attachment.local_name || attachment.filename;
+  const title = attachment.filename || attachment.local_name;
 
   return (
     <div
       className={
         embedded
           ? "relative flex h-full min-h-0 flex-col bg-[#0a1218]"
-          : "absolute inset-0 z-30 flex flex-col bg-black/70 backdrop-blur-sm"
+          : chatMode
+            ? "fixed inset-x-0 top-0 bottom-24 z-[40] flex flex-col bg-[#070b10]"
+            : "absolute inset-0 z-30 flex flex-col bg-black/70 backdrop-blur-sm"
       }
     >
       <header
@@ -391,6 +408,8 @@ export function DrawingViewer({
           <button type="button" className="orch-btn orch-btn-ghost" onClick={() => setZoom((z) => Math.max(0.25, z / 1.25))}>
             Zoom −
           </button>
+          {chatMode ? null : (
+            <>
           {(["pan", "crop", "mark"] as Mode[]).map((m) => (
             <button
               key={m}
@@ -422,6 +441,8 @@ export function DrawingViewer({
           <button type="button" className="orch-btn orch-btn-primary" disabled={saving || loading} onClick={() => void saveMarked()}>
             {saving ? "Saving…" : "Save marked"}
           </button>
+            </>
+          )}
           {!embedded ? (
             <button type="button" className="orch-btn orch-btn-ghost" onClick={onClose}>
               Close
@@ -430,9 +451,10 @@ export function DrawingViewer({
         </div>
       </header>
 
+      <div className={chatMode ? "flex min-h-0 flex-1" : "contents"}>
       <div
         ref={viewportRef}
-        className={`relative min-h-0 flex-1 overflow-hidden ${mode === "pan" ? "cursor-grab active:cursor-grabbing" : mode === "crop" ? "cursor-crosshair" : "cursor-crosshair"}`}
+        className={`relative min-h-0 flex-1 overflow-hidden ${mode === "pan" ? "cursor-grab active:cursor-grabbing" : "cursor-crosshair"}`}
         onWheel={onWheel}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
@@ -441,6 +463,11 @@ export function DrawingViewer({
       >
         {loading ? (
           <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center text-white/40">Loading drawing…</div>
+        ) : null}
+        {loadError ? (
+          <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center px-8 text-center text-sm text-white/70">
+            {loadError}
+          </div>
         ) : null}
         <div
           className={`absolute left-1/2 top-1/2 origin-center ${loading ? "invisible" : ""}`}
@@ -459,6 +486,15 @@ export function DrawingViewer({
             />
           </div>
         </div>
+      </div>
+      {chatMode ? (
+        <aside className="w-80 shrink-0 overflow-y-auto border-l border-[color:var(--border)] bg-[#070b10] p-4">
+          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-[color:var(--accent)]/70">From the sheet</p>
+          <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-[color:var(--fg)]/90">
+            {notes.trim() || "Looking at the drawing."}
+          </p>
+        </aside>
+      ) : null}
       </div>
     </div>
   );

@@ -490,6 +490,14 @@ async def api_chat(payload: ChatRequest, request: Request) -> dict:
 
     t0 = time.perf_counter()
     message = payload.message.strip()
+    from .conversations import asks_to_close_drawing, close_drawing_view, is_drawing_session
+
+    if asks_to_close_drawing(message) and is_drawing_session(payload.session_id):
+        closed = close_drawing_view(payload.session_id)
+        data = closed.model_dump()
+        remember_hud(payload.session_id, data)
+        return data
+
     try:
         from .live_log import record as live_record
 
@@ -803,15 +811,44 @@ def api_artifact_download(artifact_id: str) -> FileResponse:
 
 @app.get("/api/drawings/{filename}")
 def api_drawing_download(filename: str) -> FileResponse:
-    try:
-        path = safe_drawing_path(filename)
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
-    if not path.exists():
+    path = _resolve_drawing_file(filename)
+    if path is None:
         raise HTTPException(404, "Drawing not found")
     suffix = path.suffix.lower()
     media = "application/pdf" if suffix == ".pdf" else None
-    return FileResponse(path, media_type=media)
+    return FileResponse(path, media_type=media, filename=path.name)
+
+
+def _resolve_drawing_file(filename: str) -> Path | None:
+    """Exports drawings first, then a dropped sheet stored by fingerprint."""
+    try:
+        exported = safe_drawing_path(filename)
+    except ValueError:
+        exported = None
+    if exported is not None and exported.is_file():
+        return exported
+    clean = Path(filename).name
+    if not clean or clean in {".", ".."}:
+        return None
+    inbox_root = (settings.data_dir / "inbox" / "drawings").resolve()
+    direct = (inbox_root / clean).resolve()
+    if inbox_root in direct.parents and direct.is_file():
+        return direct
+    allowed_roots = [settings.exports_dir.resolve(), inbox_root]
+    for row in db.list_conversations():
+        focus = row.get("focus") if isinstance(row.get("focus"), dict) else {}
+        names = {
+            Path(str(focus.get("filename") or "")).name,
+            Path(str(focus.get("local_name") or "")).name,
+        }
+        if clean not in names:
+            continue
+        candidate = Path(str(focus.get("local_path") or "")).resolve()
+        if not candidate.is_file():
+            continue
+        if any(root == candidate.parent or root in candidate.parents for root in allowed_roots):
+            return candidate
+    return None
 
 
 class VisionBenchAnalyse(BaseModel):
@@ -1049,6 +1086,29 @@ def api_conversation_drawing(payload: DrawingSpawn) -> dict:
 @app.get("/api/memory")
 def api_memory(session_id: str = "default") -> dict:
     return {"items": db.list_memories(session_id)}
+
+
+@app.post("/api/chat/drawing/close")
+def api_close_drawing(payload: ChatRequest) -> dict:
+    from .conversations import close_drawing_view
+
+    result = close_drawing_view(payload.session_id)
+    data = result.model_dump()
+    remember_hud(payload.session_id, data)
+    return data
+
+
+@app.post("/api/chat/drawing")
+async def api_chat_drawing(file: UploadFile = File(...)) -> dict:
+    from . import conversations as convs
+
+    raw = await file.read()
+    if len(raw) > 20 * 1024 * 1024:
+        raise HTTPException(413, "Drawing is too large")
+    result = convs.ingest_dropped_drawing(file.filename or "drawing", raw)
+    data = result.model_dump()
+    remember_hud(str((data.get("drawing_chat") or {}).get("session_id") or "default"), data)
+    return data
 
 
 @app.post("/api/inbox")

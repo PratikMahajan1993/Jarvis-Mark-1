@@ -40,6 +40,8 @@ import { SceneBoard } from "../SceneBoard";
 import ClickSpark from "@/components/react-bits/ClickSpark";
 import SpotlightCard from "@/components/react-bits/SpotlightCard";
 import { ConverseStrip } from "@/components/bench/ConverseStrip";
+import { DrawingViewer } from "@/components/DrawingViewer";
+import { conversationToAttachment } from "@/lib/viewerMatch";
 import { DrawingStage } from "@/components/bench/DrawingStage";
 import { QuoteSheet, quoteSheetRowsForScene } from "@/components/bench/QuoteSheet";
 import { ActivityStream } from "./ActivityStream";
@@ -121,8 +123,8 @@ function mapDeskItems(
     .map((row) => ({
     id: row.id,
     sessionId: row.session_id,
-    title: row.title || row.category || "Conversation",
-    kindLabel: row.kind_label || (row.category === "workflow" ? "Job" : row.category === "drawing" ? "Drawing" : "Discussion"),
+    title: row.title || row.category || "Note",
+    kindLabel: row.kind_label || (row.category === "workflow" ? "Job" : row.category === "drawing" ? "Drawing" : "Note"),
     time: row.updated_at
       ? new Date(row.updated_at).toLocaleTimeString("en-US", {
           hour: "numeric",
@@ -247,6 +249,7 @@ function VoiceDockPanel({
   voice,
   voiceVisible,
   showCenterVoice,
+  boardOwnsCenter,
   hitlAction,
   scene,
   sending,
@@ -264,10 +267,12 @@ function VoiceDockPanel({
   onComposeChange,
   onComposeSubmit,
   onMic,
+  onDropDrawing,
 }: {
   voice: string;
   voiceVisible: boolean;
   showCenterVoice: boolean;
+  boardOwnsCenter: boolean;
   hitlAction: PendingAction | null;
   scene: Scene;
   sending: boolean;
@@ -285,8 +290,10 @@ function VoiceDockPanel({
   onComposeChange: (value: string) => void;
   onComposeSubmit: (value: string) => void;
   onMic: () => void;
+  onDropDrawing: (file: File) => void;
 }) {
   const activeLens = useDisplayLens();
+  const [dropHot, setDropHot] = useState(false);
   const gatedScene = useValueWhenSettled(scene);
 
   if (activeLens === "watch") {
@@ -322,11 +329,33 @@ function VoiceDockPanel({
   }
 
   /* Converse: open center — substrate orb + DOM rings; always a short idle line. */
-  const line = (showCenterVoice && voice ? voice : IDLE_VOICE).trim() || IDLE_VOICE;
+  const line = (showCenterVoice && voice ? voice : boardOwnsCenter ? "On the board" : IDLE_VOICE).trim() || IDLE_VOICE;
   const shortLine = line.length > 96 || line.includes("\n") ? `${line.slice(0, 96).trim()}…` : line;
   return (
     <div className="pointer-events-none relative flex h-full min-h-0 w-full items-center justify-center overflow-visible">
       <JarvisCore mode={orchestratorMode} />
+      <div
+        className={[
+          "pointer-events-auto absolute left-1/2 top-1/2 z-[2] h-[420px] w-[420px] -translate-x-1/2 -translate-y-1/2 rounded-full",
+          dropHot ? "ring-2 ring-[color:var(--accent)]/70" : "",
+        ].join(" ")}
+        aria-label="Drop a drawing on the orb"
+        onDragEnter={(event) => {
+          event.preventDefault();
+          setDropHot(true);
+        }}
+        onDragOver={(event) => {
+          event.preventDefault();
+          setDropHot(true);
+        }}
+        onDragLeave={() => setDropHot(false)}
+        onDrop={(event) => {
+          event.preventDefault();
+          setDropHot(false);
+          const file = event.dataTransfer.files?.[0];
+          if (file) onDropDrawing(file);
+        }}
+      />
       <div className="pointer-events-none relative z-[2] max-w-[min(420px,70%)] px-4 text-center">
         <p
           className={[
@@ -417,6 +446,7 @@ export function OrchestratorShell() {
   );
   const [workspacePinned, setWorkspacePinned] = useState(false);
   const [ledgerTurnId, setLedgerTurnId] = useState<string | null>(null);
+  const [drawingChat, setDrawingChat] = useState<NonNullable<ChatResponse["drawing_chat"]> | null>(null);
 
   // Mirrors `state` synchronously (a render behind `state` itself) so
   // imperative callbacks can guard re-entrancy (e.g. a second send() firing
@@ -679,7 +709,7 @@ export function OrchestratorShell() {
     sessionRef.current = AMBIENT_SESSION;
     setActiveSession(AMBIENT_SESSION);
     setActiveConversationId(null);
-    setFocusTitle("Everyday desk");
+    setFocusTitle("Everyday note");
     setConversationFocus({});
     if (!workspacePinnedRef.current) {
       setWorkspaceExplicit("monitor", "ambient");
@@ -691,7 +721,7 @@ export function OrchestratorShell() {
     }
     await refreshDesk(null);
     await loadSessionSurface(AMBIENT_SESSION, { announce: true });
-    showVoice("Back on the everyday desk.");
+    showVoice("Back on the everyday note.");
   }, [loadSessionSurface, refreshDesk, setWorkspaceExplicit, showVoice]);
 
   const focusConversation = useCallback(
@@ -701,7 +731,7 @@ export function OrchestratorShell() {
       sessionRef.current = sessionId;
       setActiveSession(sessionId);
       setActiveConversationId(row.id);
-      setFocusTitle(row.title || row.kind_label || "Conversation");
+      setFocusTitle(row.title || row.kind_label || "Note");
       setConversationFocus(row.focus || {});
       try {
         localStorage.setItem(FOCUS_STORAGE_KEY, row.id);
@@ -736,6 +766,18 @@ export function OrchestratorShell() {
       }
       const conversationId = typeof uiAction?.conversation_id === "string" ? uiAction.conversation_id : "";
       const rows = await refreshDesk(activeConversationId);
+      if (action === "focus_drawing" && conversationId) {
+        const row = rows.find((item) => item.id === conversationId);
+        if (row) {
+          const sessionId = row.session_id || AMBIENT_SESSION;
+          sessionRef.current = sessionId;
+          setActiveSession(sessionId);
+          setActiveConversationId(row.id);
+          setFocusTitle(row.title || "Drawing");
+          setConversationFocus(row.focus || {});
+        }
+        return;
+      }
       if (action === "minimize") {
         if (activeConversationId && activeConversationId === conversationId) {
           await focusAmbient();
@@ -754,6 +796,18 @@ export function OrchestratorShell() {
   const applyResponse = useCallback(
     (result: ChatResponse, opts?: { fromConfirm?: boolean; approved?: boolean }) => {
       void applyUiAction(result.ui_action);
+      const view = result.drawing_chat;
+      if (view && typeof view === "object") {
+        if (view.open === false) setDrawingChat(null);
+        else if (view.filename || view.local_name) {
+          setDrawingChat(view);
+          if (view.session_id) {
+            sessionRef.current = view.session_id;
+            setActiveSession(view.session_id);
+          }
+          if (view.conversation_id) setActiveConversationId(view.conversation_id);
+        }
+      }
 
       const waiting = result.pending || [];
       const nextAction = waiting[0] || null;
@@ -766,8 +820,12 @@ export function OrchestratorShell() {
       const nextScene = sceneHasBoardContent(result.scene) ? result.scene! : EMPTY_SCENE;
       const boardOwnsHud =
         sceneHasBoardContent(nextScene) || nextAction?.kind === "email_compose";
-      if (boardOwnsHud && workspaceRef.current !== "engineering") clearVoice();
-      else showVoice(display);
+      if (boardOwnsHud && workspaceRef.current !== "engineering") {
+        setVoiceVisible(false);
+        setVoice("On the board");
+      } else {
+        showVoice(display);
+      }
       setScene(nextScene);
 
       if (result.activity?.length) {
@@ -1171,7 +1229,7 @@ export function OrchestratorShell() {
           sessionRef.current = restored.session_id || AMBIENT_SESSION;
           setActiveSession(sessionRef.current);
           setActiveConversationId(restored.id);
-          setFocusTitle(restored.title || "Conversation");
+          setFocusTitle(restored.title || "Note");
           setConversationFocus(restored.focus || {});
           void api.patchConversation(restored.id, { minimized: false }).catch(() => null);
           await loadSessionSurface(sessionRef.current, { announce: !skipAmbientAnnounce });
@@ -1179,7 +1237,7 @@ export function OrchestratorShell() {
           sessionRef.current = AMBIENT_SESSION;
           setActiveSession(AMBIENT_SESSION);
           setActiveConversationId(null);
-          setFocusTitle("Everyday desk");
+          setFocusTitle("Everyday note");
           await loadSessionSurface(AMBIENT_SESSION, { announce: !skipAmbientAnnounce });
         }
         const taskItems = (tasks.items || [])
@@ -1273,10 +1331,10 @@ export function OrchestratorShell() {
       }
       const row = await api.startDiscussion("");
       await focusConversation(row, { announce: true });
-      pushLog("SYS", `Opened discussion: ${row.title}`);
+      pushLog("SYS", `Opened note: ${row.title}`);
       void refreshDesk(row.id);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not open discussion");
+      setError(err instanceof Error ? err.message : "Could not open note");
     }
   }, [desk.length, focusConversation, pushLog, refreshDesk, setWorkspaceExplicit]);
 
@@ -1338,6 +1396,32 @@ export function OrchestratorShell() {
     [focusConversation, openWorkflowFromTask, send, setWorkspaceExplicit],
   );
 
+  const dropDrawing = useCallback(
+    async (file: File) => {
+      setError("");
+      showVoice("Looking at the drawing…");
+      try {
+        const result = await api.dropDrawing(file);
+        applyResponse(result);
+        void refreshDesk(result.drawing_chat?.conversation_id || activeConversationId);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Could not open that drawing";
+        setError(msg);
+        showVoice(msg);
+      }
+    },
+    [activeConversationId, applyResponse, refreshDesk, showVoice],
+  );
+
+  const drawingAttachment = drawingChat?.open === false
+    ? null
+    : conversationToAttachment({
+        filename: drawingChat?.filename,
+        local_name: drawingChat?.local_name,
+        local_path: drawingChat?.local_path,
+        mime: drawingChat?.mime,
+      });
+
   const shellTree = (
     <LensSparkShell>
       <Pane
@@ -1360,10 +1444,11 @@ export function OrchestratorShell() {
         className="flex-1"
         panels={{
           voice: (
-            <VoiceDockPanel
+              <VoiceDockPanel
               voice={voice}
               voiceVisible={voiceVisible}
               showCenterVoice={showCenterVoice}
+              boardOwnsCenter={boardOwnsCenter}
               hitlAction={hitlAction}
               scene={scene}
               sending={sending}
@@ -1381,6 +1466,7 @@ export function OrchestratorShell() {
               onComposeChange={setCompose}
               onComposeSubmit={(value) => void send(value)}
               onMic={() => void startMic()}
+              onDropDrawing={(file) => void dropDrawing(file)}
             />
           ),
           notes: (
@@ -1467,6 +1553,29 @@ export function OrchestratorShell() {
         }}
         onDecide={(id, approved, fields) => void decide(id, approved, fields)}
       />
+
+      {drawingAttachment && drawingChat ? (
+        <DrawingViewer
+          chatMode
+          notes={drawingChat.notes || ""}
+          attachment={drawingAttachment}
+          onClose={() => {
+            const sessionId = drawingChat.session_id || sessionRef.current;
+            setDrawingChat(null);
+            const line = "Drawing closed.";
+            showVoice(line);
+            speakGenRef.current += 1;
+            const gen = speakGenRef.current;
+            applyEvent({ type: "SPEAK_START", text: line });
+            speak(line, voiceEnabledRef.current !== false, () => {
+              if (gen !== speakGenRef.current) return;
+              applyEvent({ type: "SPEAK_END" });
+            }, { voiceboxOnly: true });
+            void api.closeDrawing(sessionId).catch(() => null);
+          }}
+          onWhisper={(line) => showVoice(line)}
+        />
+      ) : null}
 
     </LensSparkShell>
   );
