@@ -4,27 +4,23 @@ globs: backend/app/db.py, backend/app/schemas.py, backend/migrations/**, backend
 alwaysApply: false
 ---
 
-# Data schema
+# Data Schema
 
-## Migrations only
-
+## Migrations Only
 - Schema changes ship as numbered SQL under `backend/migrations/` and a row in `schema_migrations`.
 - **No ad-hoc `ALTER` in `init_db()`** — no new `PRAGMA table_info` patch blocks for production tables.
 - Forward-only: backfills belong in migration scripts, not request handlers.
 
-## Types and storage
-
+## Types and Storage
 - **Money:** integer minor units + ISO currency code on every monetary column; never float dollars in SQL.
 - **Dimensions:** numeric value + unit column (mm, in, kg, …); never bare floats without unit.
 - **Timestamps:** store UTC ISO-8601 via `db.utc_now()`; render with `settings.tz`. Naive `datetime.now()` in writes is banned.
 
-## Provenance on priced data
-
+## Provenance on Priced Data
 - Every quotable or billable row carries **`source_kind`** and **`source_ref`** (or successor ids like `rate_source_id` per domain quote rule).
-- Demo/seed rows are stored but **not sendable** until attested (see `domain/32-master-data`).
+- Demo/seed rows are stored but **not sendable** until attested (see `domain/30-quote-playbook`).
 
-## Master data edits
-
+## Master Data Edits
 - Temporal rates: always query **as-of** a business date with `effective_from` / `effective_to`.
 - **No hard deletes** on authoritative rows — supersede with a new row and end-date the old.
 

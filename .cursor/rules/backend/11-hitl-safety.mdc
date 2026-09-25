@@ -4,30 +4,24 @@ globs: backend/app/agent.py, backend/app/main.py, backend/app/hermes/**, backend
 alwaysApply: false
 ---
 
-# HITL safety
+# HITL Safety
 
-External effects are **at-most-once**; grunt work may be at-least-once.
-
-## Claim-once execution
-
-- `pending_actions` flow: `pending → claimed → executed | failed | rejected`.
+## Claim-Once Execution
+- `pending_actions` flow: `pending → claimed → executed | failed | rejected`
 - Start provider work only when `UPDATE … SET status='claimed' … WHERE status='pending'` affects **one** row; else reply **already handled**.
 - `POST /api/confirm` accepts **Idempotency-Key**; repeats return the first response.
 
-## `external_effects` bracket
-
+## `external_effects` Bracket
 - Insert row with `state='intent'` (provider, `request_hash`) **before** the outbound call.
 - Settle to `sent`, `failed`, or `unknown` with provider ids/errors.
 - Boot: reconcile `intent`/`unknown` against the provider or park **`needs_human`** — never silent retry.
 
 ## Tools and MCP
-
 - Send mail, calendar writes, Sheets/Drive writes, `quote_send`, CNC promote, broad memory wipe → **queue Authorize**; never set `sent: true` or equivalent success flags in the tool return.
 - MCP Hermes tools follow the same queue — no direct send from the model path.
 - **Safety deny-list:** block tool names/paths that skip HITL for destructive or external ops.
 
-## Copy discipline
-
+## Copy Discipline
 - Chat and HUD text must not claim an external act succeeded until execution records it.
 - Duplicate Authorize after `claimed`/`executed` is forbidden — surface outcome instead.
 

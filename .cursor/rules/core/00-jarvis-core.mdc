@@ -1,0 +1,39 @@
+---
+description: Jarvis repo-wide facts — stack, ports, data paths, who owns numbers, what needs Authorize. ALWAYS APPLIES.
+alwaysApply: true
+---
+
+# Jarvis Core (Always-On)
+
+## Stack & Ports
+- HUD: Next.js `frontend/` on **:3000**
+- API: FastAPI `backend/app/` on **127.0.0.1:8000**
+- Hermes Gateway: **:8642** (shop work brain)
+- Voicebox TTS: **:17493** — `POST /generate` only (never `/speak`)
+- Gemini: Casual chat + vision + overflow
+- Ollama: Last resort fallback
+
+## Data Paths
+- Database: `<repo>/data/jarvis.db` (SQLite)
+- Written files: `<repo>/exports/` **only**
+- Hermes sessions: `<repo>/data/hermes_sessions.json`
+- Memory/LanceDB: `<repo>/data/memory/`
+
+## Architecture Invariants
+- **One shell:** `OrchestratorShell` (not `HudShell`)
+- **Two state layers, never collapsed:**
+  - `HudWorkspace`: `casual` | `monitor` | `engineering` (job of the screen)
+  - `JarvisState` turn FSM: `IDLE` | `LISTENING` | `THINKING` | `SPEAKING` | `AWAITING_HITL` | `EXECUTING`
+- **Turn ledger** (`turn_ledger_enabled`, default **off**) is future work — not load-bearing
+- **Jobs are Hermes playbooks** under `backend/app/hermes/playbooks/`, not new agents
+
+## Hard Rules
+- **Tools own** mail, calendar, files, and **every number**. Model never invents prices, rates, dimensions, mail, or calendar facts. No source → ask.
+- **Authorize (HITL) before any external/destructive act:** send mail, calendar write, quote send, sheet write, CNC promote, broad memory wipe. Queue it; never claim it was done.
+- **Never commit:** `.env`, `data/`, `exports/`, tokens, customer drawings.
+
+## Reference Docs
+- `docs/SYSTEM_TRUTH.md` — single source of truth (current state + locked decisions)
+- `docs/ROADMAP.md` — next steps & priorities
+- `docs/CURRENT.md` — as-built snapshot
+- `AGENTS.md` — agent & skill map

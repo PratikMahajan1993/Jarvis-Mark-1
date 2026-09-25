@@ -4,16 +4,15 @@ globs: backend/app/**/*.py
 alwaysApply: false
 ---
 
-# API Python
+# Backend Python API
 
-## Module ownership (one home per concern)
-
+## Module Ownership (One Home Per Concern)
 | Area | Owns |
-| ---- | ---- |
+|------|------|
 | `main.py` | Routes, middleware, lifespan |
 | `agent.py` / `brain.py` | Turn orchestration, model routing |
 | `tools/` | Tool registry and side-effect-free reads |
-| `connectors/` | Gmail, calendar, Drive, Sheets, search |
+| `connectors/` | Gmail, Calendar, Drive, Sheets, Search |
 | `hermes/` | Gateway bridge, MCP, playbooks |
 | `quote.py`, `rfq.py`, `cnc_suggest.py` | Shop workflows (see domain rules) |
 | `memory/` | Local RAG store (SQLite + LanceDB under `data/memory/`) |
@@ -21,11 +20,11 @@ alwaysApply: false
 | `config.py` | **`Settings` only** — no parallel env readers |
 
 ## Conventions
-
-- **Config:** read paths, keys, and ports from `settings` (`app.config`); anchor relative dirs via repo root, not process CWD.
-- **Lazy imports:** import heavy connectors and model clients inside the function that needs them; avoid new top-level import cycles.
+- **Config:** Read paths, keys, ports from `settings` (`app.config`); anchor relative dirs via repo root, not process CWD.
+- **Lazy imports:** Import heavy connectors and model clients inside the function that needs them; avoid new top-level import cycles.
 - **No new JSON state files** for durable data — SQLite tables or documented exports only.
-- **External I/O:** every HTTP/RPC call to Hermes, Gemini, Ollama, Voicebox, or Google APIs must use an explicit timeout; no unbounded `wait`.
-- **Extend, don't fork:** new features hook existing modules; no parallel stack under `backend/`.
+- **External I/O:** Every HTTP/RPC call to Hermes, Gemini, Ollama, Voicebox, or Google APIs must use an explicit timeout; no unbounded `wait`.
+- **Extend, don't fork:** New features hook existing modules; no parallel stack under `backend/`.
 
-Skills carry long procedures; this file states only break-if-wrong constraints.
+## Skills
+Long procedures live in skills (e.g., `jarvis-quote-playbook`, `jarvis-architecture`); this file states only break-if-wrong constraints.

@@ -4,12 +4,11 @@ globs: backend/app/turns/**, backend/app/agent.py, backend/app/main.py
 alwaysApply: false
 ---
 
-# Turn ledger
+# Turn Ledger (Gated: `turn_ledger_enabled`, default **off**)
 
-## States (server is truth)
-
+## States (Server is Truth)
 | State | Meaning |
-| ----- | ------- |
+|-------|---------|
 | `QUEUED` | Accepted, not yet running |
 | `RUNNING` | Worker holds lease + heartbeat |
 | `AWAITING_HITL` | Pending action queued; waiting Authorize/Reject |
@@ -19,18 +18,15 @@ alwaysApply: false
 
 Illegal transitions are rejected — do not skip `AWAITING_HITL` for external sends.
 
-## Leases and heartbeats
-
+## Leases and Heartbeats
 - `RUNNING` requires a fresh lease; stale lease → reaper marks failure with **stage** preserved for Retry copy.
 - Reaper window is bounded (≤~15 s visibility in HUD); do not infinite-spin without ledger update.
 
 ## Idempotency
-
 - Confirm and turn-creating POSTs accept idempotency keys; duplicates return the original outcome payload.
 - **Client fetch timeout is not cancellation** — turn keeps running until explicit `POST /api/turns/{id}/cancel`.
 
-## HUD projection
-
+## HUD Projection
 - FSM in `orchestratorFsm.ts` maps ledger snapshots via a pure reducer (`RECONCILE` / `hydrate`) — see `frontend/20-hud-shell`.
 - Reconcile on mount, focus, SSE reconnect, and after fetch failures (lost `AWAITING_HITL` must reopen the panel).
 

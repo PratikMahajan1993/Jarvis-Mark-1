@@ -1,40 +1,49 @@
 ---
-description: Coordinator dispatch and capability-test protocol — Composer 2.5 Fast roster workers, placement policy, observe-delegate-continue.
+description: Coordinator dispatch and capability-test protocol — user-directed subagents, placement policy, observe-delegate-continue.
 alwaysApply: false
 ---
 
-# Dispatch and capability runs
+# Dispatch Protocol
 
-## Code changes (coordinator chat)
+## Worker Roster
+| Agent | Owns | Needs Desk Machine? |
+|-------|------|---------------------|
+| `jarvis-uiux` | Layout, React Bits, weather/tasks panels, visual polish | No (cloud-verifiable) |
+| `jarvis-voice` | Voicebox, `/api/tts`, speak bridge, double-play, latency | Yes (Voicebox :17493) |
+| `jarvis-workflows` | Mail, HITL, RFQ/quote, calendar, Hermes/snapshot tools | Yes for live mail/Hermes |
+| `jarvis-builder` | General implementation / restarts / verify | Only for restarts + live verification |
 
-**Default:** the coordinator **does not** edit repo files to implement. When a change is needed:
+## Placement Policy
+- Cloud workers run on isolated VMs with browser: HUD builds/serves in cloud, headless Chrome can load/screenshot/script.
+- Cloud **can** verify: HUD rendering, layout, scroll behavior, card states.
+- Cloud **cannot** reach: Hermes (:8642), Voicebox (:17493), real Google OAuth, GPU-representative Ollama, physical mic/speaker.
+- Work needing any of the above → desk machine.
 
-1. Pick roster from `.cursor/agents/`:
-   - UI/layout/React Bits/cards/scroll/weather → **`jarvis-uiux`**
-   - TTS/Voicebox/speak/latency → **`jarvis-voice`**
-   - Mail/HITL/RFQ/calendar/tools/Hermes → **`jarvis-workflows`**
-   - Else (impl, restarts, verify) → **`jarvis-builder`**
-2. Launch Task with **`model: "composer-2.5-fast"`** — do not omit; do not inherit parent model.
-3. Background unless the user asks to wait.
-4. Closed kickoff: goal, repro, files in scope, acceptance, **do not expand scope**.
-5. No ad-hoc `generalPurpose` when a roster name fits.
+## Kickoff Rule
+Every worker gets: repo, `AGENTS.md`, `.cursor/rules/` — nothing from coordinator chat.
+Every kickoff carries: goal, files in scope, acceptance check, "do not expand scope".
+- Isolated branch worker: commits and pushes.
+- Shared desk checkout worker: does not commit unless told.
 
-**Exception — explicit direct work:** if the user explicitly authorizes direct repository work for this task, the coordinator may edit files instead of dispatching. Authorization must be explicit and task-scoped, never inferred. It does not permit scope expansion, unsafe or destructive acts, secrets, or skipping inspection, tests, git hygiene, or rule/skill/agent-prompt constraints. Changing this dispatch rule needs that edit explicitly in scope. Otherwise the Composer 2.5 Fast roster workflow above stays mandatory.
+## Subagent Dispatch
+**The coordinator implements and reviews code directly.** Subagents are dispatched **only when the user explicitly requests them** for tasks that are:
+- Very simple and well-scoped
+- Zero ambiguity — no chance of the sub-agent deviating from the coordinator's intent
+- **BAD example:** coordinator consolidates a file, asks subagent to write it → subagent uses its own reasoning
+- **GOOD example:** "run this specific test and report pass/fail", "apply this exact diff to this file"
 
-Coordinator may: talk, dispatch, log observations, update `work/*_POINTS.md` on owner intent; with explicit task authorization, implement within that scope.
-Coordinator must not: patch code, restyle HUD, or "quick fix" in chat **except under explicit task authorization above**.
+The user specifies `subagent_type` and `model` at dispatch time — no defaults, no automatic dispatch.
 
-## Capability test matrix
+## Capability Test Run (Observe → Delegate → Continue)
+1. Test one ID at a time from `work/CAPABILITY_TEST_MATRIX.md`
+2. Note pass/fail + latency
+3. If user requests a fix, dispatch to appropriate roster agent
+4. Continue testing while fix runs in background
+5. Re-test when worker reports back
 
-When running `work/CAPABILITY_TEST_MATRIX.md` or live observations:
-
-1. Stay on the current test ID; do not block on long fixes.
-2. Read `work/LAST_TURNS.md` for speak/board/pending context.
-3. Log ID, pass/fail/flaky, latency, notes in matrix or reply.
-4. Delegate fixes to background workers via `AGENTS.md` / skill **`jarvis-observation-dispatch`**, always **Composer 2.5 Fast**.
-5. One specialist per concern (UI/voice/workflows/builder).
-6. **Placement:** cloud by default (HUD layout/scroll/card states verifiable headlessly — WebGL flag in `frontend/21-react-bits`). Desk only for Hermes `:8642`, Voicebox `:17493`, real Google OAuth, GPU Ollama, or physical mic/speaker.
-7. Closed kickoff per worker; continue matrix while workers run.
-8. Worker report → 2–3 line summary; re-test only if user wants.
-
-No new architecture during test runs — fix within locked stack.
+## Skills for Dispatch
+- `jarvis-capability-test` — running matrix IDs A1…J*
+- `jarvis-observation-dispatch` — user reports observation mid-test
+- `jarvis-quote-playbook` — quote/RFQ workflow fixes
+- `jarvis-react-bits` — HUD accents
+- `jarvis-architecture` — structural/stack/workflow changes
