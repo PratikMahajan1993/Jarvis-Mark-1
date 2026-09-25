@@ -1603,11 +1603,18 @@ def _begin_external_effect(action_id: str, kind: str, payload: dict[str, Any]) -
         with db.connect() as conn:
             conn.execute(
                 """
-                INSERT INTO external_effects
-                (id, action_id, provider, request_hash, state, created_at)
-                VALUES (?, ?, ?, ?, 'intent', ?)
-                """,
-                (effect_id, action_id, provider, request_hash, db.utc_now()),
+            INSERT INTO external_effects
+            (id, action_id, provider, request_hash, state, created_at, delivery_hash)
+            VALUES (?, ?, ?, ?, 'intent', ?, ?)
+            """,
+            (
+                effect_id,
+                action_id,
+                provider,
+                request_hash,
+                db.utc_now(),
+                str(payload.get("delivery_hash") or "") or None,
+            ),
             )
         return effect_id, None
     except sqlite3.IntegrityError:

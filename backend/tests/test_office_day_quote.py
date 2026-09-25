@@ -24,6 +24,7 @@ def test_quote_build_and_pdf():
         part_name="Input pinion",
         material="18CrNiMo7-6",
         vision_summary="OD 50mm visible; bore unreadable",
+        scope="labour",
     )
     assert built["ok"]
     assert built["artifact"]["path"]

@@ -1085,6 +1085,11 @@ def _quote_build(
         machine=machine,
         machining_rate=machining_rate,
     )
+    if not result.get("ok"):
+        speak = str(result.get("message") or "Labour-only or with material?")
+        out = _ok(result, speak=speak)
+        out["ok"] = False
+        return out
     artifact = result.get("artifact") or {}
     scene = {
         "title": "Quotation sheet",
@@ -1132,6 +1137,147 @@ def _quote_playbook_note(
     return _ok(result)
 
 
+def _quote_find_drawing(
+    session_id: str,
+    part_hint: str = "",
+    drawing_path: str = "",
+    **_: Any,
+) -> dict[str, Any]:
+    from ..quote import find_drawing_for_quote
+
+    result = find_drawing_for_quote(
+        session_id=session_id,
+        part_hint=part_hint,
+        drawing_path=drawing_path,
+    )
+    if result.get("ok"):
+        speak = f"Drawing is {result.get('filename') or 'on disk'}."
+    else:
+        speak = str(result.get("message") or "Which drawing — inbox attachment, file on desk, or photo?")
+    out = _ok(result, speak=speak)
+    out["ok"] = bool(result.get("ok"))
+    return out
+
+
+def _quote_request_rm_quote(
+    session_id: str,
+    material: str = "",
+    supplier: str = "",
+    supplier_email: str = "",
+    customer: str = "",
+    **_: Any,
+) -> dict[str, Any]:
+    from ..quote import request_rm_quote
+
+    result = request_rm_quote(
+        session_id,
+        material=material,
+        supplier=supplier,
+        supplier_email=supplier_email,
+        customer=customer,
+    )
+    if result.get("ok"):
+        speak = f"Raw-material request queued for {supplier or 'the supplier'}. It is not sent."
+    else:
+        speak = str(result.get("message") or "Need a supplier email before requesting a quote.")
+    out = _ok(result, speak=speak, pending=result.get("pending"))
+    out["ok"] = bool(result.get("ok"))
+    return out
+
+
+def _quote_record_rm_quote(
+    session_id: str,
+    price_inr: Any = "",
+    is_estimate: bool = False,
+    notes: str = "",
+    quote_date: str = "",
+    request_id: str = "",
+    material: str = "",
+    supplier: str = "",
+    **_: Any,
+) -> dict[str, Any]:
+    from ..quote import record_rm_quote
+
+    result = record_rm_quote(
+        session_id,
+        price_inr=price_inr,
+        is_estimate=bool(is_estimate),
+        notes=notes,
+        quote_date=quote_date,
+        request_id=request_id,
+        material=material,
+        supplier=supplier,
+    )
+    if result.get("ok"):
+        speak = "Raw-material quote recorded."
+    else:
+        speak = str(result.get("message") or "Need the quoted price.")
+    out = _ok(result, speak=speak)
+    out["ok"] = bool(result.get("ok"))
+    return out
+
+
+def _quote_add_operation(session_id: str, **kwargs: Any) -> dict[str, Any]:
+    from ..quote_ops import add_quote_operation
+
+    result = add_quote_operation(session_id, **kwargs)
+    out = _ok(result, speak="Operation added." if result.get("ok") else str(result.get("message") or "Need an operation."))
+    out["ok"] = bool(result.get("ok"))
+    return out
+
+
+def _quote_update_operation(session_id: str, operation_id: str = "", **kwargs: Any) -> dict[str, Any]:
+    from ..quote_ops import update_quote_operation
+
+    result = update_quote_operation(session_id, operation_id, **kwargs)
+    out = _ok(result, speak="Operation updated." if result.get("ok") else str(result.get("message") or "Could not update."))
+    out["ok"] = bool(result.get("ok"))
+    return out
+
+
+def _quote_delete_operation(session_id: str, operation_id: str = "", **_: Any) -> dict[str, Any]:
+    from ..quote_ops import delete_quote_operation
+
+    result = delete_quote_operation(session_id, operation_id)
+    return _ok(result, speak="Operation removed.")
+
+
+def _quote_reorder_operations(session_id: str, ordered_ids: list[str] | None = None, **_: Any) -> dict[str, Any]:
+    from ..quote_ops import reorder_quote_operations
+
+    result = reorder_quote_operations(session_id, list(ordered_ids or []))
+    out = _ok(result, speak="Operations reordered." if result.get("ok") else str(result.get("message") or "Could not reorder."))
+    out["ok"] = bool(result.get("ok"))
+    return out
+
+
+def _mhr_list_rates(session_id: str, **_: Any) -> dict[str, Any]:
+    from ..quote_ops import list_mhr_rates
+
+    return _ok(list_mhr_rates(), speak="Machine-hour rates.")
+
+
+def _mhr_attest_rate(
+    session_id: str,
+    rate_id: str = "",
+    machine_type: str = "",
+    attested_by: str = "",
+    floor_inr: Any = "",
+    **_: Any,
+) -> dict[str, Any]:
+    from ..quote_ops import attest_mhr_rate
+
+    result = attest_mhr_rate(
+        rate_id=rate_id,
+        machine_type=machine_type,
+        attested_by=attested_by,
+        floor_inr=floor_inr,
+    )
+    out = _ok(result, speak="Rate attested." if result.get("ok") else str(result.get("message") or "Could not attest."))
+    out["ok"] = bool(result.get("ok"))
+    return out
+
+
 def _quote_send(
     session_id: str,
     to: str,
@@ -1142,7 +1288,7 @@ def _quote_send(
 ) -> dict[str, Any]:
     from ..quote import queue_quote_send, quote_refuse_if_pdf_drift, verify_quote
 
-    verify_result = verify_quote(session_id=session_id, stage="send")
+    verify_result = verify_quote(session_id=session_id, stage="send", to=to, subject=subject)
     if verify_result.get("stop"):
         return {
             "ok": False,
@@ -1291,6 +1437,15 @@ HANDLERS.update(
         "quote_pdf": _quote_pdf,
         "quote_verify": _quote_verify,
         "quote_playbook_note": _quote_playbook_note,
+        "quote_find_drawing": _quote_find_drawing,
+        "quote_request_rm_quote": _quote_request_rm_quote,
+        "quote_record_rm_quote": _quote_record_rm_quote,
+        "quote_add_operation": _quote_add_operation,
+        "quote_update_operation": _quote_update_operation,
+        "quote_delete_operation": _quote_delete_operation,
+        "quote_reorder_operations": _quote_reorder_operations,
+        "mhr_list_rates": _mhr_list_rates,
+        "mhr_attest_rate": _mhr_attest_rate,
         "quote_send": _quote_send,
         "office_refresh_tasks": _office_refresh_tasks,
         "office_list_tasks": _office_list_tasks,
@@ -1851,6 +2006,59 @@ TOOL_SCHEMAS = [
                     "change": {"type": "string"},
                 },
                 "required": ["what_went_wrong", "change"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "quote_find_drawing",
+            "description": "Resolve a drawing path for a quote. Stops at first hit: provided path → focus → named search → mail attachment save → ask.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "session_id": {"type": "string"},
+                    "part_hint": {"type": "string", "description": "Part name or filename hint for named search"},
+                    "drawing_path": {"type": "string", "description": "Absolute or relative path to a drawing file"},
+                },
+                "required": ["session_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "quote_request_rm_quote",
+            "description": "Queue a raw-material quote request email for HITL Authorize. Does not send. Records the request.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "material": {"type": "string"},
+                    "supplier": {"type": "string"},
+                    "supplier_email": {"type": "string"},
+                    "customer": {"type": "string"},
+                },
+                "required": ["material", "supplier", "supplier_email"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "quote_record_rm_quote",
+            "description": "Record a received supplier RM quote or a labelled estimate. Never invent the price. Estimate notes must name historical transactions or market trend.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "price_inr": {"type": "string"},
+                    "is_estimate": {"type": "boolean"},
+                    "notes": {"type": "string"},
+                    "quote_date": {"type": "string", "description": "ISO date of the quote or estimate basis"},
+                    "request_id": {"type": "string"},
+                    "material": {"type": "string"},
+                    "supplier": {"type": "string"},
+                },
+                "required": ["price_inr", "quote_date"],
             },
         },
     },

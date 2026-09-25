@@ -169,7 +169,7 @@ def test_quote_send_queues_hitl_not_raw_send(client: httpx.Client):
     from app.quote import build_quote, quote_to_pdf, queue_quote_send
     from app import db
 
-    built = build_quote(session_id="e2e-quote", part_name="E2E pinion", material="EN8")
+    built = build_quote(session_id="e2e-quote", part_name="E2E pinion", material="EN8", scope="labour")
     pdf = quote_to_pdf(session_id="e2e-quote", part_name="E2E pinion", rows=built["rows"])
     queued = queue_quote_send(
         session_id="e2e-quote",

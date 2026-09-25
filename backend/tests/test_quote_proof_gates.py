@@ -129,6 +129,7 @@ def test_qty_rate_mismatch_blocks():
         part_name="Bracket",
         material="EN8",
         customer="Deepak",
+        scope="labour",
         line_items=[
             {
                 "item": "Bracket",

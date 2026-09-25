@@ -46,6 +46,13 @@ from .schemas import (
     MailReplyAttachmentAction,
     MarkedDrawingSave,
     ChatRequest,
+    QuoteFindDrawingRequest,
+    QuoteScopeRequest,
+    RmQuoteRecord,
+    RmQuoteRequest,
+    QuoteOperationBody,
+    MhrAttestBody,
+    QuoteVerifyBody,
     ConfirmRequest,
     Preferences,
     PreferencesUpdate,
@@ -739,6 +746,153 @@ def api_office_refresh(session_id: str = "default") -> dict:
     except Exception:
         pass
     return refresh_suggested_tasks(session_id)
+
+
+@app.post("/api/quote/find-drawing")
+def api_quote_find_drawing(payload: QuoteFindDrawingRequest) -> dict:
+    from .quote import find_drawing_for_quote
+
+    return find_drawing_for_quote(
+        payload.session_id,
+        part_hint=payload.part_hint,
+        drawing_path=payload.drawing_path,
+    )
+
+
+@app.post("/api/quote/scope")
+def api_quote_scope(payload: QuoteScopeRequest) -> dict:
+    from .quote import resolve_quote_scope
+
+    return resolve_quote_scope(
+        payload.session_id,
+        customer=payload.customer,
+        scope=payload.scope,
+        remember=bool((payload.scope or "").strip()),
+    )
+
+
+@app.get("/api/quote/rm-quotes")
+def api_rm_quotes(session_id: str = "default") -> dict:
+    from .quote import list_rm_quote_requests
+
+    return list_rm_quote_requests(session_id)
+
+
+@app.post("/api/quote/rm-quote/request")
+def api_rm_quote_request(payload: RmQuoteRequest) -> dict:
+    from .quote import request_rm_quote
+
+    return request_rm_quote(
+        payload.session_id,
+        material=payload.material,
+        supplier=payload.supplier,
+        supplier_email=payload.supplier_email,
+        customer=payload.customer,
+    )
+
+
+@app.post("/api/quote/rm-quote/record")
+def api_rm_quote_record(payload: RmQuoteRecord) -> dict:
+    from .quote import record_rm_quote
+
+    return record_rm_quote(
+        payload.session_id,
+        price_inr=payload.price_inr,
+        is_estimate=payload.is_estimate,
+        notes=payload.notes,
+        quote_date=payload.quote_date,
+        request_id=payload.request_id,
+        material=payload.material,
+        supplier=payload.supplier,
+    )
+
+
+@app.get("/api/quote/operations")
+def api_quote_operations(session_id: str = "default") -> dict:
+    from .quote_ops import list_quote_operations
+
+    return list_quote_operations(session_id)
+
+
+@app.post("/api/quote/operations")
+def api_quote_operation_add(payload: QuoteOperationBody) -> dict:
+    from .quote_ops import add_quote_operation
+
+    return add_quote_operation(
+        payload.session_id,
+        operation=payload.operation,
+        template=payload.template,
+        machine_type=payload.machine_type,
+        outsource=payload.outsource,
+        outsource_case=payload.outsource_case,
+        outsource_vendor=payload.outsource_vendor,
+        outsource_price_inr=payload.outsource_price_inr,
+        special_tooling=payload.special_tooling,
+        setup_inr=payload.setup_inr,
+        cycle_min=payload.cycle_min,
+        notes=payload.notes,
+    )
+
+
+@app.post("/api/quote/operations/update")
+def api_quote_operation_update(payload: QuoteOperationBody) -> dict:
+    from .quote_ops import update_quote_operation
+
+    return update_quote_operation(
+        payload.session_id,
+        payload.operation_id,
+        operation=payload.operation,
+        machine_type=payload.machine_type,
+        outsource=payload.outsource,
+        outsource_case=payload.outsource_case,
+        outsource_vendor=payload.outsource_vendor,
+        outsource_price_inr=payload.outsource_price_inr,
+        outsource_received=payload.outsource_received,
+        special_tooling=payload.special_tooling,
+        setup_inr=payload.setup_inr,
+        cycle_min=payload.cycle_min,
+        notes=payload.notes,
+    )
+
+
+@app.post("/api/quote/operations/delete")
+def api_quote_operation_delete(payload: QuoteOperationBody) -> dict:
+    from .quote_ops import delete_quote_operation
+
+    return delete_quote_operation(payload.session_id, payload.operation_id)
+
+
+@app.post("/api/quote/operations/reorder")
+def api_quote_operation_reorder(payload: QuoteOperationBody) -> dict:
+    from .quote_ops import reorder_quote_operations
+
+    return reorder_quote_operations(payload.session_id, payload.ordered_ids)
+
+
+@app.get("/api/quote/mhr")
+def api_mhr_rates() -> dict:
+    from .quote_ops import list_mhr_rates
+
+    return list_mhr_rates()
+
+
+@app.post("/api/quote/mhr/attest")
+def api_mhr_attest(payload: MhrAttestBody) -> dict:
+    from .quote_ops import attest_mhr_rate
+
+    return attest_mhr_rate(
+        rate_id=payload.rate_id,
+        machine_type=payload.machine_type,
+        attested_by=payload.attested_by,
+        floor_inr=payload.floor_inr,
+    )
+
+
+@app.post("/api/quote/verify")
+def api_quote_verify(payload: QuoteVerifyBody) -> dict:
+    from .quote import verify_quote
+
+    return verify_quote(session_id=payload.session_id, stage=payload.stage)
 
 
 @app.get("/api/quote-variance/erosion")

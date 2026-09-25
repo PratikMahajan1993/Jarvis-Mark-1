@@ -33,6 +33,7 @@ def _seed_good_quote(session: str) -> None:
         part_name="Bracket",
         material="EN8",
         customer="Deepak",
+        scope="labour",
         line_items=[
             {
                 "item": "Bracket",

@@ -53,7 +53,10 @@ export function PanePanel({
   const bare = isBarePanel(id, lens) || emptyOptional;
   const hidden = parked || emptyOptional;
   const depthKey = String(depth);
-  const allowHits = id === "agents" || id === "activity" || (id === "voice" && lens === "bench");
+  const allowHits =
+    id === "agents" ||
+    id === "activity" ||
+    (lens === "bench" && (id === "voice" || id === "sheet" || id === "stage"));
 
   useLayoutEffect(() => {
     if (phase !== "moving" || depth !== 0) return;

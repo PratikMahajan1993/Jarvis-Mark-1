@@ -161,9 +161,17 @@ function BenchStagePanel({
   );
 }
 
-function BenchQuotePanel({ scene }: { scene: Scene }) {
+function BenchQuotePanel({
+  scene,
+  hasDrawing,
+  sessionId,
+}: {
+  scene: Scene;
+  hasDrawing: boolean;
+  sessionId: string;
+}) {
   const gatedScene = useValueWhenSettled(scene);
-  return <QuoteSheet scene={gatedScene} />;
+  return <QuoteSheet scene={gatedScene} hasDrawing={hasDrawing} sessionId={sessionId} />;
 }
 
 function BenchAgentDots({ agents }: { agents: AgentNode[] }) {
@@ -1507,7 +1515,13 @@ export function OrchestratorShell() {
               focus={conversationFocus}
             />
           ),
-          sheet: <BenchQuotePanel scene={scene} />,
+          sheet: (
+            <BenchQuotePanel
+              scene={scene}
+              hasDrawing={Boolean(drawingAttachment)}
+              sessionId={activeSession}
+            />
+          ),
         }}
       />
 

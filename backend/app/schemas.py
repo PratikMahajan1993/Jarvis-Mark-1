@@ -83,6 +83,67 @@ class ChatRequest(BaseModel):
     session_id: str = "default"
 
 
+class QuoteFindDrawingRequest(BaseModel):
+    session_id: str = "default"
+    part_hint: str = ""
+    drawing_path: str = ""
+
+
+class QuoteScopeRequest(BaseModel):
+    session_id: str = "default"
+    customer: str = ""
+    scope: str = ""
+
+
+class RmQuoteRequest(BaseModel):
+    session_id: str = "default"
+    material: str = ""
+    supplier: str = ""
+    supplier_email: str = ""
+    customer: str = ""
+
+
+class RmQuoteRecord(BaseModel):
+    session_id: str = "default"
+    price_inr: str = ""
+    is_estimate: bool = False
+    notes: str = ""
+    quote_date: str = ""
+    request_id: str = ""
+    material: str = ""
+    supplier: str = ""
+
+
+class QuoteOperationBody(BaseModel):
+    session_id: str = "default"
+    operation_id: str = ""
+    operation: str = ""
+    template: str = ""
+    machine_type: str = ""
+    outsource: bool = False
+    outsource_case: str = ""
+    outsource_vendor: str = ""
+    outsource_price_inr: str = ""
+    outsource_received: bool = False
+    special_tooling: str = ""
+    setup_inr: str = ""
+    cycle_min: str = ""
+    notes: str = ""
+    ordered_ids: list[str] = []
+
+
+class MhrAttestBody(BaseModel):
+    rate_id: str = ""
+    machine_type: str = ""
+    attested_by: str = ""
+    floor_inr: str = ""
+
+
+class QuoteVerifyBody(BaseModel):
+    session_id: str = "default"
+    stage: str = "draft"
+
+
 class TtsRequest(BaseModel):
     text: str
     profile: str | None = None

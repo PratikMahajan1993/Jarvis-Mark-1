@@ -58,6 +58,11 @@ export function HitlModal({
           </div>
           <h2 id="hitl-title" className="mb-4 font-display text-2xl font-normal text-[color:var(--fg)]">{copy.title}</h2>
           <p className="mb-4 text-[0.95rem] leading-relaxed text-[color:var(--muted)]">{copy.summary}</p>
+          {typeof action.payload.duplicate_warning === "string" && action.payload.duplicate_warning ? (
+            <p className="mb-4 max-w-md text-left font-mono text-[0.75rem] text-[color:oklch(78%_0.16_25)]" data-duplicate-warning>
+              {action.payload.duplicate_warning}
+            </p>
+          ) : null}
           <p className="mb-10 max-w-md text-left text-[0.85rem] leading-relaxed text-[color:var(--fg)]/80">
             <span className="font-mono text-[0.65rem] uppercase tracking-[0.08em] text-[color:var(--accent)]">
               Impact — {copy.irreversibility}/5

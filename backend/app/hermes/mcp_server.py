@@ -242,6 +242,153 @@ def jarvis_create_spreadsheet(title: str, columns: str = "Item,Qty", rows: str =
 
 
 @mcp.tool()
+def jarvis_quote_find_drawing(part_hint: str = "", drawing_path: str = "") -> str:
+    """Resolve the drawing before vision or pricing.
+
+    Stops at the first clear hit: given path, Engineering focus, one named file,
+    or one mail attachment saved to disk. Several matches or none asks — never guesses.
+    """
+    return _dump(
+        execute_tool(
+            "quote_find_drawing",
+            {"part_hint": part_hint, "drawing_path": drawing_path},
+            _session(),
+        )
+    )
+
+
+@mcp.tool()
+def jarvis_quote_request_rm_quote(material: str, supplier: str, supplier_email: str, customer: str = "") -> str:
+    """Queue a supplier raw-material quote email for Authorize. Does not send."""
+    return _dump(
+        execute_tool(
+            "quote_request_rm_quote",
+            {
+                "material": material,
+                "supplier": supplier,
+                "supplier_email": supplier_email,
+                "customer": customer,
+            },
+            _session(),
+        )
+    )
+
+
+@mcp.tool()
+def jarvis_quote_record_rm_quote(
+    price_inr: str,
+    quote_date: str,
+    notes: str = "",
+    is_estimate: bool = False,
+    request_id: str = "",
+    material: str = "",
+    supplier: str = "",
+) -> str:
+    """Record a received RM quote or a labelled estimate. Does not invent the price."""
+    return _dump(
+        execute_tool(
+            "quote_record_rm_quote",
+            {
+                "price_inr": price_inr,
+                "quote_date": quote_date,
+                "notes": notes,
+                "is_estimate": is_estimate,
+                "request_id": request_id,
+                "material": material,
+                "supplier": supplier,
+            },
+            _session(),
+        )
+    )
+
+
+@mcp.tool()
+def jarvis_quote_add_operation(
+    operation: str = "",
+    template: str = "",
+    machine_type: str = "",
+    outsource: bool = False,
+    outsource_case: str = "",
+    outsource_vendor: str = "",
+    outsource_price_inr: str = "",
+    special_tooling: str = "",
+    setup_inr: str = "",
+    cycle_min: str = "",
+    notes: str = "",
+) -> str:
+    """Add one machining or outsource operation. Does not invent prices."""
+    return _dump(
+        execute_tool(
+            "quote_add_operation",
+            {
+                "operation": operation,
+                "template": template,
+                "machine_type": machine_type,
+                "outsource": outsource,
+                "outsource_case": outsource_case,
+                "outsource_vendor": outsource_vendor,
+                "outsource_price_inr": outsource_price_inr,
+                "special_tooling": special_tooling,
+                "setup_inr": setup_inr,
+                "cycle_min": cycle_min,
+                "notes": notes,
+            },
+            _session(),
+        )
+    )
+
+
+@mcp.tool()
+def jarvis_quote_update_operation(operation_id: str, machine_type: str = "", outsource_case: str = "", outsource_vendor: str = "", outsource_price_inr: str = "", special_tooling: str = "", cycle_min: str = "") -> str:
+    """Update one operation on the current quote."""
+    fields: dict[str, Any] = {"operation_id": operation_id}
+    if machine_type:
+        fields["machine_type"] = machine_type
+    if outsource_case:
+        fields["outsource_case"] = outsource_case
+    if outsource_vendor:
+        fields["outsource_vendor"] = outsource_vendor
+    if outsource_price_inr:
+        fields["outsource_price_inr"] = outsource_price_inr
+    if special_tooling:
+        fields["special_tooling"] = special_tooling
+    if cycle_min:
+        fields["cycle_min"] = cycle_min
+    return _dump(execute_tool("quote_update_operation", fields, _session()))
+
+
+@mcp.tool()
+def jarvis_quote_delete_operation(operation_id: str) -> str:
+    """Remove one operation from the current quote."""
+    return _dump(execute_tool("quote_delete_operation", {"operation_id": operation_id}, _session()))
+
+
+@mcp.tool()
+def jarvis_quote_reorder_operations(ordered_ids: str) -> str:
+    """Reorder operations. ordered_ids is a comma-separated list of every operation id."""
+    ids = [part.strip() for part in ordered_ids.split(",") if part.strip()]
+    return _dump(execute_tool("quote_reorder_operations", {"ordered_ids": ids}, _session()))
+
+
+@mcp.tool()
+def jarvis_mhr_list_rates() -> str:
+    """List machine-hour floors and whether each is attested."""
+    return _dump(execute_tool("mhr_list_rates", {}, _session()))
+
+
+@mcp.tool()
+def jarvis_mhr_attest_rate(machine_type: str, attested_by: str, floor_inr: str = "", rate_id: str = "") -> str:
+    """Attest a machine-hour rate. The value must differ from the shipped demo seed."""
+    return _dump(
+        execute_tool(
+            "mhr_attest_rate",
+            {"machine_type": machine_type, "attested_by": attested_by, "floor_inr": floor_inr, "rate_id": rate_id},
+            _session(),
+        )
+    )
+
+
+@mcp.tool()
 def jarvis_quote_analyze_drawing(path: str, prompt: str = "") -> str:
     """Gemini vision dimensional analysis of a local drawing file path."""
     return _dump(execute_tool("quote_analyze_drawing", {"path": path, "prompt": prompt}, _session()))

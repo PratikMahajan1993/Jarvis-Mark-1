@@ -46,6 +46,21 @@ async function json<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json();
 }
 
+export type QuoteOperation = {
+  id: string;
+  operation: string;
+  machine_type: string;
+  outsource: number;
+  outsource_case: string;
+  outsource_vendor: string;
+  outsource_price_minor: number | null;
+  outsource_received: number;
+  special_tooling: string;
+  setup_minor: number | null;
+  cycle_min: number | null;
+  notes: string;
+};
+
 export const api = {
   health: () => json<Health>("/api/health"),
   saveMailAttachments: (emailId: string, attachmentIds: string[], filenames: string[], sessionId = "default") =>
@@ -67,6 +82,130 @@ export const api = {
         attachment_ids: attachmentIds,
         filenames,
       }),
+    }),
+  quoteScope: (sessionId = "default", customer = "", scope = "") =>
+    json<{
+      ok: boolean;
+      scope?: "labour" | "with_material" | string;
+      source?: string;
+      need?: string;
+      message?: string;
+    }>("/api/quote/scope", {
+      method: "POST",
+      body: JSON.stringify({ session_id: sessionId, customer, scope }),
+    }),
+  rmQuotes: (sessionId = "default") =>
+    json<{
+      ok: boolean;
+      requests: {
+        id: string;
+        material: string;
+        supplier: string;
+        status: string;
+        quoted_price_minor?: number | null;
+        currency?: string;
+        is_estimate?: number;
+        notes?: string;
+        quote_date?: string | null;
+      }[];
+    }>(`/api/quote/rm-quotes?session_id=${encodeURIComponent(sessionId)}`),
+  requestRmQuote: (sessionId: string, material: string, supplier: string, supplierEmail: string) =>
+    json<{ ok: boolean; sent?: boolean; message?: string; request_id?: string }>("/api/quote/rm-quote/request", {
+      method: "POST",
+      body: JSON.stringify({
+        session_id: sessionId,
+        material,
+        supplier,
+        supplier_email: supplierEmail,
+      }),
+    }),
+  recordRmQuote: (
+    sessionId: string,
+    fields: { price_inr: string; quote_date: string; notes: string; is_estimate: boolean; request_id?: string },
+  ) =>
+    json<{ ok: boolean; message?: string }>("/api/quote/rm-quote/record", {
+      method: "POST",
+      body: JSON.stringify({ session_id: sessionId, ...fields }),
+    }),
+  quoteOperations: (sessionId = "default") =>
+    json<{ ok: boolean; operations: QuoteOperation[] }>(
+      `/api/quote/operations?session_id=${encodeURIComponent(sessionId)}`,
+    ),
+  addQuoteOperation: (sessionId: string, template: string) =>
+    json<{ ok: boolean; message?: string; operations?: QuoteOperation[] }>("/api/quote/operations", {
+      method: "POST",
+      body: JSON.stringify({ session_id: sessionId, template }),
+    }),
+  updateQuoteOperation: (sessionId: string, operation: QuoteOperation) =>
+    json<{ ok: boolean; message?: string; operations?: QuoteOperation[] }>("/api/quote/operations/update", {
+      method: "POST",
+      body: JSON.stringify({
+        session_id: sessionId,
+        operation_id: operation.id,
+        operation: operation.operation,
+        machine_type: operation.machine_type,
+        outsource: Boolean(operation.outsource),
+        outsource_case: operation.outsource_case,
+        outsource_vendor: operation.outsource_vendor,
+        outsource_price_inr:
+          operation.outsource_price_minor == null ? "" : String(operation.outsource_price_minor / 100),
+        outsource_received: Boolean(operation.outsource_received),
+        special_tooling: operation.special_tooling,
+        setup_inr: operation.setup_minor == null ? "" : String(operation.setup_minor / 100),
+        cycle_min: operation.cycle_min == null ? "" : String(operation.cycle_min),
+        notes: operation.notes,
+      }),
+    }),
+  deleteQuoteOperation: (sessionId: string, operationId: string) =>
+    json<{ ok: boolean; operations?: QuoteOperation[] }>("/api/quote/operations/delete", {
+      method: "POST",
+      body: JSON.stringify({ session_id: sessionId, operation_id: operationId }),
+    }),
+  reorderQuoteOperations: (sessionId: string, orderedIds: string[]) =>
+    json<{ ok: boolean; operations?: QuoteOperation[] }>("/api/quote/operations/reorder", {
+      method: "POST",
+      body: JSON.stringify({ session_id: sessionId, ordered_ids: orderedIds }),
+    }),
+  mhrRates: () =>
+    json<{
+      ok: boolean;
+      message?: string;
+      rates: {
+        id: string;
+        machine_type: string;
+        floor_inr: number;
+        attested_by: string;
+        attested_at: string;
+        status: string;
+      }[];
+    }>("/api/quote/mhr"),
+  attestMhr: (machineType: string, attestedBy: string, floorInr: string, rateId = "") =>
+    json<{ ok: boolean; message?: string }>("/api/quote/mhr/attest", {
+      method: "POST",
+      body: JSON.stringify({
+        machine_type: machineType,
+        attested_by: attestedBy,
+        floor_inr: floorInr,
+        rate_id: rateId,
+      }),
+    }),
+  verifyQuote: (sessionId = "default", stage = "draft") =>
+    json<import("@/lib/pane/quoteContract").QuoteVerifyResult>("/api/quote/verify", {
+      method: "POST",
+      body: JSON.stringify({ session_id: sessionId, stage }),
+    }),
+  findQuoteDrawing: (sessionId = "default", partHint = "") =>
+    json<{
+      ok: boolean;
+      path?: string;
+      filename?: string;
+      source?: string;
+      need?: string;
+      message?: string;
+      candidates?: { path?: string; filename?: string; source?: string }[];
+    }>("/api/quote/find-drawing", {
+      method: "POST",
+      body: JSON.stringify({ session_id: sessionId, part_hint: partHint }),
     }),
   chat: (message: string, sessionId = "default") =>
     json<ChatResponse | { turn_id: string; state: string }>("/api/chat", {

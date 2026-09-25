@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { api } from "@/lib/api";
 import { motion } from "motion/react";
 import type { Scene } from "@/lib/types";
 import fixtureDoc from "@/lib/pane/fixtures/quote-fixture.json";
@@ -9,6 +10,7 @@ import {
   type QuoteFixtureDocument,
   type QuoteRowGroup,
   type QuoteSheetRow,
+  type QuoteVerifyResult,
 } from "@/lib/pane/quoteContract";
 import { usePane } from "@/lib/pane/paneStore";
 import { SPRING } from "@/lib/pane/springs";
@@ -17,7 +19,10 @@ import { FactConfirmChips } from "@/components/orchestrator/engineering/FactConf
 import { ToolChangeField } from "@/components/orchestrator/engineering/ToolChangeField";
 import { VarianceCard } from "@/components/orchestrator/engineering/VarianceCard";
 import { VisionBenchQueue } from "@/components/orchestrator/engineering/VisionBenchQueue";
+import { MHRAttestationPanel } from "./MHRAttestationPanel";
+import { OperationEditor } from "./OperationEditor";
 import { ProofStrip } from "./ProofStrip";
+import { RMTracker } from "./RMTracker";
 import { SheetRow } from "./SheetRow";
 import { pinsFromRows } from "./CalloutPins";
 
@@ -88,16 +93,55 @@ export function QuoteSheet({
   scene,
   entityType = "",
   entityId = "",
+  hasDrawing = true,
+  sessionId = "default",
 }: {
   scene: Scene;
   entityType?: string;
   entityId?: string;
+  /** False when the Engineering stage has no local drawing. */
+  hasDrawing?: boolean;
+  sessionId?: string;
 }) {
   const [tab, setTab] = useState<SheetTab>("sheet");
+  const [findNote, setFindNote] = useState("");
+  const [finding, setFinding] = useState(false);
+  const [scope, setScope] = useState<"" | "labour" | "with_material">("");
+  const [scopeNote, setScopeNote] = useState("");
+  const [liveVerify, setLiveVerify] = useState<QuoteVerifyResult | null>(null);
   const focusMode = usePane((s) => s.focusMode);
   const focused = focusMode === "stage";
 
   const doc = useMemo(() => resolveDocument(scene), [scene]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void api.quoteScope(sessionId, doc.meta.customer).then((result) => {
+      if (cancelled) return;
+      if (result.ok && (result.scope === "labour" || result.scope === "with_material")) {
+        setScope(result.scope);
+        setScopeNote(result.source === "customer" ? "Customer default" : "");
+        return;
+      }
+      setScope("");
+      setScopeNote(result.message || "Labour-only or with material?");
+    }).catch(() => {
+      if (!cancelled) setScopeNote("Labour-only or with material?");
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionId, doc.meta.customer]);
+
+  useEffect(() => {
+    const handle = window.setTimeout(() => {
+      void api
+        .verifyQuote(sessionId)
+        .then((result) => setLiveVerify(result))
+        .catch(() => setLiveVerify(null));
+    }, 500);
+    return () => window.clearTimeout(handle);
+  }, [sessionId, doc.rows]);
   const pinned = useMemo(() => pinsFromRows(doc.rows), [doc.rows]);
 
   const grouped = useMemo(() => {
@@ -124,11 +168,12 @@ export function QuoteSheet({
     return any ? sum : null;
   }, [doc.rows]);
 
-  const verify = doc.verify;
+  const verify = liveVerify ?? doc.verify;
   const isFixture = !scenePricedRows(scene);
   const authOff = verify.stop || authorizeDisabled(verify) || isFixture;
-  const failingIds =
-    doc.failingCheckIds?.length > 0
+  const failingIds = liveVerify
+    ? liveVerify.checks.filter((c) => !c.pass && c.severity !== "WARN").map((c) => c.id)
+    : doc.failingCheckIds?.length > 0
       ? doc.failingCheckIds
       : verify.checks.filter((c) => !c.pass).map((c) => c.id);
 
@@ -160,6 +205,75 @@ export function QuoteSheet({
         <p className="mt-0.5 font-mono text-[10px] text-[color:var(--muted)]">
           {doc.meta.material} · qty {doc.meta.orderQty} · due {doc.meta.due}
         </p>
+        <div className="mt-2 flex flex-wrap items-center gap-2" role="group" aria-label="Quote scope">
+          {(
+            [
+              ["labour", "Labour"],
+              ["with_material", "With material"],
+            ] as const
+          ).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              aria-pressed={scope === id}
+              className={[
+                "rounded border px-2 py-1 font-mono text-[10px] uppercase tracking-[0.14em]",
+                scope === id
+                  ? "border-[color:var(--accent)] text-[color:var(--accent)]"
+                  : "border-[color:var(--border)] text-[color:var(--fg)] hover:border-[color:var(--accent)]",
+              ].join(" ")}
+              onClick={() => {
+                setScope(id);
+                setScopeNote("");
+                void api.quoteScope(sessionId, doc.meta.customer, id).then((result) => {
+                  if (!result.ok) setScopeNote(result.message || "Labour-only or with material?");
+                });
+              }}
+            >
+              {label}
+            </button>
+          ))}
+          {scopeNote ? (
+            <p className="font-mono text-[10px] text-[color:var(--muted)]" data-quote-scope-note>
+              {scopeNote}
+            </p>
+          ) : null}
+        </div>
+        {!hasDrawing ? (
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              className="rounded border border-[color:var(--border)] px-2 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-[color:var(--fg)] hover:border-[color:var(--accent)] disabled:opacity-50"
+              disabled={finding}
+              onClick={() => {
+                setFinding(true);
+                setFindNote("");
+                void api
+                  .findQuoteDrawing(sessionId)
+                  .then((result) => {
+                    if (result.ok && result.filename) {
+                      setFindNote(`Drawing is ${result.filename}.`);
+                      return;
+                    }
+                    const names = (result.candidates || [])
+                      .map((row) => row.filename)
+                      .filter(Boolean)
+                      .join(", ");
+                    setFindNote(names ? `${result.message || "Which drawing?"} ${names}` : result.message || "Which drawing — inbox attachment, file on desk, or photo?");
+                  })
+                  .catch(() => setFindNote("Could not look up a drawing."))
+                  .finally(() => setFinding(false));
+              }}
+            >
+              {finding ? "Finding…" : "Find Drawing"}
+            </button>
+            {findNote ? (
+              <p className="font-mono text-[10px] text-[color:var(--muted)]" data-find-drawing-note>
+                {findNote}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
         <div
           className="relative mt-2 flex gap-3 font-mono text-[10px] uppercase tracking-[0.16em] text-[color:var(--muted)]"
           role="tablist"
@@ -217,6 +331,9 @@ export function QuoteSheet({
         ) : null}
         {tab === "strategy" ? (
           <div className="flex flex-col gap-3">
+            <RMTracker sessionId={sessionId} />
+            <OperationEditor sessionId={sessionId} />
+            <MHRAttestationPanel />
             <VarianceCard />
             <ToolChangeField />
           </div>

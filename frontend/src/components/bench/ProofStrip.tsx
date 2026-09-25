@@ -31,6 +31,11 @@ export function ProofStrip({ verify }: { verify: QuoteVerifyResult }) {
           stop
         </span>
       ) : null}
+      {verify.checks.some((check) => check.id === "mhr_demo_floor" && !check.pass) ? (
+        <span className="ml-1 font-mono text-[9px] text-[color:oklch(78%_0.16_25)]" data-mhr-warning>
+          Demo MHR not attested — will block send
+        </span>
+      ) : null}
     </div>
   );
 }

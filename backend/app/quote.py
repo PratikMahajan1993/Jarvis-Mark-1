@@ -6,7 +6,8 @@ import hashlib
 import json
 import re
 import sqlite3
-from datetime import date, datetime
+import uuid
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -183,6 +184,66 @@ def _rm_price_from_rows(rows: list[list[Any]]) -> float | None:
     return None
 
 
+def get_customer_scope_default(customer_id: str = "", customer_name: str = "") -> str | None:
+    """Customer labour/material default. ``ask``, a missing row, or master data off → None."""
+    if not settings.masterdata_enabled:
+        return None
+    cid = (customer_id or "").strip()
+    name = (customer_name or "").strip()
+    with db.connect() as conn:
+        if not cid and name:
+            row = conn.execute(
+                "SELECT customer_id FROM customer_aliases WHERE alias = ? COLLATE NOCASE LIMIT 1",
+                (name,),
+            ).fetchone()
+            if row:
+                cid = str(row["customer_id"])
+            else:
+                row = conn.execute(
+                    "SELECT id FROM customers WHERE name = ? COLLATE NOCASE LIMIT 1",
+                    (name,),
+                ).fetchone()
+                if row:
+                    cid = str(row["id"])
+        if not cid:
+            return None
+        terms = conn.execute(
+            "SELECT default_scope FROM customer_terms WHERE customer_id = ?",
+            (cid,),
+        ).fetchone()
+    if not terms:
+        return None
+    scope = str(terms["default_scope"] or "").strip().lower()
+    if scope in {"labour", "with_material"}:
+        return scope
+    return None
+
+
+def resolve_quote_scope(
+    session_id: str,
+    *,
+    customer: str = "",
+    scope: str = "",
+    remember: bool = False,
+) -> dict[str, Any]:
+    """Explicit scope wins, then this order's saved choice, then the customer default."""
+    chosen = (scope or "").strip().lower()
+    if chosen in {"labour", "with_material"}:
+        if remember and session_id:
+            db.add_memory(session_id, "last_quote_scope", chosen)
+        return {"ok": True, "scope": chosen, "source": "override"}
+    remembered = _latest_memory(session_id, "last_quote_scope").strip().lower() if session_id else ""
+    if remembered in {"labour", "with_material"}:
+        return {"ok": True, "scope": remembered, "source": "order"}
+    name = (customer or "").strip() or (_latest_memory(session_id, "last_quote_customer") if session_id else "")
+    default = get_customer_scope_default(customer_name=name)
+    if default:
+        if remember and session_id:
+            db.add_memory(session_id, "last_quote_scope", default)
+        return {"ok": True, "scope": default, "source": "customer"}
+    return {"ok": False, "need": "scope", "message": "Labour-only or with material?"}
+
+
 def build_quote(
     *,
     session_id: str,
@@ -199,7 +260,14 @@ def build_quote(
     machining_rate: Any = "",
 ) -> dict[str, Any]:
     """Create a local quotation spreadsheet artifact (live Sheet bind can follow)."""
-    items = line_items or [
+    resolved = resolve_quote_scope(session_id, customer=customer, scope=scope, remember=True)
+    if not resolved.get("ok"):
+        return resolved
+    scope = str(resolved["scope"])
+    from .quote_ops import operation_line_items
+
+    from_ops = operation_line_items(session_id, machining_rate=machining_rate)
+    items = line_items or from_ops or [
         {
             "item": part_name or "Component",
             "material": material or "TBD",
@@ -211,10 +279,12 @@ def build_quote(
     rate_num = _parse_numeric(machining_rate)
     if rate_num is not None:
         for it in items:
+            if it.get("outsource"):
+                continue
             if _parse_numeric(it.get("unit_price")) is None:
                 it["unit_price"] = rate_num
     rm_num = _parse_numeric(rm_price)
-    scope_norm = (scope or "").strip().lower()
+    scope_norm = scope
     if rm_num is not None and rm_num > 0 and scope_norm == "with_material":
         has_rm_row = any(_RM_ROW_RE.search(str(it.get("item") or "")) for it in items)
         if not has_rm_row:
@@ -320,6 +390,8 @@ def build_quote(
         "material": material,
         "vision_summary": vision_summary,
         "sheet_ref": sheet_ref,
+        "scope": scope,
+        "scope_source": resolved.get("source") or "",
     }
     return {"ok": True, **payload}
 
@@ -343,25 +415,102 @@ def _load_quote_rows(session_id: str) -> list[list[Any]]:
 
 
 def quote_to_pdf(*, session_id: str, part_name: str = "", rows: list[list[Any]] | None = None) -> dict[str, Any]:
+    """Formal quotation PDF. Sections follow the shop-quote template. No invented address or terms."""
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+    from reportlab.lib.units import mm
+    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+
     effective_rows = rows if rows is not None else _load_quote_rows(session_id)
     part = part_name or "Component"
-    if not part_name:
+    customer = ""
+    if not part_name or True:
         if settings.masterdata_enabled:
             from .masterdata.quotes import load_session_revision_facts
 
             facts = load_session_revision_facts(session_id)
-            if facts and facts.get("part_name"):
+            if facts and facts.get("part_name") and not part_name:
                 part = str(facts["part_name"])
+            if facts and facts.get("customer"):
+                customer = str(facts["customer"])
         if part == "Component":
             part = _latest_memory(session_id, "last_quote_part_name") or "Component"
-    body_lines = [f"Quotation: {part}", ""]
+        if not customer:
+            customer = _latest_memory(session_id, "last_quote_customer")
+    scope = _latest_memory(session_id, "last_quote_scope")
+    material = _latest_memory(session_id, "last_quote_material")
+    rm_note = _latest_memory(session_id, "last_quote_rm_source_note")
+    delivery = _latest_memory(session_id, "last_quote_delivery_days")
+    drawing = _latest_memory(session_id, "last_quote_drawing")
+    issued = _quote_calendar_today().isoformat()
+    styles = getSampleStyleSheet()
+    total_style = ParagraphStyle("QuoteTotal", parent=styles["Title"], fontSize=16, leading=20, textColor=colors.HexColor("#0B1F33"))
+    story: list[Any] = [
+        Paragraph("QUOTATION", styles["Title"]),
+        Spacer(1, 4 * mm),
+        Paragraph(f"Date: {issued}", styles["BodyText"]),
+        Paragraph(f"Customer: {customer or '—'}", styles["BodyText"]),
+        Paragraph(f"Part: {part}", styles["BodyText"]),
+    ]
+    if drawing:
+        story.append(Paragraph(f"Drawing: {drawing}", styles["BodyText"]))
+    story.append(Spacer(1, 4 * mm))
+    scope_line = "Labour-only" if scope == "labour" else "With material" if scope == "with_material" else ""
+    if scope_line:
+        story.append(Paragraph(f"Scope: {scope_line}", styles["BodyText"]))
+    if material:
+        rm_line = f"Material: {material}"
+        if rm_note:
+            rm_line += f" — {rm_note}"
+        story.append(Paragraph(rm_line, styles["BodyText"]))
+    story.append(Spacer(1, 4 * mm))
+    table_data = [["Item", "Material", "Qty", "Unit price", "Line total"]]
+    grand = 0.0
+    any_price = False
     for row in effective_rows:
-        body_lines.append(" | ".join(str(c) for c in row))
-    body = "\n".join(body_lines) or "Quotation"
-    artifact = documents.create_pdf(f"Quote PDF — {part}", body)
+        cells = [str(cell) for cell in row]
+        while len(cells) < 4:
+            cells.append("")
+        qty = _parse_numeric(cells[2]) or 0
+        unit = _parse_numeric(cells[3])
+        line_total = ""
+        if unit is not None and qty:
+            amount = qty * unit
+            grand += amount
+            any_price = True
+            line_total = f"INR {amount:,.2f}"
+        table_data.append([cells[0], cells[1], cells[2], cells[3], line_total])
+    table = Table(table_data, hAlign="LEFT")
+    table.setStyle(
+        TableStyle(
+            [
+                ("FONTNAME", (0, 0), (-1, 0), "Times-Bold"),
+                ("FONTNAME", (0, 1), (-1, -1), "Times-Roman"),
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#E6EEF5")),
+                ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#8AA0B4")),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ]
+        )
+    )
+    story.append(table)
+    story.append(Spacer(1, 6 * mm))
+    if any_price:
+        story.append(Paragraph(f"<b>Total Quoted Cost: INR {grand:,.2f}</b>", total_style))
+    else:
+        story.append(Paragraph("Total Quoted Cost: —", styles["BodyText"]))
+    if delivery and not _is_tbd(delivery):
+        story.append(Spacer(1, 4 * mm))
+        story.append(Paragraph(f"Delivery: {delivery} days", styles["BodyText"]))
+    story.append(Spacer(1, 10 * mm))
+    story.append(Paragraph("Authorized signatory", styles["BodyText"]))
+    name = f"Quote PDF — {part}-{uuid.uuid4().hex[:6]}.pdf"
+    path = db.safe_export_path(name)
+    SimpleDocTemplate(str(path), pagesize=A4, title=f"Quotation — {part}").build(story)
+    artifact = db.add_artifact(uuid.uuid4().hex[:12], "pdf", name, str(path))
     db.add_memory(session_id, "last_quote_pdf", artifact["id"])
     db.add_memory(session_id, "last_quote_pdf_path", artifact["path"])
-    return {"ok": True, "artifact": artifact}
+    return {"ok": True, "artifact": artifact, "total_inr": grand if any_price else None}
 
 
 def _check(
@@ -545,7 +694,7 @@ def _reference_client_names() -> list[str]:
     return names
 
 
-def verify_quote(*, session_id: str, stage: str = "draft") -> dict[str, Any]:
+def verify_quote(*, session_id: str, stage: str = "draft", to: str = "", subject: str = "") -> dict[str, Any]:
     """Deterministic quote proof — any BLOCKER failure sets stop."""
     stage_norm = _normalize_stage(stage)
     checks: list[dict[str, Any]] = []
@@ -870,6 +1019,12 @@ def verify_quote(*, session_id: str, stage: str = "draft") -> dict[str, Any]:
                 )
             )
 
+    for track in _rm_quote_track_checks(session_id):
+        checks.append(track)
+    from .quote_ops import outsource_checks
+
+    checks.extend(outsource_checks(session_id))
+
     machine = (
         _fact("machine").strip()
         if revision_facts
@@ -1040,6 +1195,30 @@ def verify_quote(*, session_id: str, stage: str = "draft") -> dict[str, Any]:
             )
         )
 
+    digest_now = pdf_file_sha256(pdf_file) if pdf_ok and pdf_file else ""
+    if (to or "").strip() and digest_now:
+        duplicate = duplicate_delivery_warning(to, subject, digest_now)
+        if duplicate:
+            checks.append(
+                _check(
+                    "duplicate_delivery",
+                    False,
+                    duplicate,
+                    "external_effects",
+                    severity="WARN",
+                )
+            )
+        else:
+            checks.append(
+                _check(
+                    "duplicate_delivery",
+                    True,
+                    "No identical delivery in the last 30 days",
+                    "external_effects",
+                    severity="WARN",
+                )
+            )
+
     result = _finalize_verify(checks)
     if pdf_ok and pdf_file:
         digest = pdf_file_sha256(pdf_file)
@@ -1048,6 +1227,567 @@ def verify_quote(*, session_id: str, stage: str = "draft") -> dict[str, Any]:
             if stage_norm != "send":
                 db.add_memory(session_id, "last_quote_pdf_sha256", digest)
     return result
+
+
+_DRAWING_SUFFIXES = {
+    ".pdf",
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".webp",
+    ".tif",
+    ".tiff",
+    ".dwg",
+    ".dxf",
+    ".step",
+    ".stp",
+}
+_DRAWING_ASK = "Which drawing — inbox attachment, file on desk, or photo?"
+
+
+def _drawing_filename(name: str) -> bool:
+    return Path(name or "").suffix.lower() in _DRAWING_SUFFIXES
+
+
+def _hint_matches(part_hint: str, filename: str) -> bool:
+    hint = (part_hint or "").strip().lower()
+    if len(hint) < 2:
+        return False
+    name = Path(filename or "").name.lower()
+    if not name:
+        return False
+    return hint in name or hint in Path(name).stem
+
+
+def _existing_file(raw: str) -> Path | None:
+    text = (raw or "").strip()
+    if not text:
+        return None
+    try:
+        path = Path(text).resolve()
+    except OSError:
+        return None
+    return path if path.is_file() else None
+
+
+def _resolve_provided_path(drawing_path: str) -> Path | None:
+    raw = (drawing_path or "").strip()
+    if not raw:
+        return None
+    direct = _existing_file(raw)
+    if direct:
+        return direct
+    given = Path(raw)
+    if given.is_absolute():
+        return None
+    exports = settings.exports_dir.resolve()
+    for candidate in (exports / raw, exports / "drawings" / given.name):
+        found = _existing_file(str(candidate))
+        if found:
+            return found
+    return None
+
+
+def _candidate(path: str, filename: str, source: str, **extra: Any) -> dict[str, Any]:
+    row: dict[str, Any] = {"path": path, "filename": filename, "source": source}
+    row.update(extra)
+    return row
+
+
+def _remember_drawing(session_id: str, path: Path) -> None:
+    if not session_id:
+        return
+    db.add_memory(session_id, "last_quote_drawing", path.name)
+    db.add_memory(session_id, "last_quote_drawing_path", str(path))
+
+
+def _found(session_id: str, path: Path, source: str) -> dict[str, Any]:
+    resolved = path.resolve()
+    _remember_drawing(session_id, resolved)
+    return {
+        "ok": True,
+        "path": str(resolved),
+        "filename": resolved.name,
+        "source": source,
+    }
+
+
+def _ask(candidates: list[dict[str, Any]], message: str = "") -> dict[str, Any]:
+    return {
+        "ok": False,
+        "need": "path",
+        "candidates": candidates,
+        "message": message or _DRAWING_ASK,
+    }
+
+
+def _focus_drawing_rows(session_id: str) -> list[dict[str, Any]]:
+    """Drawings the desk is showing. The tool session's own sheet comes first."""
+    own = db.get_conversation_by_session(session_id) if session_id else None
+    ordered: list[dict[str, Any]] = []
+    if own and own.get("category") == "drawing" and own.get("status") != "archived":
+        ordered.append(own)
+    own_id = str(own.get("id") or "") if own else ""
+    for row in db.list_conversations():
+        if row.get("category") != "drawing" or row.get("status") == "archived":
+            continue
+        if row.get("minimized"):
+            continue
+        if str(row.get("id") or "") == own_id:
+            continue
+        focus = row.get("focus") if isinstance(row.get("focus"), dict) else {}
+        if focus.get("viewing") is False:
+            continue
+        ordered.append(row)
+    return ordered
+
+
+def _row_drawing_file(row: dict[str, Any]) -> Path | None:
+    from .conversations import _local_path
+
+    focus = row.get("focus") if isinstance(row.get("focus"), dict) else {}
+    return _local_path(focus)
+
+
+def _unique_files(items: list[tuple[Path, dict[str, Any]]]) -> list[tuple[Path, dict[str, Any]]]:
+    seen: set[str] = set()
+    out: list[tuple[Path, dict[str, Any]]] = []
+    for path, meta in items:
+        key = str(path.resolve()).lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append((path.resolve(), meta))
+    return out
+
+
+def _named_disk_hits(part_hint: str) -> list[tuple[Path, dict[str, Any]]]:
+    hint = (part_hint or "").strip()
+    if len(hint) < 2:
+        return []
+    found: list[tuple[Path, dict[str, Any]]] = []
+    exports = settings.exports_dir.resolve()
+    if exports.is_dir():
+        for path in exports.rglob("*"):
+            if path.is_file() and _drawing_filename(path.name) and _hint_matches(hint, path.name):
+                found.append((path, _candidate(str(path.resolve()), path.name, "named_search")))
+    for row in db.list_inbox_files(40):
+        name = str(row.get("name") or "")
+        raw = str(row.get("path") or "")
+        if not _hint_matches(hint, name) or not _drawing_filename(name):
+            continue
+        path = _existing_file(raw)
+        if path:
+            found.append((path, _candidate(str(path), path.name, "inbox_file")))
+    for row in db.list_conversations():
+        if row.get("category") != "drawing" or row.get("status") == "archived":
+            continue
+        focus = row.get("focus") if isinstance(row.get("focus"), dict) else {}
+        label = str(focus.get("filename") or focus.get("local_name") or row.get("title") or "")
+        if not _hint_matches(hint, label):
+            continue
+        path = _row_drawing_file(row)
+        if path and _drawing_filename(path.name):
+            found.append((path, _candidate(str(path), path.name, "named_search")))
+    return _unique_files(found)
+
+
+def _mail_drawing_hits(session_id: str, part_hint: str) -> list[dict[str, Any]]:
+    """Drawing attachments on the open mail, or filename matches when a hint is set."""
+    from .connectors import email as email_conn
+    from .mail_attachments import get_mail_context
+    from .rfq import attachment_is_drawing
+
+    hint = (part_hint or "").strip()
+    mails: list[dict[str, Any]] = []
+    ctx = get_mail_context(session_id) if session_id else {}
+    open_id = str(ctx.get("email_id") or "")
+    if hint:
+        try:
+            mails = list(email_conn.search_emails(query="", limit=30))
+        except Exception:
+            mails = []
+    elif open_id:
+        opened = email_conn.get_email(open_id)
+        if opened:
+            mails.append(opened)
+    if open_id and hint and all(str(mail.get("id") or "") != open_id for mail in mails):
+        opened = email_conn.get_email(open_id)
+        if opened:
+            mails.append(opened)
+    hits: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for mail in mails:
+        mail_id = str(mail.get("id") or "")
+        for att in mail.get("attachments") or []:
+            if not isinstance(att, dict) or not attachment_is_drawing(att):
+                continue
+            filename = str(att.get("filename") or att.get("local_name") or "")
+            if hint and not _hint_matches(hint, filename):
+                continue
+            att_id = str(att.get("attachment_id") or "")
+            key = f"{mail_id}:{att_id or filename.lower()}"
+            if key in seen:
+                continue
+            seen.add(key)
+            local = _existing_file(str(att.get("local_path") or ""))
+            hits.append(
+                _candidate(
+                    str(local) if local else "",
+                    filename or (local.name if local else "drawing"),
+                    "mail_attachment",
+                    mail_id=mail_id,
+                    attachment_id=att_id,
+                    on_disk=bool(local),
+                )
+            )
+    return hits
+
+
+def _save_one_mail_drawing(session_id: str, hit: dict[str, Any]) -> Path | None:
+    from .mail_attachments import save_attachments
+
+    mail_id = str(hit.get("mail_id") or "")
+    att_id = str(hit.get("attachment_id") or "")
+    filename = str(hit.get("filename") or "")
+    if not mail_id or not session_id:
+        return None
+    ids = [att_id] if att_id else None
+    names = [filename] if filename and not att_id else None
+    try:
+        result = save_attachments(
+            session_id,
+            email_id=mail_id,
+            attachment_ids=ids,
+            filenames=names,
+            local=True,
+            drive=False,
+        )
+    except Exception:
+        return None
+    for item in result.get("attachments") or []:
+        if not isinstance(item, dict):
+            continue
+        if filename and str(item.get("filename") or "").lower() != filename.lower():
+            if att_id and str(item.get("attachment_id") or "") != att_id:
+                continue
+        path = _existing_file(str(item.get("local_path") or ""))
+        if path:
+            return path
+    return None
+
+
+def find_drawing_for_quote(
+    session_id: str,
+    part_hint: str = "",
+    drawing_path: str = "",
+) -> dict[str, Any]:
+    """Resolve one drawing file. Stop at the first clear hit. Several matches ask.
+
+    Order: provided path → Engineering focus → named search → save one mail
+    attachment → ask. Never picks the newest file when more than one matches.
+    """
+    provided = (drawing_path or "").strip()
+    if provided:
+        path = _resolve_provided_path(provided)
+        if path is None:
+            return _ask([], f"That path is not a file on disk: {provided}")
+        return _found(session_id, path, "provided_path")
+
+    focus_hits: list[tuple[Path, dict[str, Any]]] = []
+    own = db.get_conversation_by_session(session_id) if session_id else None
+    own_id = str(own.get("id") or "") if own else ""
+    for row in _focus_drawing_rows(session_id):
+        path = _row_drawing_file(row)
+        if not path:
+            continue
+        focus = row.get("focus") if isinstance(row.get("focus"), dict) else {}
+        label = str(focus.get("filename") or focus.get("local_name") or path.name)
+        focus_hits.append((path, _candidate(str(path), label, "focus")))
+        if own_id and str(row.get("id") or "") == own_id:
+            return _found(session_id, path, "focus")
+    focus_hits = _unique_files(focus_hits)
+    if len(focus_hits) == 1:
+        return _found(session_id, focus_hits[0][0], "focus")
+    if len(focus_hits) > 1:
+        hint = (part_hint or "").strip()
+        named = [(path, meta) for path, meta in focus_hits if hint and _hint_matches(hint, meta["filename"])]
+        if len(named) == 1:
+            return _found(session_id, named[0][0], "focus")
+        if named:
+            return _ask([meta for _path, meta in named], "Several drawings are on the desk. Which one?")
+        if not hint:
+            return _ask(
+                [meta for _path, meta in focus_hits],
+                "Several drawings are on the desk. Which one?",
+            )
+
+    disk_hits = _named_disk_hits(part_hint)
+    mail_hits = _mail_drawing_hits(session_id, part_hint)
+    mail_on_disk = [
+        (_existing_file(str(hit.get("path") or "")), hit)
+        for hit in mail_hits
+        if hit.get("on_disk") and _existing_file(str(hit.get("path") or ""))
+    ]
+    combined = _unique_files(disk_hits + [(path, hit) for path, hit in mail_on_disk if path])
+    if len(combined) == 1:
+        return _found(session_id, combined[0][0], "named_search")
+    if len(combined) > 1:
+        return _ask([meta for _path, meta in combined], "Several drawings match. Which one?")
+
+    unsaved = [hit for hit in mail_hits if not hit.get("on_disk")]
+    if len(unsaved) == 1:
+        saved = _save_one_mail_drawing(session_id, unsaved[0])
+        if saved:
+            return _found(session_id, saved, "mail_attachment")
+        return _ask(unsaved, "The mail drawing is not on disk yet, and I could not save it.")
+    if len(unsaved) > 1:
+        return _ask(unsaved, "Several mail drawings match. Which attachment should I save?")
+
+    if len(focus_hits) > 1:
+        return _ask(
+            [meta for _path, meta in focus_hits],
+            "Several drawings are on the desk. Which one?",
+        )
+    return _ask([])
+
+
+_ESTIMATE_BASIS_RE = re.compile(r"historical|market", re.I)
+
+
+def _rm_rows(session_id: str) -> list[dict[str, Any]]:
+    with db.connect() as conn:
+        rows = conn.execute(
+            "SELECT * FROM rm_quote_requests WHERE session_id = ? ORDER BY created_at",
+            (session_id,),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def list_rm_quote_requests(session_id: str) -> dict[str, Any]:
+    return {"ok": True, "requests": _rm_rows(session_id)}
+
+
+def _rm_quote_track_checks(session_id: str) -> list[dict[str, Any]]:
+    received = [row for row in _rm_rows(session_id) if row.get("status") == "received"]
+    if not received:
+        return []
+    priced = [
+        row
+        for row in received
+        if not int(row.get("is_estimate") or 0) and int(row.get("quoted_price_minor") or 0) > 0
+    ]
+    if priced:
+        supplier = str(priced[-1].get("supplier") or "supplier")
+        return [_check("rm_quote_track", True, f"Supplier quote from {supplier}", "rm_quote_requests")]
+    bad = [
+        row
+        for row in received
+        if not int(row.get("is_estimate") or 0)
+        or not str(row.get("notes") or "").strip()
+        or not _ESTIMATE_BASIS_RE.search(str(row.get("notes") or ""))
+    ]
+    if bad:
+        return [
+            _check(
+                "rm_quote_track",
+                False,
+                "Estimate must be labelled and name historical transactions or market trend",
+                "rm_quote_requests",
+            )
+        ]
+    return [_check("rm_quote_track", True, "Estimate labelled from historical or market basis", "rm_quote_requests")]
+
+
+def request_rm_quote(
+    session_id: str,
+    *,
+    material: str,
+    supplier: str,
+    supplier_email: str,
+    customer: str = "",
+) -> dict[str, Any]:
+    """Open a raw-material request and queue the supplier email. Does not send."""
+    grade = (material or "").strip()
+    who = (supplier or "").strip()
+    email = (supplier_email or "").strip()
+    if not grade or not who or not email or "@" not in email:
+        return {
+            "ok": False,
+            "need": "rm_request",
+            "message": "Need material, supplier, and a supplier email before I can request a quote.",
+        }
+    customer_id = None
+    if settings.masterdata_enabled and (customer or "").strip():
+        customer_id = None
+        with db.connect() as conn:
+            row = conn.execute(
+                "SELECT customer_id FROM customer_aliases WHERE alias = ? COLLATE NOCASE LIMIT 1",
+                (customer.strip(),),
+            ).fetchone()
+            if not row:
+                row = conn.execute(
+                    "SELECT id AS customer_id FROM customers WHERE name = ? COLLATE NOCASE LIMIT 1",
+                    (customer.strip(),),
+                ).fetchone()
+            if row:
+                customer_id = str(row["customer_id"])
+    request_id = f"rmq-{uuid.uuid4().hex[:12]}"
+    created = db.utc_now()
+    body = (
+        f"Dear {who},\n\n"
+        f"Please quote raw material: {grade}.\n"
+        "Reply with price, currency, and the date of the quote.\n\n"
+        "Regards"
+    )
+    pending = request_human_approval(
+        session_id=session_id,
+        kind="email_send",
+        title=f"Request RM quote: {grade}",
+        summary=f"To {email}",
+        payload={
+            "to": email,
+            "subject": f"Raw material quote — {grade}",
+            "body": body,
+            "attachment_paths": [],
+            "rm_request_id": request_id,
+        },
+        tool_name="quote_request_rm_quote",
+    )
+    with db.connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO rm_quote_requests (
+              id, session_id, customer_id, material, supplier, supplier_email,
+              status, currency, notes, is_estimate, source_kind, source_ref, pending_id, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, 'requested', 'INR', '', 0, '', '', ?, ?)
+            """,
+            (request_id, session_id, customer_id, grade, who, email, pending.get("id") or "", created),
+        )
+    return {
+        "ok": True,
+        "queued": True,
+        "sent": False,
+        "request_id": request_id,
+        "pending": pending,
+        "requests": _rm_rows(session_id),
+    }
+
+
+def _price_minor_inr(price_inr: Any) -> int | None:
+    amount = _parse_numeric(price_inr)
+    if amount is None or amount <= 0:
+        return None
+    return int(round(amount * 100))
+
+
+def record_rm_quote(
+    session_id: str,
+    *,
+    price_inr: Any = "",
+    is_estimate: bool = False,
+    notes: str = "",
+    quote_date: str = "",
+    request_id: str = "",
+    material: str = "",
+    supplier: str = "",
+) -> dict[str, Any]:
+    """Record a received supplier quote or a labelled estimate. Does not invent a price."""
+    note = (notes or "").strip()
+    when = (quote_date or "").strip()
+    estimate = bool(is_estimate)
+    if estimate and (not note or not _ESTIMATE_BASIS_RE.search(note)):
+        return {
+            "ok": False,
+            "need": "rm_basis",
+            "message": "An estimate must say whether it comes from historical transactions or market trend.",
+        }
+    minor = _price_minor_inr(price_inr)
+    if minor is None:
+        return {"ok": False, "need": "rm_price", "message": "Need the quoted price. I will not guess it."}
+    if not when:
+        return {"ok": False, "need": "rm_date", "message": "Need the quote date."}
+    rows = _rm_rows(session_id)
+    target: dict[str, Any] | None = None
+    if request_id:
+        target = next((row for row in rows if row.get("id") == request_id), None)
+        if target is None:
+            return {"ok": False, "need": "rm_request", "message": "That raw-material request is not on this quote."}
+    else:
+        open_rows = [row for row in rows if row.get("status") == "requested"]
+        if len(open_rows) == 1:
+            target = open_rows[0]
+        elif len(open_rows) > 1:
+            return {
+                "ok": False,
+                "need": "rm_request",
+                "message": "Several raw-material requests are open. Which one arrived?",
+                "candidates": [{"id": row["id"], "material": row["material"], "supplier": row["supplier"]} for row in open_rows],
+            }
+    received_at = db.utc_now()
+    source_kind = "estimate" if estimate else "supplier_quote"
+    if target:
+        with db.connect() as conn:
+            conn.execute(
+                """
+                UPDATE rm_quote_requests
+                SET status = 'received', quoted_price_minor = ?, quote_date = ?, received_at = ?,
+                    notes = ?, is_estimate = ?, source_kind = ?, source_ref = ?
+                WHERE id = ?
+                """,
+                (minor, when, received_at, note, 1 if estimate else 0, source_kind, note, target["id"]),
+            )
+        supplier_name = str(target.get("supplier") or supplier or "")
+        grade = str(target.get("material") or material or "")
+        request_id = str(target["id"])
+    else:
+        if not (material or "").strip() or not (supplier or "").strip():
+            return {
+                "ok": False,
+                "need": "rm_request",
+                "message": "Need the material and supplier to record a quote that was not requested here.",
+            }
+        request_id = f"rmq-{uuid.uuid4().hex[:12]}"
+        supplier_name = supplier.strip()
+        grade = material.strip()
+        with db.connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO rm_quote_requests (
+                  id, session_id, customer_id, material, supplier, supplier_email, status,
+                  quoted_price_minor, currency, quote_date, received_at, notes, is_estimate,
+                  source_kind, source_ref, pending_id, created_at
+                ) VALUES (?, ?, NULL, ?, ?, '', 'received', ?, 'INR', ?, ?, ?, ?, ?, ?, '', ?)
+                """,
+                (
+                    request_id,
+                    session_id,
+                    grade,
+                    supplier_name,
+                    minor,
+                    when,
+                    received_at,
+                    note,
+                    1 if estimate else 0,
+                    source_kind,
+                    note,
+                    received_at,
+                ),
+            )
+    rupees = minor / 100
+    db.add_memory(session_id, "last_quote_rm_price", f"{rupees:.2f}".rstrip("0").rstrip("."))
+    db.add_memory(session_id, "last_quote_rm_source", "estimate" if estimate else "supplier")
+    db.add_memory(session_id, "last_quote_rm_source_note", note or f"{supplier_name} quote")
+    db.add_memory(session_id, "last_quote_rm_basis_date", when)
+    db.add_memory(session_id, "last_quote_material", grade)
+    return {
+        "ok": True,
+        "request_id": request_id,
+        "quoted_price_minor": minor,
+        "currency": "INR",
+        "is_estimate": estimate,
+        "requests": _rm_rows(session_id),
+    }
 
 
 def append_playbook_note(*, what_went_wrong: str, layer: str, change: str) -> dict[str, Any]:
@@ -1075,6 +1815,61 @@ def append_playbook_note(*, what_went_wrong: str, layer: str, change: str) -> di
     return {"ok": True, "path": str(notes_path), "line": line.strip()}
 
 
+def _quote_rows_total(session_id: str) -> float | None:
+    total = 0.0
+    priced = False
+    for row in _load_quote_rows(session_id):
+        cells = list(row)
+        if len(cells) < 4:
+            continue
+        qty = _parse_numeric(cells[2]) or 0
+        unit = _parse_numeric(cells[3])
+        if unit is not None and qty:
+            total += qty * unit
+            priced = True
+    return total if priced else None
+
+
+def delivery_hash(to: str, subject: str, pdf_sha256: str) -> str:
+    raw = f"{(to or '').strip().lower()}{(subject or '').strip()}{pdf_sha256 or ''}"
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def duplicate_delivery_warning(to: str, subject: str, pdf_sha256: str) -> str:
+    """WARN text when the same recipient, subject, and PDF were sent in the last 30 days."""
+    digest = delivery_hash(to, subject, pdf_sha256)
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+    with db.connect() as conn:
+        row = conn.execute(
+            """
+            SELECT created_at FROM external_effects
+            WHERE delivery_hash = ? AND state = 'sent' AND created_at >= ?
+            ORDER BY created_at DESC LIMIT 1
+            """,
+            (digest, cutoff),
+        ).fetchone()
+    if not row:
+        return ""
+    sent_on = str(row["created_at"] or "")[:10]
+    return f"Identical quote sent to {to} on {sent_on}"
+
+
+def quote_email_body(*, customer: str, part_name: str, total_inr: Any, sign_off: str = "") -> tuple[str, str]:
+    part = part_name or "Component"
+    total = _parse_numeric(total_inr)
+    total_text = f"₹{total:,.2f}" if total is not None else "—"
+    subject = f"Quotation — {part}"
+    closing = (sign_off or "").strip() or "Jarvis"
+    body = (
+        f"Dear {customer or 'Customer'},\n\n"
+        f"Please find attached our quotation for {part}.\n\n"
+        f"Total Quoted Cost: {total_text}\n\n"
+        "The detailed breakdown is in the attached PDF. Valid for 30 days.\n\n"
+        f"Regards,\n{closing}"
+    )
+    return subject, body
+
+
 def queue_quote_send(
     *,
     session_id: str,
@@ -1087,15 +1882,36 @@ def queue_quote_send(
     pdf_sha256 = (verify_snapshot or {}).get("pdf_sha256")
     if not pdf_sha256 and pdf_path:
         pdf_sha256 = pdf_file_sha256(pdf_path)
+    customer = _latest_memory(session_id, "last_quote_customer")
+    part = _latest_memory(session_id, "last_quote_part_name") or "Component"
+    if not (subject or "").strip() or not (body or "").strip():
+        filled_subject, filled_body = quote_email_body(
+            customer=customer,
+            part_name=part,
+            total_inr=_quote_rows_total(session_id),
+        )
+        subject = subject.strip() or filled_subject
+        body = body.strip() or filled_body
+    warning = ""
+    digest_key = ""
+    if pdf_sha256:
+        digest_key = delivery_hash(to, subject, pdf_sha256)
+        warning = duplicate_delivery_warning(to, subject, pdf_sha256)
     payload: dict[str, Any] = {
         "to": to,
         "subject": subject,
         "body": body,
         "attachment_paths": [pdf_path] if pdf_path else [],
         "verify": verify_snapshot or {},
+        "blast_radius": 5,
+        "duplicate_check": True,
     }
     if pdf_sha256:
         payload["pdf_sha256"] = pdf_sha256
+    if digest_key:
+        payload["delivery_hash"] = digest_key
+    if warning:
+        payload["duplicate_warning"] = warning
     pending = request_human_approval(
         session_id=session_id,
         kind="quote_send",
