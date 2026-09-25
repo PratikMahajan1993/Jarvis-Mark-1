@@ -125,7 +125,8 @@ export function QuoteSheet({
   }, [doc.rows]);
 
   const verify = doc.verify;
-  const authOff = verify.stop || authorizeDisabled(verify);
+  const isFixture = !scenePricedRows(scene);
+  const authOff = verify.stop || authorizeDisabled(verify) || isFixture;
   const failingIds =
     doc.failingCheckIds?.length > 0
       ? doc.failingCheckIds
@@ -244,13 +245,13 @@ export function QuoteSheet({
             Failing: {failingIds.join(", ")}
           </p>
         ) : null}
-        <div className="flex gap-2">
+        <div className="flex gap-2 relative">
           <button
             type="button"
             className="orch-btn orch-btn-primary flex-1"
             disabled={authOff}
             onClick={() => {
-              /* Bench fixture Authorize — no mail / quote_send / jarvis_quote_build */
+              /* Bench fixture Authorize ?" no mail / quote_send / jarvis_quote_build */
             }}
           >
             Authorize
@@ -258,12 +259,18 @@ export function QuoteSheet({
           <button
             type="button"
             className="orch-btn orch-btn-ghost flex-1"
+            disabled={isFixture}
             onClick={() => {
-              /* Bench fixture Reject — local UI only */
+              /* Bench fixture Reject ?" local UI only */
             }}
           >
             Reject
           </button>
+          {isFixture && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-[1px] rounded-md pointer-events-none">
+              <span className="font-mono text-[9px] uppercase tracking-widest text-[color:var(--muted)]">Preview - Not connected</span>
+            </div>
+          )}
         </div>
       </footer>
     </div>

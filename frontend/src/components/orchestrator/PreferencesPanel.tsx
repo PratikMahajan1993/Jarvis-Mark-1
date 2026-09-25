@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useState, useRef } from "react";
 import { api } from "@/lib/api";
 import type { Preferences } from "@/lib/types";
 import SpotlightCard from "@/components/react-bits/SpotlightCard";
@@ -165,10 +165,34 @@ export function PreferencesPanel({
   onClose: () => void;
   onSave: (next: Partial<Preferences>) => Promise<void>;
 }) {
+  const closeBtnRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (open && closeBtnRef.current) {
+      closeBtnRef.current.focus();
+    }
+  }, [open]);
+
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape" && open) {
+        onClose();
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [open, onClose]);
+
   if (!open) return null;
 
   return (
-    <div className="pointer-events-auto fixed inset-0 z-[30] bg-black/55 backdrop-blur-sm" onClick={onClose}>
+    <div 
+      className="pointer-events-auto fixed inset-0 z-[30] bg-black/55 backdrop-blur-sm" 
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="preferences-title"
+    >
       <div
         className="ml-auto flex h-full w-full max-w-md flex-col p-4 sm:p-6"
         onClick={(event) => event.stopPropagation()}
@@ -182,9 +206,10 @@ export function PreferencesPanel({
               <GradientText className="font-mono text-[10px] uppercase tracking-[0.2em]" animationSpeed={9}>
                 Configuration
               </GradientText>
-              <h2 className="mt-1 font-display text-lg text-white">Preferences</h2>
+              <h2 id="preferences-title" className="mt-1 font-display text-lg text-white">Preferences</h2>
             </div>
             <button
+              ref={closeBtnRef}
               type="button"
               onClick={onClose}
               className="rounded-full border border-[color:var(--border)] px-3 py-1 font-mono text-[10px] uppercase tracking-[0.12em] text-[color:var(--muted)] transition hover:border-[color:var(--accent)]/30 hover:text-[color:var(--accent)]"

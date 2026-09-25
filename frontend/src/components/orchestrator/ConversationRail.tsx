@@ -117,7 +117,7 @@ export function ConversationRail({
           title={
             openCount >= maxOpen
               ? `Opens a new note and parks the oldest (max ${maxOpen})`
-              : "Start a named discussion"
+              : "Start a named note"
           }
         >
           + New
@@ -125,7 +125,7 @@ export function ConversationRail({
       </div>
 
       <RailOrbRow
-        title="Everyday desk"
+        title="Everyday note"
         subtitle="Quick asks"
         tone="ambient"
         active={ambientActive}
@@ -155,7 +155,7 @@ export function ConversationRail({
 
       {!items.length ? (
         <p className="px-1 pt-2 font-mono text-[0.65rem] leading-relaxed text-[color:var(--muted)]/70">
-          Up to {maxOpen} discussions and jobs stay open here.
+          Up to {maxOpen} notes and jobs stay open here.
         </p>
       ) : null}
     </div>

@@ -31,7 +31,7 @@ export function googleConnectPrompt(status: GoogleConnectStatus): {
     return {
       title: "Google is not configured",
       summary:
-        "Add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to the API .env file, restart the server, then connect from here.",
+        "Jarvis isn't connected to your Google account yet — open Preferences to finish setup.",
       actionLabel: "Open preferences",
       showConnect: false,
     };
