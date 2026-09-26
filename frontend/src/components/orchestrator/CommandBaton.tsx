@@ -2,7 +2,7 @@
 
 import { FormEvent, KeyboardEvent, useEffect, useRef } from "react";
 import GlareHover from "@/components/react-bits/GlareHover";
-import { primeVoicePlayback } from "@/lib/voice";
+import { ensureAudioContextUnlocked } from "@/lib/voice";
 
 export function CommandBaton({
   value,
@@ -33,7 +33,7 @@ export function CommandBaton({
 
   function handleSubmit(event: FormEvent | KeyboardEvent) {
     event.preventDefault();
-    primeVoicePlayback();
+    ensureAudioContextUnlocked();
     const next = value.trim();
     if (!next || disabled) return;
     onSubmit(next);
@@ -75,7 +75,7 @@ export function CommandBaton({
           onKeyDown={(event) => {
             if (event.key !== "Enter" || event.shiftKey) return;
             event.preventDefault();
-            primeVoicePlayback();
+            ensureAudioContextUnlocked();
             handleSubmit(event);
           }}
           placeholder={placeholder}

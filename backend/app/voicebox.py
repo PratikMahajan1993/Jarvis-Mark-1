@@ -28,6 +28,7 @@ _prefetch_inflight: set[str] = set()
 _MEM_LIMIT = 48
 _TTS_CACHE_TTL_SEC = 7 * 24 * 60 * 60
 _CACHE_VERSION = "vb3"
+_machine_autoplay_disabled = False
 
 
 class VoiceboxTtsError(RuntimeError):
@@ -224,6 +225,28 @@ def _cache_put(key: str, wav: bytes) -> None:
         _expire_old_tts_files()
 
 
+def _disable_machine_autoplay(client: httpx.Client, base: str) -> None:
+    """Voicebox otherwise plays /generate on the machine while the browser plays the WAV."""
+    global _machine_autoplay_disabled
+    if _machine_autoplay_disabled:
+        return
+    try:
+        current = client.get(f"{base}/settings/generation")
+        if current.status_code >= 400:
+            return
+        payload = current.json() if current.content else {}
+        if not isinstance(payload, dict) or not payload.get("autoplay_on_generate"):
+            _machine_autoplay_disabled = True
+            return
+        updated = dict(payload)
+        updated["autoplay_on_generate"] = False
+        saved = client.put(f"{base}/settings/generation", json=updated)
+        if saved.status_code < 400:
+            _machine_autoplay_disabled = True
+    except Exception:
+        return
+
+
 def synthesize(
     text: str,
     *,
@@ -267,6 +290,7 @@ def synthesize(
         }
         if voice_type == "preset" and engine:
             body["engine"] = engine
+        _disable_machine_autoplay(client, base)
         started = client.post(f"{base}/generate", json=body)
         if started.status_code >= 400:
             raise VoiceboxTtsError(

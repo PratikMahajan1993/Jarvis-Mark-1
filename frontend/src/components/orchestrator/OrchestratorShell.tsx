@@ -32,10 +32,8 @@ import { readHermesEventStream, takeSentences, type HermesRunEvent } from "@/lib
 import {
   canListen,
   classifyDecision,
-  enqueueSentence,
-  resetSpeechQueue,
   silence,
-  speak,
+  speakText,
   startListening,
   stopListening,
   whenSpeechIdle,
@@ -688,16 +686,11 @@ export function OrchestratorShell() {
       speakGenRef.current += 1;
       const gen = speakGenRef.current;
       const started = applyEvent({ type: "SPEAK_START", text: line });
-      if (!started) return;
-      speak(
-        line,
-        voiceEnabledRef.current !== false,
-        () => {
-          if (gen !== speakGenRef.current) return;
-          applyEvent({ type: "SPEAK_END" });
-        },
-        { force: opts?.force ?? true },
-      );
+      if (!started || voiceEnabledRef.current === false) return;
+      void speakText(line).finally(() => {
+        if (gen !== speakGenRef.current) return;
+        applyEvent({ type: "SPEAK_END" });
+      });
     },
     [applyEvent, showVoice],
   );
@@ -884,7 +877,7 @@ export function OrchestratorShell() {
   );
 
   const applyResponse = useCallback(
-    (result: ChatResponse, opts?: { fromConfirm?: boolean; approved?: boolean; spokenLive?: boolean }) => {
+    (result: ChatResponse, opts?: { fromConfirm?: boolean; approved?: boolean; alreadySpoken?: boolean }) => {
       void applyUiAction(result.ui_action);
       const view = result.drawing_chat;
       if (view && typeof view === "object") {
@@ -962,41 +955,37 @@ export function OrchestratorShell() {
       speakGenRef.current += 1;
       const gen = speakGenRef.current;
 
-      if (opts?.spokenLive) {
-        const settle = () => {
-          if (gen !== speakGenRef.current) return;
-          if (nextAction && nextAction.kind !== "hermes_approval") {
-            const settled = applyEvent({ type: "AWAIT_HITL", action: nextAction });
-            if (settled) {
-              liveLog(
-                "hitl",
-                { phase: "shown", action_kind: nextAction.kind, action_id: nextAction.id },
-                { sessionId: sessionRef.current },
-              );
-              confirmListenRef.current(nextAction);
-            }
-            return;
+      const settle = () => {
+        if (gen !== speakGenRef.current) return;
+        if (nextAction && nextAction.kind !== "hermes_approval") {
+          const settled = applyEvent({ type: "AWAIT_HITL", action: nextAction });
+          if (settled) {
+            liveLog(
+              "hitl",
+              { phase: "shown", action_kind: nextAction.kind, action_id: nextAction.id },
+              { sessionId: sessionRef.current },
+            );
+            confirmListenRef.current(nextAction);
           }
-          if (stateRef.current.mode === "THINKING" || stateRef.current.mode === "SPEAKING") {
-            applyEvent({ type: "RESET" });
-          }
-        };
+          return;
+        }
+        if (stateRef.current.mode === "THINKING" || stateRef.current.mode === "SPEAKING") {
+          applyEvent({ type: "RESET" });
+        }
+      };
+
+      if (opts?.alreadySpoken) {
         whenSpeechIdle(settle);
         return;
       }
 
       if (voiceEnabledRef.current && tts) {
         applyEvent({ type: "SPEAK_START", text: tts });
-        speak(tts, true, () => {
-          // A late-arriving clip's onEnd must not resurrect SPEAKING or
-          // start a confirm-listen for a turn that's no longer current.
+        void speakText(tts).finally(() => {
           if (gen !== speakGenRef.current) return;
-          // If some other event already moved the mode on (e.g. a new
-          // send() interrupted this speech), SPEAK_END is refused and
-          // `nextAction` — already superseded — must not be re-presented.
           const settled = applyEvent({ type: "SPEAK_END" });
           if (settled === null) return;
-          if (nextAction) {
+          if (nextAction && nextAction.kind !== "hermes_approval") {
             applyEvent({ type: "AWAIT_HITL", action: nextAction });
             liveLog(
               "hitl",
@@ -1006,6 +995,7 @@ export function OrchestratorShell() {
             confirmListenRef.current(nextAction);
           }
         });
+        return;
       } else if (nextAction) {
         const settled = applyEvent({ type: "AWAIT_HITL", action: nextAction });
         if (settled) {
@@ -1104,7 +1094,7 @@ export function OrchestratorShell() {
             applyEvent({ type: "RESUME_THINKING" });
           } else {
             await api.stopHermesRun(runId);
-            resetSpeechQueue();
+            silence();
             applyEvent({ type: "RESET" });
             showVoice(IDLE_VOICE);
           }
@@ -1239,8 +1229,10 @@ export function OrchestratorShell() {
             showVoice(sentenceBufRef.current);
             const taken = takeSentences(unspokenRef.current + delta);
             unspokenRef.current = taken.rest;
-            for (const sentence of taken.ready) {
-              enqueueSentence(sentence, voiceEnabledRef.current !== false);
+            if (voiceEnabledRef.current !== false) {
+              for (const sentence of taken.ready) {
+                void speakText(sentence);
+              }
             }
             return;
           }
@@ -1260,14 +1252,19 @@ export function OrchestratorShell() {
             unspokenRef.current = "";
             sentenceBufRef.current = "";
             const voiceOn = voiceEnabledRef.current !== false;
-            if (rest) {
-              enqueueSentence(rest, voiceOn);
-            } else if (!streamed.trim()) {
+            let spoke = Boolean(streamed.trim());
+            if (voiceOn && rest) {
+              void speakText(rest);
+              spoke = true;
+            } else if (voiceOn && !streamed.trim()) {
               const finalText = String(event.response.speak || event.response.reply || "").trim();
-              if (finalText) enqueueSentence(finalText, voiceOn);
+              if (finalText) {
+                void speakText(finalText);
+                spoke = true;
+              }
             }
             setLedgerTurnId(null);
-            applyResponse(event.response, { spokenLive: true });
+            applyResponse(event.response, { alreadySpoken: spoke });
             void refreshDesk(activeConversationId);
             return;
           }
@@ -1351,7 +1348,7 @@ export function OrchestratorShell() {
   const cancelRun = useCallback(async () => {
     const runId = liveRunRef.current;
     runAbortRef.current?.abort();
-    resetSpeechQueue();
+    silence();
     liveRunRef.current = "";
     if (runId) {
       try {
@@ -1843,10 +1840,12 @@ export function OrchestratorShell() {
             speakGenRef.current += 1;
             const gen = speakGenRef.current;
             applyEvent({ type: "SPEAK_START", text: line });
-            speak(line, voiceEnabledRef.current !== false, () => {
-              if (gen !== speakGenRef.current) return;
-              applyEvent({ type: "SPEAK_END" });
-            });
+            if (voiceEnabledRef.current !== false) {
+              void speakText(line).finally(() => {
+                if (gen !== speakGenRef.current) return;
+                applyEvent({ type: "SPEAK_END" });
+              });
+            }
             void api.closeDrawing(sessionId).catch(() => null);
           }}
           onWhisper={(line) => showVoice(line)}

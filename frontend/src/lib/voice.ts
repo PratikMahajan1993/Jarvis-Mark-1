@@ -497,15 +497,9 @@ export function classifyDecision(text: string): "yes" | "no" | null {
 const GLANCE_STORE = "jarvis.spokenGlance";
 const spokenGlanceKeys = new Set<string>();
 let glanceStoreLoaded = false;
-let activeAudio: HTMLAudioElement | null = null;
 let activeSource: AudioBufferSourceNode | null = null;
 let playbackCtx: AudioContext | null = null;
-let unlockAudio: HTMLAudioElement | null = null;
-let speakSeq = 0;
 let speakAbort: AbortController | null = null;
-
-const SILENT_WAV =
-  "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=";
 
 function playbackContext(): AudioContext | null {
   if (typeof window === "undefined") return null;
@@ -517,22 +511,14 @@ function playbackContext(): AudioContext | null {
   return playbackCtx;
 }
 
-/** Call from a click or keypress so a later Voicebox clip is allowed to play. */
-export function primeVoicePlayback() {
-  if (typeof window === "undefined") return;
+/** Resume audio during a click or keypress. A later Voicebox clip can then play. */
+export function ensureAudioContextUnlocked() {
   const ctx = playbackContext();
   if (ctx && ctx.state !== "running") void ctx.resume();
-  if (!unlockAudio) {
-    unlockAudio = new Audio();
-    unlockAudio.setAttribute("playsinline", "true");
-  }
-  if (!unlockAudio.paused) return;
-  unlockAudio.src = SILENT_WAV;
-  void unlockAudio.play().then(() => unlockAudio?.pause()).catch(() => undefined);
 }
 
 if (typeof window !== "undefined") {
-  const prime = () => primeVoicePlayback();
+  const prime = () => ensureAudioContextUnlocked();
   window.addEventListener("pointerdown", prime, true);
   window.addEventListener("keydown", prime, true);
 }
@@ -556,20 +542,6 @@ function stopAudio() {
   speakAbort?.abort();
   speakAbort = null;
   stopSource();
-  if (activeAudio) {
-    try {
-      activeAudio.onended = null;
-      activeAudio.onerror = null;
-      activeAudio.pause();
-      const src = activeAudio.src;
-      activeAudio.removeAttribute("src");
-      activeAudio.load();
-      if (src.startsWith("blob:")) URL.revokeObjectURL(src);
-    } catch {
-      /* ignore */
-    }
-    activeAudio = null;
-  }
 }
 
 function loadGlanceStore() {
@@ -598,8 +570,8 @@ export function claimGlanceSpeech(key: string): boolean {
   return true;
 }
 
-/** Fetch Voicebox WAV only — caller decides whether to play. */
-async function fetchVoicebox(text: string, seq: number): Promise<Blob | null> {
+/** Fetch a Voicebox WAV. Playback is separate and always this blob. */
+async function fetchVoicebox(text: string): Promise<Blob | null> {
   if (typeof window === "undefined") return null;
   const controller = new AbortController();
   speakAbort = controller;
@@ -611,9 +583,7 @@ async function fetchVoicebox(text: string, seq: number): Promise<Blob | null> {
       signal: controller.signal,
     });
     if (!response.ok) return null;
-    const blob = await response.blob();
-    if (seq !== speakSeq) return null;
-    return blob;
+    return await response.blob();
   } catch (err) {
     if ((err as { name?: string })?.name === "AbortError") return null;
     return null;
@@ -622,191 +592,92 @@ async function fetchVoicebox(text: string, seq: number): Promise<Blob | null> {
   }
 }
 
-function playVoiceboxBlob(blob: Blob, onEnd: (() => void) | undefined, seq: number) {
-  const ctx = playbackContext();
-  if (ctx) {
-    void blob
-      .arrayBuffer()
-      .then(async (raw) => {
-        if (seq !== speakSeq) return;
-        if (ctx.state !== "running") await ctx.resume();
-        if (seq !== speakSeq) return;
-        const decoded = await ctx.decodeAudioData(raw.slice(0));
-        if (seq !== speakSeq) return;
-        stopSource();
-        const source = ctx.createBufferSource();
-        source.buffer = decoded;
-        source.connect(ctx.destination);
-        activeSource = source;
-        source.onended = () => {
-          if (activeSource !== source) return;
-          activeSource = null;
-          deafUntil = Date.now() + 500;
-          onEnd?.();
-        };
-        source.start(0);
-      })
-      .catch(() => {
-        if (seq !== speakSeq) return;
-        playVoiceboxElement(blob, onEnd);
-      });
-    return;
-  }
-  playVoiceboxElement(blob, onEnd);
+let playGen = 0;
+let speakChain: Promise<void> = Promise.resolve();
+let playsInFlight = 0;
+const speechIdleWaiters: Array<() => void> = [];
+
+function flushSpeechIdle() {
+  if (playsInFlight > 0 || activeSource) return;
+  const waiters = speechIdleWaiters.splice(0);
+  waiters.forEach((waiter) => waiter());
 }
 
-function playVoiceboxElement(blob: Blob, onEnd?: () => void) {
-  const url = URL.createObjectURL(blob);
-  const audio = unlockAudio ?? new Audio();
-  if (!unlockAudio) unlockAudio = audio;
-  audio.src = url;
-  activeAudio = audio;
-  let finished = false;
-  const done = () => {
-    if (finished) return;
-    finished = true;
-    if (activeAudio === audio) activeAudio = null;
-    URL.revokeObjectURL(url);
-    deafUntil = Date.now() + 500;
-    onEnd?.();
-  };
-  audio.onended = done;
-  audio.onerror = done;
-  void audio.play().catch(() => done());
+function playBuffer(blob: Blob, gen: number): Promise<void> {
+  const ctx = playbackContext();
+  if (!ctx) return Promise.resolve();
+  return blob.arrayBuffer().then(async (raw) => {
+    if (gen !== playGen) return;
+    if (ctx.state !== "running") await ctx.resume();
+    if (gen !== playGen) return;
+    const decoded = await ctx.decodeAudioData(raw.slice(0));
+    if (gen !== playGen) return;
+    stopSource();
+    await new Promise<void>((resolve) => {
+      const source = ctx.createBufferSource();
+      source.buffer = decoded;
+      source.connect(ctx.destination);
+      activeSource = source;
+      source.onended = () => {
+        if (activeSource === source) activeSource = null;
+        deafUntil = Date.now() + 500;
+        resolve();
+      };
+      source.start(0);
+    });
+  });
+}
+
+/** The only way a reply is spoken. Fetches a Voicebox WAV and plays that buffer. */
+export function speakText(text: string): Promise<void> {
+  const line = text.trim();
+  if (!line || typeof window === "undefined") return Promise.resolve();
+  const gen = playGen;
+  playsInFlight += 1;
+  const job = speakChain.then(async () => {
+    if (gen !== playGen) return;
+    ensureAudioContextUnlocked();
+    let blob = await fetchVoicebox(line);
+    if (gen !== playGen) return;
+    if (!blob) {
+      await new Promise((resolve) => window.setTimeout(resolve, 400));
+      if (gen !== playGen) return;
+      blob = await fetchVoicebox(line);
+    }
+    if (!blob || gen !== playGen) return;
+    await playBuffer(blob, gen);
+  });
+  const settled = job.finally(() => {
+    if (gen !== playGen) return;
+    playsInFlight = Math.max(0, playsInFlight - 1);
+    flushSpeechIdle();
+  });
+  speakChain = settled.then(
+    () => undefined,
+    () => undefined,
+  );
+  return settled;
 }
 
 export function isSpeaking(): boolean {
-  return Boolean(activeAudio || activeSource) || Date.now() < deafUntil;
-}
-
-let lastSpokenText = "";
-let lastSpokenAt = 0;
-
-type QueuedSentence = {
-  text: string;
-  enabled: boolean;
-  onEnd?: () => void;
-};
-
-const sentenceQueue: QueuedSentence[] = [];
-const speechIdleWaiters: Array<() => void> = [];
-let queueHold = false;
-let speechGen = 0;
-
-function speechBusy(): boolean {
-  return queueHold || Boolean(activeAudio || activeSource) || sentenceQueue.length > 0;
-}
-
-function drainSpeechQueue(gen: number) {
-  if (gen !== speechGen) return;
-  queueHold = false;
-  const next = sentenceQueue.shift();
-  if (next) {
-    speak(next.text, next.enabled, next.onEnd, { force: true, queue: true });
-    return;
-  }
-  const waiters = speechIdleWaiters.splice(0);
-  waiters.forEach((fn) => fn());
-}
-
-/** Drop queued sentences. A new turn or cancel must not keep the previous clip's tail. */
-export function resetSpeechQueue() {
-  speechGen += 1;
-  queueHold = false;
-  sentenceQueue.length = 0;
-  speechIdleWaiters.length = 0;
-  silence();
+  return Boolean(activeSource) || playsInFlight > 0 || Date.now() < deafUntil;
 }
 
 export function whenSpeechIdle(callback: () => void) {
-  if (!speechBusy()) {
+  if (playsInFlight === 0 && !activeSource) {
     callback();
     return;
   }
   speechIdleWaiters.push(callback);
 }
 
-export function speak(
-  text: string,
-  enabled = true,
-  onEnd?: () => void,
-  options?: { force?: boolean; queue?: boolean },
-) {
-  if (!enabled || !text || typeof window === "undefined") {
-    onEnd?.();
-    return;
-  }
-  const queued = Boolean(options?.queue);
-  if (queued && speechBusy()) {
-    sentenceQueue.push({ text, enabled, onEnd });
-    return;
-  }
-  const gen = speechGen;
-  if (queued) queueHold = true;
-  else {
-    speechGen += 1;
-    sentenceQueue.length = 0;
-    queueHold = false;
-  }
-  const end = () => {
-    onEnd?.();
-    if (queued) drainSpeechQueue(gen);
-  };
-  const force = Boolean(options?.force);
-  if (!force && activeAudio && text === lastSpokenText && performance.now() - lastSpokenAt < 2500) {
-    end();
-    return;
-  }
-  if (!force && text === lastSpokenText && performance.now() - lastSpokenAt < 90000) {
-    end();
-    return;
-  }
-  lastSpokenText = text;
-  lastSpokenAt = performance.now();
-  const words = text.split(/\s+/).filter(Boolean).length;
-  deafUntil = Date.now() + Math.min(12000, 900 + words * 320);
-  speakSeq += 1;
-  const seq = speakSeq;
-  stopAudio();
-  if (typeof window !== "undefined" && window.speechSynthesis) {
-    window.speechSynthesis.cancel();
-  }
-
-  void (async () => {
-    let blob = await fetchVoicebox(text, seq);
-    if (seq !== speakSeq) return;
-    if (!blob) {
-      await new Promise((resolve) => window.setTimeout(resolve, 400));
-      if (seq !== speakSeq) return;
-      blob = await fetchVoicebox(text, seq);
-      if (seq !== speakSeq) return;
-    }
-    if (blob) {
-      playVoiceboxBlob(blob, end, seq);
-      return;
-    }
-    end();
-  })();
-}
-
-export function enqueueSentence(text: string, enabled = true, onEnd?: () => void) {
-  const sentence = text.trim();
-  if (!sentence) {
-    onEnd?.();
-    return;
-  }
-  speak(sentence, enabled, onEnd, { force: true, queue: true });
-}
-
 export function silence() {
-  speechGen += 1;
-  queueHold = false;
-  sentenceQueue.length = 0;
-  speechIdleWaiters.length = 0;
-  speakSeq += 1;
+  playGen += 1;
+  playsInFlight = 0;
+  speakChain = Promise.resolve();
   deafUntil = Date.now() + 450;
   stopAudio();
-  if (typeof window !== "undefined" && window.speechSynthesis) {
-    window.speechSynthesis.cancel();
-  }
+  const waiters = speechIdleWaiters.splice(0);
+  waiters.forEach((waiter) => waiter());
 }
+
