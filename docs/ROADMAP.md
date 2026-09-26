@@ -80,6 +80,8 @@
 
 ## Phase 4: Master Data & Schema (Week 7)
 
+**Status:** Implemented. `masterdata_enabled` defaults on. Master Data UI is `/masterdata`. Markdown `mhr-demo.md` and `client-names.md` are no longer read when the flag is on.
+
 **Goal:** Durable source for rates, machines, customers, vendors.
 
 | ID | Task | Owner | Acceptance | Priority |

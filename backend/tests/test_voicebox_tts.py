@@ -12,40 +12,25 @@ from app import voicebox as vb
 from app.main import app
 
 
-def test_resolve_profile_creates_kokoro_preset_when_empty():
+def test_resolve_profile_does_not_invent_a_voice():
     client = MagicMock(spec=httpx.Client)
     empty = httpx.Response(200, json=[])
-    created = httpx.Response(
-        200,
-        json={
-            "id": "prof-1",
-            "name": "Mark",
-            "default_engine": "kokoro",
-            "preset_engine": "kokoro",
-        },
-    )
-
-    def fake_get(url: str, *args, **kwargs):
-        if url.endswith("/profiles"):
-            return empty
-        raise AssertionError(url)
-
-    def fake_post(url: str, *args, **kwargs):
-        if url.endswith("/profiles"):
-            body = kwargs.get("json") or {}
-            assert body.get("voice_type") == "preset"
-            assert body.get("preset_engine") == "kokoro"
-            assert body.get("name") == "Mark"
-            return created
-        raise AssertionError(url)
-
-    client.get.side_effect = fake_get
-    client.post.side_effect = fake_post
-
+    client.get.return_value = empty
     vb._profile_cache.clear()
-    row = vb.resolve_profile(client, "Mark")
-    assert row["id"] == "prof-1"
-    assert client.post.call_count == 1
+    with pytest.raises(vb.VoiceboxTtsError, match="no profile named Mark"):
+        vb.resolve_profile(client, "Mark")
+    client.post.assert_not_called()
+
+
+def test_resolve_profile_does_not_substitute_another_name():
+    client = MagicMock(spec=httpx.Client)
+    client.get.return_value = httpx.Response(
+        200,
+        json=[{"id": "other", "name": "Alloy", "default_engine": "kokoro", "preset_voice_id": "af_alloy"}],
+    )
+    vb._profile_cache.clear()
+    with pytest.raises(vb.VoiceboxTtsError, match="no profile named Mark"):
+        vb.resolve_profile(client, "Mark")
 
 
 def test_api_tts_returns_503_not_502_on_voicebox_error():

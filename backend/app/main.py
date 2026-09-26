@@ -61,6 +61,7 @@ from .schemas import (
 from .tools.documents import read_export_text
 from .hud_state import load_hud, remember_hud
 from .mail_sync import get_state as mail_sync_state, kick_bulk as kick_mail_bulk, maybe_kick_on_startup
+from .masterdata.routes import router as masterdata_router
 from .snapshot import kick as kick_snapshot
 from .watch import ack_watch, resume_watches, watch_payload
 
@@ -73,7 +74,11 @@ async def lifespan(app: FastAPI):
     if settings.turn_ledger_enabled:
         _reaper_stop, _reaper_thread = start_reaper_daemon()
     startup()
+    from .memory.ingest_queue import start_ingest_workers, stop_ingest_workers
+
+    await start_ingest_workers()
     yield
+    await stop_ingest_workers()
     if _reaper_stop is not None:
         _reaper_stop.set()
     if _reaper_thread is not None:
@@ -81,6 +86,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Jarvis Command Center", version="0.1.0", lifespan=lifespan)
+app.include_router(masterdata_router)
 
 _LOCAL_CLIENT_HOSTS = frozenset({"127.0.0.1", "::1", "localhost", "testclient"})
 _MUTATING_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
@@ -124,6 +130,11 @@ app.add_middleware(
 
 def startup() -> None:
     db.init_db()
+    if settings.masterdata_enabled:
+        from .masterdata.seed_master_data import seed_master_data
+
+        with db.connect() as conn:
+            seed_master_data(conn)
     reconcile_external_effects_on_boot()
     if not gmail_live():
         seed_mailbox()
@@ -145,6 +156,10 @@ def startup() -> None:
         import threading
 
         def _mcp_bg() -> None:
+            import logging
+            import time
+
+            log = logging.getLogger("jarvis.mcp")
             try:
                 from .hermes.bridge import (
                     ensure_jarvis_mcp_registered,
@@ -152,11 +167,32 @@ def startup() -> None:
                     hermes_available,
                 )
 
-                ensure_playbooks_installed()
-                if hermes_available():
-                    ensure_jarvis_mcp_registered()
-            except Exception:
-                pass
+                try:
+                    ensure_playbooks_installed()
+                except Exception as exc:
+                    log.warning("Playbook install failed: %s", exc)
+                attempts = 4
+                last_error: BaseException | None = None
+                for attempt in range(attempts):
+                    try:
+                        if hermes_available() and ensure_jarvis_mcp_registered():
+                            return
+                        last_error = RuntimeError(
+                            "Hermes is down or MCP registration was declined"
+                        )
+                    except Exception as exc:
+                        last_error = exc
+                    if attempt + 1 < attempts:
+                        time.sleep(float(2**attempt))
+                log.warning(
+                    "Jarvis MCP registration failed after %s attempts: %s",
+                    attempts,
+                    last_error,
+                )
+            except Exception as exc:
+                logging.getLogger("jarvis.mcp").warning(
+                    "Jarvis MCP registration failed: %s", exc
+                )
 
         threading.Thread(target=_mcp_bg, name="jarvis-mcp-register", daemon=True).start()
     else:
@@ -298,7 +334,7 @@ def api_tts(payload: TtsRequest) -> Response:
         return Response(content=wav, media_type="audio/wav")
     except Exception as exc:
         err_msg = str(exc)[:200]
-        # 503 (not 502): Voicebox unreachable or synthesis failed — HUD falls back to browser TTS.
+        # 503: Voicebox unreachable or synthesis failed. The desk does not speak another voice.
         raise HTTPException(503, err_msg) from exc
     finally:
         try:
@@ -699,6 +735,16 @@ def api_briefing() -> dict:
     return build_briefing()
 
 
+@app.get("/api/briefing/cache")
+def api_briefing_cache() -> dict:
+    from .briefing import read_morning_cache
+
+    cached = read_morning_cache()
+    if not cached:
+        return {"cached": False, "speak": ""}
+    return cached
+
+
 @app.get("/api/suggested-tasks")
 def api_suggested_tasks(refresh: bool = False, session_id: str = "default") -> dict:
     from .office_day import list_tasks, refresh_suggested_tasks
@@ -733,6 +779,98 @@ def api_hermes_warm_status(session_id: str = "default") -> dict:
     from .hermes.bridge import hermes_warm_status
 
     return hermes_warm_status(session_id)
+
+
+class HermesApprovalBody(BaseModel):
+    choice: str = "once"
+    request_id: str = ""
+
+
+@app.post("/api/hermes/runs")
+def api_hermes_run_start(payload: ChatRequest) -> dict:
+    from .hermes.live import start_desk_run
+
+    message = payload.message.strip()
+    if not message:
+        raise HTTPException(400, "message required")
+    run = start_desk_run(message, payload.session_id)
+    return {"run_id": run.jarvis_id, "status": "started"}
+
+
+@app.get("/api/hermes/runs/{run_id}/events")
+async def api_hermes_run_events(run_id: str) -> StreamingResponse:
+    import asyncio
+
+    from .hermes.live import get_run
+
+    run = get_run(run_id)
+    if run is None:
+        raise HTTPException(404, "run not found")
+
+    async def body():
+        while True:
+            event = await asyncio.to_thread(run.events.get)
+            if event is None:
+                break
+            name = str(event.get("event") or "")
+            if name.startswith("reasoning") or name == "keepalive":
+                continue
+            yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n".encode()
+
+    return StreamingResponse(
+        body(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@app.post("/api/hermes/runs/{run_id}/stop")
+def api_hermes_run_stop(run_id: str) -> dict:
+    from .hermes.live import get_run, request_stop
+
+    run = get_run(run_id)
+    if run is None:
+        raise HTTPException(404, "run not found")
+    try:
+        return request_stop(run)
+    except Exception as exc:
+        raise HTTPException(502, str(exc)[:300]) from exc
+
+
+@app.post("/api/hermes/runs/{run_id}/approval")
+def api_hermes_run_approval(run_id: str, payload: HermesApprovalBody) -> dict:
+    from .hermes.live import get_run, submit_approval
+
+    run = get_run(run_id)
+    if run is None:
+        raise HTTPException(404, "run not found")
+    try:
+        return submit_approval(run, payload.choice, payload.request_id)
+    except Exception as exc:
+        raise HTTPException(502, str(exc)[:300]) from exc
+
+
+@app.post("/api/extract/text")
+async def api_extract_text(file: UploadFile = File(...)) -> dict:
+    import tempfile
+
+    from .extract_text import ExtractError, extract_local_text
+
+    name = file.filename or "upload.txt"
+    data = await file.read()
+    if len(data) > 8_000_000:
+        raise HTTPException(413, "File is too large")
+    suffix = Path(name).suffix or ".txt"
+    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as handle:
+        handle.write(data)
+        tmp_path = Path(handle.name)
+    try:
+        text = extract_local_text(tmp_path, name)
+    except ExtractError as exc:
+        return {"ok": False, "drawing": exc.drawing, "message": str(exc), "text": ""}
+    finally:
+        tmp_path.unlink(missing_ok=True)
+    return {"ok": True, "drawing": False, "message": "", "text": text, "filename": name}
 
 
 @app.post("/api/office/refresh")
@@ -1039,6 +1177,83 @@ def api_knowledge_fact_confirm(fact_id: str, payload: KnowledgeFactConfirm) -> d
     out = confirm_fact(fact_id, payload.confirmed_by, payload.value)
     out["enabled"] = True
     return out
+
+
+class MemoryIngestPost(BaseModel):
+    kind: str
+    payload: dict = {}
+    priority: str = "normal"
+
+
+@app.get("/api/knowledge/drawing-identity")
+def api_drawing_identity(session_id: str = "default") -> dict:
+    from .knowledge.cards import _latest_memory
+
+    raw = _latest_memory(session_id, "last_drawing_identity")
+    if not raw:
+        return {"ok": True, "kind": None}
+    try:
+        body = json.loads(raw)
+    except json.JSONDecodeError:
+        return {"ok": False, "kind": None}
+    if isinstance(body, dict):
+        body["ok"] = True
+        return body
+    return {"ok": True, "kind": None}
+
+
+@app.get("/api/knowledge/recall")
+def api_drawing_recall(
+    session_id: str = "default",
+    entity_id: str = "",
+    drawing_sha256: str = "",
+) -> dict:
+    from .config import settings as app_settings
+    from .knowledge.cards import recall_drawing_knowledge
+
+    if not app_settings.knowledge_cards_enabled:
+        return {"enabled": False, "ok": False, "summary": ""}
+    body = recall_drawing_knowledge(
+        session_id=session_id,
+        entity_id=entity_id,
+        drawing_sha256=drawing_sha256,
+    )
+    body["enabled"] = True
+    return body
+
+
+@app.get("/api/shop/floor")
+def api_shop_floor() -> dict:
+    from .shop.state import shop_floor_snapshot
+
+    return shop_floor_snapshot()
+
+
+@app.post("/api/memory/ingest")
+async def api_memory_ingest(payload: MemoryIngestPost) -> dict:
+    from .memory.ingest_queue import IngestPriority, IngestTask, ingest_queue
+
+    kind = (payload.kind or "").strip()
+    if not kind:
+        raise HTTPException(400, "kind required")
+    priority_name = (payload.priority or "normal").strip().lower()
+    priority = {
+        "high": IngestPriority.HIGH,
+        "low": IngestPriority.LOW,
+    }.get(priority_name, IngestPriority.NORMAL)
+    await ingest_queue.enqueue(
+        IngestTask(kind=kind, payload=dict(payload.payload or {}), priority=priority)
+    )
+    return {"ok": True, "kind": kind, "queue_depth": ingest_queue.depth()}
+
+
+@app.post("/api/memory/reindex")
+async def api_memory_reindex() -> dict:
+    from .memory.ingest_queue import nightly_ingest
+
+    body = await nightly_ingest()
+    body["queue_depth"] = body.get("queue_depth", 0)
+    return body
 
 
 @app.post("/api/knowledge/facts/{fact_id}/reject")

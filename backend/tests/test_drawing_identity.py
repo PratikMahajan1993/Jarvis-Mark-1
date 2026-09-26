@@ -47,9 +47,12 @@ def _clean_tables():
         conn.execute("DELETE FROM quotes")
         conn.execute("DELETE FROM customers")
     prev = settings.knowledge_cards_enabled
+    prev_master = settings.masterdata_enabled
     settings.knowledge_cards_enabled = True
+    settings.masterdata_enabled = False
     yield
     settings.knowledge_cards_enabled = prev
+    settings.masterdata_enabled = prev_master
 
 
 def _write_bytes(path: Path, content: bytes) -> Path:
@@ -343,3 +346,39 @@ def test_flag_off_skips_identity_lookup(tmp_path, monkeypatch):
     assert out.get("ok") is True
     assert calls == ["vision"]
     assert out.get("identity_kind") is None
+
+
+def test_identity_tool_revision_change_includes_banner():
+    from app.knowledge.identity import resolve_drawing_identity_tool
+
+    cust_id, comp_id = _seed_customer_component(suffix="toolrev")
+    with db.connect() as conn:
+        _seed_part_revision(
+            conn,
+            revision_id="rev-tool-b",
+            component_id=comp_id,
+            revision="B",
+            drawing_no="DWG-TOOL",
+            drawing_sha256="7" * 64,
+        )
+        _seed_part_revision(
+            conn,
+            revision_id="rev-tool-c",
+            component_id=comp_id,
+            revision="C",
+            drawing_no="DWG-TOOL",
+            drawing_sha256="8" * 64,
+        )
+    _seed_card_with_confirmed("rev-tool-b", {"material": "En1A"})
+    _seed_card_with_confirmed("rev-tool-c", {"material": "EN8"})
+    out = resolve_drawing_identity_tool(
+        session_id="phase2-identity",
+        drawing_sha256="9" * 64,
+        customer_id=cust_id,
+        drawing_no="DWG-TOOL",
+        revision="C",
+    )
+    assert out["kind"] == "revision_change"
+    assert "material" in out["changed_fields"]
+    assert "new revision" in out["banner"].lower()
+    assert out["change_details"]

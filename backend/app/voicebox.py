@@ -1,8 +1,10 @@
 """Local Voicebox TTS client (desktop app API on :17493).
 
 Docs: https://docs.voicebox.sh/
-- POST /speak generates *and plays* on the machine (speaking pill).
-- POST /generate synthesizes only — we use this so the browser plays once.
+- POST /generate synthesizes a profile and returns a generation id.
+- GET /audio/{generation_id} is the WAV the browser plays.
+- Never POST /speak. That plays on the machine as well as the browser.
+- Never invent a profile. The named Voicebox profile is the only voice.
 """
 
 from __future__ import annotations
@@ -22,23 +24,14 @@ _STATUS_RE = re.compile(r'"status"\s*:\s*"([^"]+)"')
 _profile_cache: dict[str, dict[str, str]] = {}
 _audio_mem: dict[str, bytes] = {}
 _audio_lock = threading.Lock()
-_profile_ensure_lock = threading.Lock()
 _prefetch_inflight: set[str] = set()
 _MEM_LIMIT = 48
-
-# Jarvis default voice name → Kokoro preset when Voicebox has no cloned profiles yet.
-_PRESET_VOICE_BY_NAME: dict[str, tuple[str, str]] = {
-    "mark": ("kokoro", "bm_george"),
-    "george": ("kokoro", "bm_george"),
-    "daniel": ("kokoro", "bm_daniel"),
-    "adam": ("kokoro", "am_adam"),
-    "liam": ("kokoro", "am_liam"),
-}
-_DEFAULT_PRESET: tuple[str, str] = ("kokoro", "bm_george")
+_TTS_CACHE_TTL_SEC = 7 * 24 * 60 * 60
+_CACHE_VERSION = "vb3"
 
 
 class VoiceboxTtsError(RuntimeError):
-    """Voicebox could not produce audio (HUD should fall back to browser TTS)."""
+    """Voicebox could not produce audio. The desk stays silent rather than using another voice."""
 
 
 def voicebox_base() -> str:
@@ -122,92 +115,58 @@ def _profiles(client: httpx.Client) -> list[dict[str, Any]]:
     return []
 
 
-def _preset_for_name(name: str) -> tuple[str, str]:
-    key = (name or "").strip().lower() or "mark"
-    return _PRESET_VOICE_BY_NAME.get(key, _DEFAULT_PRESET)
-
-
-def _ensure_preset_profile(client: httpx.Client, name: str) -> dict[str, Any]:
-    """Create a Kokoro preset profile when Voicebox returns an empty /profiles list."""
-    voice_name = (name or "").strip() or "Mark"
-    engine, voice_id = _preset_for_name(voice_name)
-    body = {
-        "name": voice_name,
-        "voice_type": "preset",
-        "preset_engine": engine,
-        "preset_voice_id": voice_id,
-        "default_engine": engine,
-        "language": "en",
-    }
-    response = client.post(f"{voicebox_base()}/profiles", json=body)
-    if response.status_code >= 400:
-        raise VoiceboxTtsError(
-            f"Voicebox profile create failed ({response.status_code}): {response.text[:240]}"
-        )
-    row = response.json() if response.content else {}
-    if not isinstance(row, dict):
-        raise VoiceboxTtsError("Voicebox profile create returned invalid payload")
-    row_id = str(row.get("id") or row.get("profile_id") or "").strip()
-    if not row_id:
-        raise VoiceboxTtsError(f"Voicebox profile missing id after create: {voice_name}")
-    eng = str(row.get("default_engine") or row.get("preset_engine") or engine).strip()
-    _profile_cache[voice_name.lower()] = {"id": row_id, "engine": eng}
-    return row
+def _preset_identity(row: dict[str, Any]) -> str:
+    return "|".join(
+        [
+            str(row.get("id") or row.get("profile_id") or "").strip(),
+            str(row.get("voice_type") or "").strip(),
+            str(row.get("default_engine") or row.get("preset_engine") or "").strip(),
+            str(row.get("preset_voice_id") or "").strip(),
+        ]
+    )
 
 
 def resolve_profile(client: httpx.Client, profile: str) -> dict[str, Any]:
+    """Return the Voicebox profile with this exact name. Never create or substitute one."""
     name = (profile or "").strip() or "Mark"
-    cached = _profile_cache.get(name.lower())
-    if cached and cached.get("id"):
-        return {
-            "id": cached["id"],
-            "name": name,
-            "default_engine": cached.get("engine") or "",
-            "preset_engine": cached.get("engine") or "",
-        }
     rows = _profiles(client)
-    chosen: dict[str, Any] | None = None
+    matches = []
     for row in rows:
         row_name = str(row.get("name") or "").strip()
         row_id = str(row.get("id") or row.get("profile_id") or "").strip()
         if row_id and row_name.lower() == name.lower():
-            chosen = row
-            break
-    if chosen is None:
-        for row in rows:
-            row_id = str(row.get("id") or row.get("profile_id") or "").strip()
-            if row_id:
-                chosen = row
-                break
-    if not chosen:
-        with _profile_ensure_lock:
-            rows = _profiles(client)
-            for row in rows:
-                row_name = str(row.get("name") or "").strip()
-                row_id = str(row.get("id") or row.get("profile_id") or "").strip()
-                if row_id and row_name.lower() == name.lower():
-                    chosen = row
-                    break
-            if not chosen and rows:
-                for row in rows:
-                    row_id = str(row.get("id") or row.get("profile_id") or "").strip()
-                    if row_id:
-                        chosen = row
-                        break
-            if not chosen:
-                chosen = _ensure_preset_profile(client, name)
-    if not chosen:
-        raise VoiceboxTtsError(f"Voicebox profile not found: {name}")
+            matches.append(row)
+    if not matches:
+        known = ", ".join(str(row.get("name") or "").strip() for row in rows if row.get("name")) or "none"
+        raise VoiceboxTtsError(
+            f"Voicebox has no profile named {name}. Profiles on this server: {known}. "
+            "Create that voice in Voicebox. Jarvis will not invent a preset."
+        )
+    if len(matches) > 1:
+        raise VoiceboxTtsError(f"Voicebox has more than one profile named {name}")
+    chosen = matches[0]
     row_id = str(chosen.get("id") or chosen.get("profile_id") or "").strip()
-    engine = str(chosen.get("default_engine") or chosen.get("preset_engine") or "").strip()
-    if row_id:
-        _profile_cache[name.lower()] = {"id": row_id, "engine": engine}
+    cached = _profile_cache.get(name.lower())
+    identity = _preset_identity(chosen)
+    if not cached or cached.get("identity") != identity:
+        _profile_cache[name.lower()] = {
+            "id": row_id,
+            "engine": str(chosen.get("default_engine") or chosen.get("preset_engine") or "").strip(),
+            "identity": identity,
+        }
     return chosen
 
 
-def _cache_key(text: str, profile: str, language: str) -> str:
-    raw = f"{profile}|{language}|{text}".encode("utf-8")
-    return hashlib.sha1(raw).hexdigest()
+def _cache_key(text: str, profile_row: dict[str, Any], language: str) -> str:
+    raw = "|".join(
+        [
+            _CACHE_VERSION,
+            _preset_identity(profile_row),
+            language or "en",
+            text,
+        ]
+    ).encode("utf-8")
+    return hashlib.sha256(raw).hexdigest()
 
 
 def _cache_dir() -> Path:
@@ -216,38 +175,53 @@ def _cache_dir() -> Path:
     return path
 
 
-def _mem_put(key: str, wav: bytes) -> None:
-    with _audio_lock:
-        _audio_mem[key] = wav
-        while len(_audio_mem) > _MEM_LIMIT:
-            _audio_mem.pop(next(iter(_audio_mem)))
+def _remember_audio(key: str, wav: bytes) -> None:
+    """Store WAV bytes. Caller holds `_audio_lock`."""
+    _audio_mem[key] = wav
+    while len(_audio_mem) > _MEM_LIMIT:
+        _audio_mem.pop(next(iter(_audio_mem)))
+
+
+def _expire_old_tts_files() -> None:
+    """Delete cache files older than 7 days. Caller holds `_audio_lock`."""
+    cutoff = time.time() - _TTS_CACHE_TTL_SEC
+    for item in _cache_dir().glob("*.wav"):
+        try:
+            if item.is_file() and item.stat().st_mtime < cutoff:
+                item.unlink()
+        except OSError:
+            continue
 
 
 def _cache_get(key: str) -> bytes | None:
+    path = _cache_dir() / f"{key}.wav"
     with _audio_lock:
         hit = _audio_mem.get(key)
-    if hit:
-        return hit
-    path = _cache_dir() / f"{key}.wav"
-    if path.is_file():
+        if hit:
+            return hit
         try:
+            if not path.is_file():
+                return None
             data = path.read_bytes()
-            if data:
-                _mem_put(key, data)
-                return data
         except OSError:
             return None
-    return None
+        if not data:
+            return None
+        _remember_audio(key, data)
+        return data
 
 
 def _cache_put(key: str, wav: bytes) -> None:
     if not wav:
         return
-    _mem_put(key, wav)
-    try:
-        (_cache_dir() / f"{key}.wav").write_bytes(wav)
-    except OSError:
-        pass
+    path = _cache_dir() / f"{key}.wav"
+    with _audio_lock:
+        _remember_audio(key, wav)
+        try:
+            path.write_bytes(wav)
+        except OSError:
+            return
+        _expire_old_tts_files()
 
 
 def synthesize(
@@ -268,11 +242,6 @@ def synthesize(
 
     voice = (profile or settings.voicebox_profile or "Mark").strip() or "Mark"
     lang = language or "en"
-    key = _cache_key(line, voice, lang)
-    cached = _cache_get(key)
-    if cached:
-        return cached
-
     timeout = max(5.0, float(settings.voicebox_timeout_sec or 45.0))
     base = voicebox_base()
 
@@ -281,17 +250,22 @@ def synthesize(
         profile_id = str(profile_row.get("id") or profile_row.get("profile_id") or "").strip()
         if not profile_id:
             raise VoiceboxTtsError(f"Voicebox profile missing id: {voice}")
-        engine = (
-            str(profile_row.get("default_engine") or profile_row.get("preset_engine") or "").strip()
-            or None
-        )
+        key = _cache_key(line, profile_row, lang)
+        cached = _cache_get(key)
+        if cached:
+            return cached
+        # Preset profiles are locked to their engine. Sending a different engine
+        # makes Voicebox skip the profile. Clones omit engine so the server default
+        # (the profile's own engine) is used.
+        voice_type = str(profile_row.get("voice_type") or "").strip().lower()
+        engine = str(profile_row.get("default_engine") or profile_row.get("preset_engine") or "").strip()
         body: dict[str, Any] = {
             "text": line[:5000],
             "profile_id": profile_id,
             "language": lang,
             "personality": False,
         }
-        if engine:
+        if voice_type == "preset" and engine:
             body["engine"] = engine
         started = client.post(f"{base}/generate", json=body)
         if started.status_code >= 400:
@@ -340,13 +314,11 @@ def prefetch_tts(text: str, *, profile: str | None = None, language: str = "en")
         return
     voice = (profile or settings.voicebox_profile or "Mark").strip() or "Mark"
     lang = language or "en"
-    key = _cache_key(line, voice, lang)
-    if _cache_get(key):
-        return
     with _audio_lock:
-        if key in _prefetch_inflight:
+        inflight = f"{voice}|{lang}|{line}"
+        if inflight in _prefetch_inflight:
             return
-        _prefetch_inflight.add(key)
+        _prefetch_inflight.add(inflight)
 
     def _run() -> None:
         try:
@@ -355,13 +327,13 @@ def prefetch_tts(text: str, *, profile: str | None = None, language: str = "en")
             pass
         finally:
             with _audio_lock:
-                _prefetch_inflight.discard(key)
+                _prefetch_inflight.discard(inflight)
 
     threading.Thread(target=_run, name="jarvis-tts-prefetch", daemon=True).start()
 
 
 def warm_voicebox() -> None:
-    """Prime profile resolution + Kokoro so the first real line is less cold."""
+    """Prime the configured Voicebox profile so the first spoken line is less cold."""
     if not settings.voicebox_enabled:
         return
 

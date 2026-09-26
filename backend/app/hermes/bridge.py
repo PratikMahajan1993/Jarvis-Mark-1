@@ -21,6 +21,11 @@ from ..agents import agent_code, agent_for_kind, agent_status_payload
 from ..config import settings
 from ..intent import classify, looks_like_work
 from ..schemas import ActivityEvent, AgentStatus, ChatResponse, PendingAction, Scene, Widget
+from .circuit_breaker import gateway_circuit
+from .runs import HermesRunStopped, consume_hermes_run
+
+# Tool-ops and quotes keep settings.hermes_timeout_sec (30s). Casual gateway calls do not.
+CASUAL_GATEWAY_TIMEOUT_SEC = 12.0
 
 _ANSI = re.compile(r"\x1b\[[0-9;]*m")
 _SESSION_FILE = "hermes_sessions.json"
@@ -37,16 +42,26 @@ def hermes_gateway_url() -> str:
 
 
 def hermes_gateway_reachable(timeout: float = 1.5) -> bool:
-    """True when the warm API server answers /health."""
+    """True when the warm API server answers /health.
+
+    An open circuit skips this probe and reports unreachable so the caller
+    uses the existing Hermes-miss path. No parallel fallback is started here.
+    """
     base = hermes_gateway_url()
     if not base or not settings.hermes_api_key:
         return False
+    if not gateway_circuit.before_health_probe():
+        return False
+    ok = False
     try:
         with httpx.Client(timeout=timeout) as client:
             r = client.get(f"{base}/health")
-            return r.status_code == 200
+            ok = r.status_code == 200
     except Exception:
-        return False
+        ok = False
+    finally:
+        gateway_circuit.after_health_probe(ok)
+    return ok
 
 
 def hermes_available() -> bool:
@@ -379,6 +394,7 @@ def _build_query(message: str, session_id: str, casual: bool, known: str | None)
             "mcp__jarvis__jarvis_draft_email, mcp__jarvis__jarvis_search_emails, "
             "mcp__jarvis__jarvis_read_shop_sheet, etc.). "
             f"Jarvis session id for HITL queues: {session_id}. "
+            "Batch multi-step quote and shop tool calls with execute_code. "
             "External writes queue for human authorization — do not claim they were sent.]\n\n"
             + message
         )
@@ -400,7 +416,12 @@ def _instructions(casual: bool, session_id: str, message: str = "") -> str:
         "Prefer Jarvis MCP tools (jarvis_draft_email, jarvis_search_emails, "
         "jarvis_read_shop_sheet, etc.). "
         f"HITL session id: {session_id}. "
-        "External writes queue for human authorization — never claim they were sent."
+        "Multi-step quote or shop work: batch the tool calls with execute_code "
+        "in one step instead of a separate model turn per call. "
+        "External writes (mail send, calendar write, quote send, sheet write) "
+        "still go through Jarvis tools and only queue Authorize. Never claim they were sent. "
+        "Do not call reason_rfq unless a drawing path, mail id, or drawing conversation id is already known. "
+        "If it is not, ask which drawing — inbox attachment, file on the desk, or photo."
     )
     if message:
         from ..intent import is_quote_start
@@ -475,7 +496,7 @@ def hermes_warm_status(session_id: str = "default") -> dict[str, Any]:
 def warm_hermes(session_id: str = "default", *, force: bool = False) -> dict[str, Any]:
     """Prime the Hermes gateway for a Jarvis session (HUD open / API startup).
 
-    Uses the same session headers as live chat so the first casual turn reuses a warm path.
+    Confirms /health. Live turns use the Runs API, not a blocking chat ping.
     """
     key = (session_id or "default").strip() or "default"
     if not settings.hermes_enabled or not settings.hermes_prefer_gateway:
@@ -494,30 +515,6 @@ def warm_hermes(session_id: str = "default", *, force: bool = False) -> dict[str
             if not hermes_gateway_reachable(timeout=2.0):
                 _WARM_STATUS[key] = "unreachable"
                 return
-            base = hermes_gateway_url()
-            title = hermes_session_title(key)
-            headers = {
-                "Authorization": f"Bearer {settings.hermes_api_key}",
-                "Content-Type": "application/json",
-                "X-Hermes-Session-Id": title,
-                "X-Hermes-Session-Key": f"jarvis:{key}",
-            }
-            with httpx.Client(timeout=25.0) as client:
-                client.post(
-                    f"{base}/v1/chat/completions",
-                    headers=headers,
-                    json={
-                        "model": "hermes-agent",
-                        "messages": [
-                            {
-                                "role": "system",
-                                "content": _instructions(True, key),
-                            },
-                            {"role": "user", "content": "ping"},
-                        ],
-                        "stream": False,
-                    },
-                )
             _WARM_AT[key] = time.monotonic()
             _WARM_STATUS[key] = "ready"
         except Exception:
@@ -527,106 +524,59 @@ def warm_hermes(session_id: str = "default", *, force: bool = False) -> dict[str
     return {**hermes_warm_status(key), "started": True}
 
 
-def _gateway_chat(
-    *,
-    base: str,
-    headers: dict[str, str],
-    message: str,
-    session_id: str,
-    casual: bool,
-    timeout: float,
-) -> tuple[str, str, int]:
-    """Warm chat/completions path — faster and more reliable than /v1/responses for short turns."""
-    title = hermes_session_title(session_id)
-    messages: list[dict[str, str]] = [
-        {"role": "system", "content": _instructions(casual, session_id, message)},
-    ]
-    # Carry recent Jarvis turns so follow-ups work without Hermes conversation store.
-    # Keep this short — Hermes already injects a large tool system prompt (~15k tokens).
-    history = db.recent_messages(session_id, 6 if casual else 10)
-    for item in history:
-        role = str(item.get("role") or "")
-        content = str(item.get("content") or "").strip()
-        if role not in {"user", "assistant"} or not content:
-            continue
-        cap = 400 if casual else 2000
-        messages.append({"role": role, "content": content[:cap]})
-    if not any(m.get("role") == "user" and m.get("content") == message for m in messages):
-        messages.append({"role": "user", "content": message})
+def _hermes_session_key(title: str) -> str:
+    return f"hermes:{title}"
 
-    chat_body = {
-        "model": "hermes-agent",
-        "messages": messages,
-        "stream": False,
-    }
-    started = time.monotonic()
-    try:
-        with httpx.Client(timeout=timeout) as client:
-            response = client.post(f"{base}/v1/chat/completions", headers=headers, json=chat_body)
-    except httpx.TimeoutException as exc:
-        elapsed_ms = int((time.monotonic() - started) * 1000)
-        raise RuntimeError(
-            f"Hermes timed out after {timeout:.0f}s ({elapsed_ms}ms)"
-        ) from exc
-    elapsed_ms = int((time.monotonic() - started) * 1000)
-    if response.status_code >= 400:
-        raise RuntimeError(
-            f"Hermes gateway chat HTTP {response.status_code}: {(response.text or '')[:500]}"
-        )
-    data = response.json() if response.content else {}
-    speak = _extract_responses_text(data if isinstance(data, dict) else {})
-    return speak or "I am here.", title, elapsed_ms
+
+def _load_conversation_hermes_id(title: str, session_id: str) -> str | None:
+    """Hermes session id for this conversation, from data/hermes_sessions.json."""
+    data = _load_sessions_data()
+    stored = data.get(_hermes_session_key(title))
+    if not stored and title == hermes_session_title(session_id):
+        stored = data.get(session_id)
+    return str(stored) if stored else None
+
+
+def _store_conversation_hermes_id(title: str, hermes_session: str) -> None:
+    if not title or not hermes_session:
+        return
+    data = _load_sessions_data()
+    data[_hermes_session_key(title)] = hermes_session
+    _write_sessions_data(data)
 
 
 def _run_via_gateway(message: str, session_id: str, casual: bool) -> tuple[str, str, int]:
-    """Warm API path. Returns (speak, session_label, elapsed_ms)."""
+    """Runs API path. Returns (speak, hermes_session_id, elapsed_ms).
+
+    Sends only the new sentence. Hermes loads its own transcript from the
+    session id stored in hermes_sessions.json.
+    """
     base = hermes_gateway_url()
-    title = hermes_conversation_title(message, session_id) if not casual else hermes_session_title(session_id)
-    headers = {
-        "Authorization": f"Bearer {settings.hermes_api_key}",
-        "Content-Type": "application/json",
-        "X-Hermes-Session-Id": title,
-        "X-Hermes-Session-Key": f"jarvis:{session_id}",
-    }
-    # Casual: skip /v1/responses (hangs). Prefer chat/completions only.
+    title = hermes_session_title(session_id) if casual else hermes_conversation_title(message, session_id)
+    stored = _load_conversation_hermes_id(title, session_id)
     timeout = float(settings.hermes_timeout_sec)
     if casual:
-        timeout = min(timeout, 35.0)
-        return _gateway_chat(
-            base=base,
-            headers=headers,
+        timeout = min(timeout, CASUAL_GATEWAY_TIMEOUT_SEC)
+    try:
+        speak, hermes_session, elapsed_ms, _events = consume_hermes_run(
+            base_url=base,
             message=message,
-            session_id=session_id,
-            casual=True,
+            session_id=stored,
+            instructions=_instructions(casual, session_id, message),
+            casual=casual,
             timeout=timeout,
         )
-
-    body: dict[str, Any] = {
-        "model": "hermes-agent",
-        "input": message,
-        "instructions": _instructions(False, session_id, message),
-        "conversation": title,
-        "store": True,
-    }
-    started = time.monotonic()
-    try:
-        with httpx.Client(timeout=timeout) as client:
-            r = client.post(f"{base}/v1/responses", headers=headers, json=body)
-    except httpx.TimeoutException as exc:
-        elapsed_ms = int((time.monotonic() - started) * 1000)
-        raise RuntimeError(
-            f"Hermes timed out after {timeout:.0f}s ({elapsed_ms}ms)"
-        ) from exc
-    elapsed_ms = int((time.monotonic() - started) * 1000)
-    if r.status_code >= 400:
-        detail = (r.text or "")[:500]
-        raise RuntimeError(f"Hermes gateway HTTP {r.status_code}: {detail}")
-    payload = r.json()
-    speak = _extract_responses_text(payload)
-    hermes_id = str(payload.get("id") or title)
-    if speak:
-        return speak, hermes_id, elapsed_ms
-    raise RuntimeError("Hermes returned no speakable text from responses API")
+    except HermesRunStopped:
+        raise
+    except Exception:
+        gateway_circuit.record_failure()
+        raise
+    if hermes_session:
+        _store_conversation_hermes_id(title, hermes_session)
+    cleaned = _clean_speak(speak)
+    if not cleaned:
+        raise RuntimeError("Hermes returned no speakable text")
+    return cleaned, hermes_session or title, elapsed_ms
 
 
 def _run_via_cli(message: str, session_id: str, casual: bool) -> tuple[str, str | None, int]:
@@ -727,6 +677,8 @@ def run_hermes_turn(message: str, session_id: str = "default", *, casual: bool |
     from ..metrics import new_mission_id, record_hermes_latency, record_mission_step
 
     if not _speak_usable(speak, casual=casual):
+        if transport == "gateway":
+            gateway_circuit.record_failure()
         record_hermes_latency(
             session_id=session_id,
             transport=transport,
@@ -735,6 +687,9 @@ def run_hermes_turn(message: str, session_id: str = "default", *, casual: bool |
             ok=False,
         )
         raise RuntimeError("Hermes returned empty or unusable speech")
+
+    if transport == "gateway":
+        gateway_circuit.record_success()
 
     mission_id = new_mission_id()
     record_hermes_latency(

@@ -46,9 +46,10 @@ function tasksRailGlanceNorm(root: HTMLElement): { x: number; y: number } | null
   };
 }
 
-let glanceQueue: string[] = [];
 let glanceActive = false;
 let glanceReturnTimer: ReturnType<typeof setTimeout> | null = null;
+
+const glanceQueue: string[] = [];
 
 function drainGlanceQueue(root: HTMLElement) {
   if (glanceActive || glanceQueue.length === 0) return;

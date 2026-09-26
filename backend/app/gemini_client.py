@@ -102,6 +102,68 @@ def chat_casual(
     return _to_ollama_message(data)
 
 
+def iter_casual_deltas(
+    messages: list[dict[str, Any]],
+    *,
+    timeout: float = 45,
+    temperature: float = 0.9,
+    max_output_tokens: int = 120,
+):
+    """Yield answer text as Gemini produces it. Each yield is a new fragment."""
+    if not settings.gemini_api_key:
+        raise OllamaError("GEMINI_API_KEY is empty.")
+    body = _casual_payload(messages, temperature=temperature, max_output_tokens=max_output_tokens)
+    used = settings.gemini_model.strip() or settings.gemini_model
+    url = f"{_API}/models/{used}:streamGenerateContent?alt=sse"
+    client = _shared_client(timeout)
+    accumulated = ""
+    try:
+        with client.stream("POST", url, headers=_headers(), json=body) as response:
+            if response.status_code >= 400:
+                data: dict[str, Any] = {}
+                try:
+                    data = response.json()
+                except Exception:
+                    data = {}
+                raise OllamaError(_error_text(data, response.text))
+            for raw in response.iter_lines():
+                line = raw.decode("utf-8", errors="replace") if isinstance(raw, bytes) else str(raw or "")
+                line = line.strip()
+                if not line.startswith("data:"):
+                    continue
+                payload_text = line[5:].strip()
+                if not payload_text or payload_text == "[DONE]":
+                    continue
+                try:
+                    payload = json.loads(payload_text)
+                except json.JSONDecodeError:
+                    continue
+                piece = _text_from_gemini(payload)
+                if not piece:
+                    continue
+                if accumulated and piece.startswith(accumulated):
+                    delta = piece[len(accumulated) :]
+                    accumulated = piece
+                else:
+                    delta = piece
+                    accumulated += piece
+                if delta:
+                    yield delta
+    except httpx.HTTPError as exc:
+        raise OllamaError(str(exc)) from exc
+
+
+def _text_from_gemini(data: dict[str, Any]) -> str:
+    parts: list[str] = []
+    for cand in data.get("candidates") or []:
+        content = cand.get("content") or {}
+        for part in content.get("parts") or []:
+            text = part.get("text")
+            if text:
+                parts.append(str(text))
+    return "".join(parts)
+
+
 def _casual_payload(
     messages: list[dict[str, Any]],
     *,

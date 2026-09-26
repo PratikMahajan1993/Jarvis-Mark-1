@@ -64,7 +64,9 @@ def hydrate_event(turn: dict | None) -> dict:
         if action_id:
             return {"type": "RECONCILE", "turn": {**turn, "state": "EXECUTING", "pending_action_id": action_id}}
         return {"type": "RESET"}
-    if st in (turns_store.STATE_FAILED, turns_store.STATE_ABANDONED, turns_store.STATE_DONE):
+    if st in (turns_store.STATE_FAILED, turns_store.STATE_ABANDONED):
+        return {"type": "SHOW_ERROR", "message": failure_line_for_turn(turn)}
+    if st == turns_store.STATE_DONE:
         return {"type": "RESET"}
     return {"type": "RESET"}
 
@@ -167,7 +169,18 @@ def test_failed_turn_failure_line_names_stage():
     }
     line = failure_line_for_turn(turn)
     assert "vision" in line
-    assert hydrate_event(turn) == {"type": "RESET"}
+    assert hydrate_event(turn) == {"type": "SHOW_ERROR", "message": line}
+
+
+def test_abandoned_hydrate_keeps_stage_on_show_error():
+    turn = {"state": turns_store.STATE_ABANDONED, "stage": "confirm", "error": ""}
+    mapped = hydrate_event(turn)
+    assert mapped["type"] == "SHOW_ERROR"
+    assert "confirm" in mapped["message"]
+
+
+def test_done_hydrate_still_resets():
+    assert hydrate_event({"state": turns_store.STATE_DONE, "stage": "complete"}) == {"type": "RESET"}
 
 
 def test_hydrate_running_maps_to_send():

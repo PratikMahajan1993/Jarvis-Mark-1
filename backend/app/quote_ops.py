@@ -222,6 +222,33 @@ def outsource_checks(session_id: str) -> list[dict[str, Any]]:
                     "quote_operations",
                 )
             )
+            if settings.masterdata_enabled:
+                from datetime import datetime
+                from zoneinfo import ZoneInfo
+
+                from .masterdata.lookup import outsource_quote_as_of
+
+                as_of = datetime.now(ZoneInfo(settings.tz)).date().isoformat()
+                with db.connect() as conn:
+                    found = outsource_quote_as_of(conn, name, as_of)
+                if found is None:
+                    checks.append(
+                        _check(
+                            "outsource_quote_as_of",
+                            False,
+                            f"No outsource quote for {name} as of {as_of}",
+                            "outsource_quotes",
+                        )
+                    )
+                else:
+                    checks.append(
+                        _check(
+                            "outsource_quote_as_of",
+                            True,
+                            f"Outsource quote {found['id']} as of {as_of}",
+                            "outsource_quotes",
+                        )
+                    )
     return checks
 
 

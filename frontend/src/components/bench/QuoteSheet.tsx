@@ -19,14 +19,17 @@ import { FactConfirmChips } from "@/components/orchestrator/engineering/FactConf
 import { ToolChangeField } from "@/components/orchestrator/engineering/ToolChangeField";
 import { VarianceCard } from "@/components/orchestrator/engineering/VarianceCard";
 import { VisionBenchQueue } from "@/components/orchestrator/engineering/VisionBenchQueue";
+import { KnowledgeSummary } from "./KnowledgeSummary";
 import { MHRAttestationPanel } from "./MHRAttestationPanel";
+import { RevisionDiffBanner } from "./RevisionDiffBanner";
+import { ShopFloorPanel } from "./ShopFloorPanel";
 import { OperationEditor } from "./OperationEditor";
 import { ProofStrip } from "./ProofStrip";
 import { RMTracker } from "./RMTracker";
 import { SheetRow } from "./SheetRow";
 import { pinsFromRows } from "./CalloutPins";
 
-type SheetTab = "sheet" | "strategy" | "vision";
+type SheetTab = "sheet" | "strategy" | "vision" | "knowledge" | "shop";
 
 const GROUP_ORDER: QuoteRowGroup[] = ["raw", "machining", "outsource", "tooling", "margin"];
 
@@ -274,8 +277,11 @@ export function QuoteSheet({
             ) : null}
           </div>
         ) : null}
+        <div className="mt-2">
+          <RevisionDiffBanner sessionId={sessionId} />
+        </div>
         <div
-          className="relative mt-2 flex gap-3 font-mono text-[10px] uppercase tracking-[0.16em] text-[color:var(--muted)]"
+          className="relative mt-2 flex flex-wrap gap-3 font-mono text-[10px] uppercase tracking-[0.16em] text-[color:var(--muted)]"
           role="tablist"
           aria-label="Quote sheet sections"
         >
@@ -284,6 +290,8 @@ export function QuoteSheet({
               ["sheet", "Sheet"],
               ["strategy", "Strategy"],
               ["vision", "Vision"],
+              ["knowledge", "Knowledge"],
+              ["shop", "Shop"],
             ] as const
           ).map(([id, label]) => (
             <button
@@ -342,9 +350,13 @@ export function QuoteSheet({
           <div className="flex flex-col gap-3">
             <VisionBenchQueue />
             <CustomerVisionConsent />
-            <FactConfirmChips entityType={entityType} entityId={entityId} />
+            <FactConfirmChips entityType={entityType} entityId={entityId} sessionId={sessionId} />
           </div>
         ) : null}
+        {tab === "knowledge" ? (
+          <KnowledgeSummary sessionId={sessionId} entityId={entityId} />
+        ) : null}
+        {tab === "shop" ? <ShopFloorPanel /> : null}
       </div>
 
       <footer className="shrink-0 space-y-2 border-t border-[color:var(--border)]/50 pt-2">

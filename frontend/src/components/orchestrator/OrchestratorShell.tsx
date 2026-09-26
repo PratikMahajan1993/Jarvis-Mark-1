@@ -28,13 +28,17 @@ import {
   type JarvisState,
   type ServerTurn,
 } from "@/lib/orchestratorFsm";
+import { readHermesEventStream, takeSentences, type HermesRunEvent } from "@/lib/hermesRun";
 import {
   canListen,
   classifyDecision,
+  enqueueSentence,
+  resetSpeechQueue,
   silence,
   speak,
   startListening,
   stopListening,
+  whenSpeechIdle,
 } from "@/lib/voice";
 import { SceneBoard } from "../SceneBoard";
 import ClickSpark from "@/components/react-bits/ClickSpark";
@@ -71,7 +75,7 @@ import {
   talkJumpWorkspace,
   type HudWorkspace,
 } from "./hudWorkspace";
-import { TurnStageLine } from "./TurnStageLine";
+import { TurnStageLine, type TurnEventPayload } from "./TurnStageLine";
 import { Pane } from "@/components/pane/Pane";
 import { useDisplayLens, useLens, usePane } from "@/lib/pane/paneStore";
 import { useWatchFindingsGlance } from "@/components/pane/useWatchFindingsGlance";
@@ -268,6 +272,7 @@ function VoiceDockPanel({
   orchestratorMode,
   onLedgerTurnComplete,
   onLedgerTurnFailed,
+  onLedgerReconcile,
   compose,
   listening,
   batonDisabled,
@@ -276,6 +281,11 @@ function VoiceDockPanel({
   onComposeSubmit,
   onMic,
   onDropDrawing,
+  thinking,
+  runStatus = "",
+  onCancel,
+  extractCard,
+  onExtractFile,
 }: {
   voice: string;
   voiceVisible: boolean;
@@ -290,7 +300,8 @@ function VoiceDockPanel({
   prefsName: string;
   orchestratorMode: OrchestratorMode;
   onLedgerTurnComplete: (output: ChatResponse) => void;
-  onLedgerTurnFailed: (message: string) => void;
+  onLedgerTurnFailed: (info: { error?: string; stage?: string; state?: string }) => void;
+  onLedgerReconcile: (turnId: string, payload: TurnEventPayload) => void;
   compose: string;
   listening: boolean;
   batonDisabled?: boolean;
@@ -299,18 +310,64 @@ function VoiceDockPanel({
   onComposeSubmit: (value: string) => void;
   onMic: () => void;
   onDropDrawing: (file: File) => void;
+  thinking?: boolean;
+  runStatus?: string;
+  onCancel?: () => void;
+  extractCard?: { title: string; text: string } | null;
+  onExtractFile?: (file: File) => void;
 }) {
   const activeLens = useDisplayLens();
   const [dropHot, setDropHot] = useState(false);
   const gatedScene = useValueWhenSettled(scene);
+  const extras = (
+    <>
+      {thinking ? (
+        <button
+          type="button"
+          className="pointer-events-auto absolute bottom-6 right-4 z-[6] rounded-md border border-[color:var(--accent)]/60 bg-black/50 px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-[color:var(--accent)]"
+          onClick={() => onCancel?.()}
+        >
+          Cancel
+        </button>
+      ) : null}
+      {activeLens === "converse" ? (
+        <label className="pointer-events-auto absolute bottom-6 left-4 z-[6] cursor-pointer rounded-md border border-white/15 bg-black/40 px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.16em] text-[color:var(--muted)]">
+          Read a document
+          <input
+            type="file"
+            accept=".pdf,.docx,.txt,.md,.markdown,application/pdf,text/plain,text/markdown"
+            className="hidden"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              event.target.value = "";
+              if (file) onExtractFile?.(file);
+            }}
+          />
+        </label>
+      ) : null}
+      {activeLens === "converse" && extractCard ? (
+        <div className="pointer-events-auto absolute inset-x-8 bottom-16 z-[5] max-h-[34%] overflow-hidden rounded-2xl border border-[color:var(--border)] bg-black/55">
+          <div className="max-h-[28vh] overflow-y-auto p-4">
+            <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.16em] text-[color:var(--accent)]">
+              {extractCard.title}
+            </p>
+            <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-[color:var(--fg)]/90">
+              {extractCard.text}
+            </pre>
+          </div>
+        </div>
+      ) : null}
+    </>
+  );
 
   if (activeLens === "watch") {
     const line = (voiceVisible && voice ? voice : focusTitle).slice(0, 120);
     return (
-      <div className="flex h-full min-h-0 items-end justify-center pb-1">
+      <div className="relative flex h-full min-h-0 items-end justify-center pb-1">
         <p className="max-w-[min(520px,90%)] px-3 text-center font-display text-base leading-snug text-[color:var(--fg)]/90 [text-shadow:0_1px_10px_rgba(0,0,0,0.55)]">
           {line}
         </p>
+        {extras}
       </div>
     );
   }
@@ -318,6 +375,7 @@ function VoiceDockPanel({
   if (activeLens === "bench") {
     const line = voiceVisible ? voice : focusTitle;
     return (
+      <div className="relative h-full min-h-0">
       <ConverseStrip
         line={line}
         baton={
@@ -333,11 +391,17 @@ function VoiceDockPanel({
           />
         }
       />
+      {extras}
+      </div>
     );
   }
 
-  /* Converse: open center — substrate orb + DOM rings; always a short idle line. */
-  const line = (showCenterVoice && voice ? voice : boardOwnsCenter ? "On the board" : IDLE_VOICE).trim() || IDLE_VOICE;
+  /* Converse: while a run is live, keep the tool or spoken line. Never fall back to idle. */
+  const spoken = (showCenterVoice && voice && voice !== IDLE_VOICE ? voice : "").trim();
+  const liveLine = (spoken || runStatus || "Orchestrating…").trim();
+  const line = (
+    thinking ? liveLine : spoken || (boardOwnsCenter ? "On the board" : IDLE_VOICE)
+  ).trim() || IDLE_VOICE;
   const shortLine = line.length > 96 || line.includes("\n") ? `${line.slice(0, 96).trim()}…` : line;
   return (
     <div className="pointer-events-none relative flex h-full min-h-0 w-full items-center justify-center overflow-visible">
@@ -399,6 +463,7 @@ function VoiceDockPanel({
           turnId={ledgerTurnId}
           onComplete={onLedgerTurnComplete}
           onFailed={onLedgerTurnFailed}
+          onReconcile={onLedgerReconcile}
         />
       </div>
       {error ? (
@@ -409,6 +474,7 @@ function VoiceDockPanel({
       <span className="sr-only">
         {prefsName} · {focusTitle}
       </span>
+      {extras}
     </div>
   );
 }
@@ -443,6 +509,8 @@ export function OrchestratorShell() {
   const [conversationFocus, setConversationFocus] = useState<Record<string, unknown>>({});
   const [prefs, setPrefs] = useState<Preferences | null>(null);
   const [error, setError] = useState("");
+  const [extractCard, setExtractCard] = useState<{ title: string; text: string } | null>(null);
+  const [runStatus, setRunStatus] = useState("");
   const [suggested, setSuggested] = useState<SuggestedTask[]>([]);
   const [weatherLine, setWeatherLine] = useState("");
   const [dockHidden, setDockHidden] = useState(false);
@@ -462,6 +530,12 @@ export function OrchestratorShell() {
   // render. `applyEvent` keeps both in lockstep on every dispatch.
   const stateRef = useRef<JarvisState>(state);
   const speakGenRef = useRef(0);
+  const liveRunRef = useRef("");
+  const runAbortRef = useRef<AbortController | null>(null);
+  const sentenceBufRef = useRef("");
+  const unspokenRef = useRef("");
+  const sessionSurfaceGenRef = useRef(0);
+  const decideInFlightRef = useRef(false);
   const sessionRef = useRef(AMBIENT_SESSION);
   const voiceEnabledRef = useRef(true);
   const composeFieldsRef = useRef({ to: "", subject: "", body: "" });
@@ -558,6 +632,7 @@ export function OrchestratorShell() {
   const sending = state.mode === "EXECUTING";
   const listening = state.mode === "LISTENING";
   const busy = isBusy(state);
+  const shownError = error || (state.mode === "IDLE" && state.error ? state.error : "");
   const mode: OrchestratorMode = modeToOrchestratorMode(state);
   /** Mail board / compose modal owns the center — hide VoiceLine so text is not duplicated. */
   const boardOwnsCenter = sceneHasBoardContent(scene) || Boolean(composeDraft);
@@ -635,11 +710,13 @@ export function OrchestratorShell() {
 
   const loadSessionSurface = useCallback(
     async (sessionId: string, opts?: { announce?: boolean }) => {
+      const generation = ++sessionSurfaceGenRef.current;
       void api.hermesWarm(sessionId).catch(() => null);
       const [waiting, session] = await Promise.all([
         api.pending(sessionId).catch(() => ({ items: [] as PendingAction[] })),
         api.session(sessionId).catch(() => null),
       ]);
+      if (generation !== sessionSurfaceGenRef.current) return;
       const items = waiting.items || [];
       const first = items[0] || null;
       // Restoring/switching sessions never auto-opens the confirm mic — only
@@ -652,7 +729,11 @@ export function OrchestratorShell() {
       } else if (opts?.announce !== false && session?.speak) {
         showVoice(session.speak);
       } else if (opts?.announce !== false && !first) {
-        showVoice(IDLE_VOICE);
+        const cached = await api.briefingCache().catch(() => null);
+        if (generation !== sessionSurfaceGenRef.current) return;
+        if (liveRunRef.current || isBusy(stateRef.current)) return;
+        if (cached?.cached && cached.speak) showVoice(cached.speak);
+        else showVoice(IDLE_VOICE);
       }
       if (first) {
         const agentId = agentForPending(first);
@@ -686,6 +767,7 @@ export function OrchestratorShell() {
         setLedgerTurnId(null);
         clearAgents();
         const line = failureLineForTurn(turn);
+        applyEvent({ type: "SHOW_ERROR", message: line });
         setError(line);
         showVoice(line);
         return;
@@ -802,7 +884,7 @@ export function OrchestratorShell() {
   );
 
   const applyResponse = useCallback(
-    (result: ChatResponse, opts?: { fromConfirm?: boolean; approved?: boolean }) => {
+    (result: ChatResponse, opts?: { fromConfirm?: boolean; approved?: boolean; spokenLive?: boolean }) => {
       void applyUiAction(result.ui_action);
       const view = result.drawing_chat;
       if (view && typeof view === "object") {
@@ -879,6 +961,29 @@ export function OrchestratorShell() {
 
       speakGenRef.current += 1;
       const gen = speakGenRef.current;
+
+      if (opts?.spokenLive) {
+        const settle = () => {
+          if (gen !== speakGenRef.current) return;
+          if (nextAction && nextAction.kind !== "hermes_approval") {
+            const settled = applyEvent({ type: "AWAIT_HITL", action: nextAction });
+            if (settled) {
+              liveLog(
+                "hitl",
+                { phase: "shown", action_kind: nextAction.kind, action_id: nextAction.id },
+                { sessionId: sessionRef.current },
+              );
+              confirmListenRef.current(nextAction);
+            }
+            return;
+          }
+          if (stateRef.current.mode === "THINKING" || stateRef.current.mode === "SPEAKING") {
+            applyEvent({ type: "RESET" });
+          }
+        };
+        whenSpeechIdle(settle);
+        return;
+      }
 
       if (voiceEnabledRef.current && tts) {
         applyEvent({ type: "SPEAK_START", text: tts });
@@ -990,6 +1095,28 @@ export function OrchestratorShell() {
         { sessionId: sessionRef.current },
       );
 
+      if (action.kind === "hermes_approval") {
+        const runId = String(action.payload?.run_id || liveRunRef.current || "");
+        const requestId = String(action.payload?.request_id || "");
+        try {
+          if (approved) {
+            await api.approveHermesRun(runId, "once", requestId);
+            applyEvent({ type: "RESUME_THINKING" });
+          } else {
+            await api.stopHermesRun(runId);
+            resetSpeechQueue();
+            applyEvent({ type: "RESET" });
+            showVoice(IDLE_VOICE);
+          }
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : "Approval failed";
+          setError(msg);
+          showVoice("That did not go through. Awaiting instruction.");
+          applyEvent({ type: "AWAIT_HITL", action });
+        }
+        return;
+      }
+
       const syncFields = fields || (action.kind === "email_compose" ? composeFieldsRef.current : undefined);
       if (approved) {
         showVoice(action.kind === "email_compose" || action.kind === "email_send" || action.kind === "quote_send" ? "Sending…" : "Working…");
@@ -1040,7 +1167,13 @@ export function OrchestratorShell() {
       const decision = current.mode === "AWAITING_HITL" ? classifyDecision(text) : null;
       const words = text.trim().split(/\s+/).filter(Boolean).length;
       if (decision && current.mode === "AWAITING_HITL" && words <= 5) {
-        await decide(current.action.id, decision === "yes");
+        if (decideInFlightRef.current) return;
+        decideInFlightRef.current = true;
+        try {
+          await decide(current.action.id, decision === "yes");
+        } finally {
+          decideInFlightRef.current = false;
+        }
         setCompose("");
         return;
       }
@@ -1066,24 +1199,91 @@ export function OrchestratorShell() {
 
       pushLog("SYS", text.length > 72 ? `${text.slice(0, 72)}…` : text);
       showVoice("Orchestrating…");
+      setRunStatus("");
 
+      const abort = new AbortController();
+      runAbortRef.current = abort;
+      liveRunRef.current = "";
+      sentenceBufRef.current = "";
+      unspokenRef.current = "";
       try {
-        const result = await api.chat(text, sessionRef.current);
-        if (
-          result &&
-          typeof result === "object" &&
-          "turn_id" in result &&
-          typeof (result as { turn_id?: string }).turn_id === "string" &&
-          !("speak" in result)
-        ) {
-          setLedgerTurnId((result as { turn_id: string }).turn_id);
-          return;
+        const started = await api.startHermesRun(text, sessionRef.current);
+        if (abort.signal.aborted) return;
+        liveRunRef.current = started.run_id;
+        const stream = await api.hermesRunEvents(started.run_id, abort.signal);
+        if (!stream.ok || !stream.body) {
+          throw new Error(`Run stream failed (${stream.status})`);
         }
-        setLedgerTurnId(null);
-        applyResponse(result as ChatResponse);
-        void refreshDesk(activeConversationId);
+        await readHermesEventStream(stream, (event: HermesRunEvent) => {
+          if (abort.signal.aborted) return;
+          const name = String(event.event || "");
+          if (name === "tool.started" || name === "tool.completed") {
+            const line = String(event.message || "working");
+            if (name === "tool.started") setRunStatus(line);
+            setActivity((prev) =>
+              [
+                {
+                  id: `tool-${Date.now()}-${prev.length}`,
+                  time: formatClock(),
+                  agent: "SYS",
+                  message: line,
+                },
+                ...prev,
+              ].slice(0, 8),
+            );
+            return;
+          }
+          if (name === "message.delta") {
+            const delta = String(event.delta || "");
+            sentenceBufRef.current += delta;
+            showVoice(sentenceBufRef.current);
+            const taken = takeSentences(unspokenRef.current + delta);
+            unspokenRef.current = taken.rest;
+            for (const sentence of taken.ready) {
+              enqueueSentence(sentence, voiceEnabledRef.current !== false);
+            }
+            return;
+          }
+          if (name === "approval.request" && event.pending?.id) {
+            applyEvent({ type: "AWAIT_HITL", action: event.pending });
+            liveLog(
+              "hitl",
+              { phase: "shown", action_kind: "hermes_approval", action_id: event.pending.id },
+              { sessionId: sessionRef.current },
+            );
+            return;
+          }
+          if (name === "jarvis.done" && event.response) {
+            setRunStatus("");
+            const streamed = sentenceBufRef.current;
+            const rest = unspokenRef.current.trim();
+            unspokenRef.current = "";
+            sentenceBufRef.current = "";
+            const voiceOn = voiceEnabledRef.current !== false;
+            if (rest) {
+              enqueueSentence(rest, voiceOn);
+            } else if (!streamed.trim()) {
+              const finalText = String(event.response.speak || event.response.reply || "").trim();
+              if (finalText) enqueueSentence(finalText, voiceOn);
+            }
+            setLedgerTurnId(null);
+            applyResponse(event.response, { spokenLive: true });
+            void refreshDesk(activeConversationId);
+            return;
+          }
+          if (name === "run.failed") {
+            setRunStatus("");
+            const msg = String(event.error || "Run failed");
+            setError(msg);
+            showVoice("Connection fault. Awaiting instruction.");
+            pushLog("SYS", "Request failed.");
+            applyEvent({ type: "RESET" });
+          }
+        });
       } catch (err) {
+        if (abort.signal.aborted) return;
         clearAgents();
+        setRunStatus("");
         const msg = err instanceof Error ? err.message : "Request failed";
         setError(msg);
         liveLog("error", { message: msg }, { sessionId: sessionRef.current });
@@ -1106,20 +1306,76 @@ export function OrchestratorShell() {
   );
 
   const onLedgerTurnFailed = useCallback(
-    (message: string) => {
+    (info: { error?: string; stage?: string; state?: string }) => {
+      const line = failureLineForTurn({
+        id: "turn",
+        state: info.state === "ABANDONED" ? "ABANDONED" : "FAILED",
+        stage: info.stage,
+        error: info.error,
+      });
+      applyEvent({ type: "SHOW_ERROR", message: line });
       setLedgerTurnId(null);
       clearAgents();
-      setError(message);
-      showVoice("Connection fault. Awaiting instruction.");
+      setError(line);
+      showVoice(line);
       pushLog("SYS", "Turn failed.");
-      applyEvent({ type: "RESET" });
     },
     [applyEvent, clearAgents, pushLog, showVoice],
   );
 
+  const reconcileOpenTurnRef = useRef(reconcileOpenTurn);
+  reconcileOpenTurnRef.current = reconcileOpenTurn;
+
+  const onLedgerReconcile = useCallback((turnId: string, payload: TurnEventPayload) => {
+    const st = String(payload.state || "").toUpperCase();
+    if (!st || st === "DONE" || st === "FAILED" || st === "ABANDONED") return;
+    if (st === "AWAITING_HITL" || st === "EXECUTING") {
+      void reconcileOpenTurnRef.current();
+      return;
+    }
+    applyEvent({
+      type: "RECONCILE",
+      turn: {
+        id: turnId,
+        state: st,
+        stage: payload.stage,
+        error: payload.error,
+      },
+    });
+  }, [applyEvent]);
+
   useEffect(() => {
     sendRef.current = send;
   }, [send]);
+
+  const cancelRun = useCallback(async () => {
+    const runId = liveRunRef.current;
+    runAbortRef.current?.abort();
+    resetSpeechQueue();
+    liveRunRef.current = "";
+    if (runId) {
+      try {
+        await api.stopHermesRun(runId);
+      } catch {
+        /* the run may already have finished */
+      }
+    }
+    clearAgents();
+    setRunStatus("");
+    applyEvent({ type: "RESET" });
+    showVoice(IDLE_VOICE);
+  }, [applyEvent, clearAgents, showVoice]);
+
+  const extractDocument = useCallback(async (file: File) => {
+    try {
+      const result = await api.extractText(file);
+      const text = result.ok ? result.text || "" : result.message || "Could not read that file.";
+      setExtractCard({ title: file.name || "Document", text });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Could not read that file.";
+      setExtractCard({ title: file.name || "Document", text: msg });
+    }
+  }, []);
 
   const startMic = useCallback(async () => {
     if (!canListen()) return;
@@ -1461,12 +1717,13 @@ export function OrchestratorShell() {
               scene={scene}
               sending={sending}
               ledgerTurnId={ledgerTurnId}
-              error={error}
+              error={shownError}
               focusTitle={focusTitle}
               prefsName={prefs?.assistant_name || "Jarvis"}
               orchestratorMode={mode}
               onLedgerTurnComplete={onLedgerTurnComplete}
               onLedgerTurnFailed={onLedgerTurnFailed}
+              onLedgerReconcile={onLedgerReconcile}
               compose={compose}
               listening={listening}
               batonDisabled={busy || hitl}
@@ -1475,6 +1732,11 @@ export function OrchestratorShell() {
               onComposeSubmit={(value) => void send(value)}
               onMic={() => void startMic()}
               onDropDrawing={(file) => void dropDrawing(file)}
+              thinking={state.mode === "THINKING"}
+              runStatus={runStatus}
+              onCancel={() => void cancelRun()}
+              extractCard={extractCard}
+              onExtractFile={(file) => void extractDocument(file)}
             />
           ),
           notes: (
@@ -1584,7 +1846,7 @@ export function OrchestratorShell() {
             speak(line, voiceEnabledRef.current !== false, () => {
               if (gen !== speakGenRef.current) return;
               applyEvent({ type: "SPEAK_END" });
-            }, { voiceboxOnly: true });
+            });
             void api.closeDrawing(sessionId).catch(() => null);
           }}
           onWhisper={(line) => showVoice(line)}

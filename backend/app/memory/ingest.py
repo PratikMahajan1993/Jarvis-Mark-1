@@ -22,6 +22,24 @@ def ingest_text(
     return {"ok": True, **doc}
 
 
+def schedule_drawing_ingest(
+    drawing_name: str,
+    summary: str,
+    *,
+    meta: dict[str, Any] | None = None,
+) -> bool:
+    """Enqueue a drawing summary. False when the worker is not running (caller ingests inline)."""
+    from .ingest_queue import IngestPriority, IngestTask, try_enqueue
+
+    return try_enqueue(
+        IngestTask(
+            kind="drawing",
+            payload={"name": drawing_name, "summary": summary, "meta": meta or {}},
+            priority=IngestPriority.HIGH,
+        )
+    )
+
+
 def ingest_drawing_summary(
     drawing_name: str,
     summary: str,

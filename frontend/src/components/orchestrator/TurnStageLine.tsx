@@ -7,10 +7,12 @@ import type { ChatResponse } from "@/lib/types";
 type TurnStageLineProps = {
   turnId: string | null;
   onComplete: (output: ChatResponse) => void;
-  onFailed?: (message: string) => void;
+  onFailed?: (info: { error?: string; stage?: string; state?: string }) => void;
+  /** Non-terminal frames from the existing turn SSE stream (and its poll fallback). */
+  onReconcile?: (turnId: string, payload: TurnEventPayload) => void;
 };
 
-type TurnEventPayload = {
+export type TurnEventPayload = {
   state?: string;
   stage?: string;
   output?: ChatResponse;
@@ -18,10 +20,10 @@ type TurnEventPayload = {
 };
 
 function isTerminal(state: string | undefined): boolean {
-  return state === "DONE" || state === "FAILED";
+  return state === "DONE" || state === "FAILED" || state === "ABANDONED";
 }
 
-export function TurnStageLine({ turnId, onComplete, onFailed }: TurnStageLineProps) {
+export function TurnStageLine({ turnId, onComplete, onFailed, onReconcile }: TurnStageLineProps) {
   const [stage, setStage] = useState("");
   const finishedRef = useRef(false);
   const pollRef = useRef<number | null>(null);
@@ -43,12 +45,21 @@ export function TurnStageLine({ turnId, onComplete, onFailed }: TurnStageLinePro
         const st = String(row.stage || "").trim();
         if (st) setStage(st);
         const state = String(row.state || "");
-        if (!isTerminal(state)) return;
+        const payload: TurnEventPayload = {
+          state,
+          stage: st,
+          error: row.error,
+          output: row.output ?? undefined,
+        };
+        if (!isTerminal(state)) {
+          onReconcile?.(turnId, payload);
+          return;
+        }
         finishedRef.current = true;
         if (state === "DONE" && row.output) {
           onComplete(row.output as ChatResponse);
-        } else if (state === "FAILED") {
-          onFailed?.(String(row.error || "Turn failed"));
+        } else if (state === "FAILED" || state === "ABANDONED") {
+          onFailed?.({ error: String(row.error || "Turn failed"), stage: st, state });
         }
       } catch {
         /* polling fallback only */
@@ -67,7 +78,10 @@ export function TurnStageLine({ turnId, onComplete, onFailed }: TurnStageLinePro
     const handlePayload = (payload: TurnEventPayload) => {
       const nextStage = (payload.stage || "").trim();
       if (nextStage) setStage(nextStage);
-      if (!isTerminal(payload.state)) return;
+      if (!isTerminal(payload.state)) {
+        onReconcile?.(turnId, payload);
+        return;
+      }
       if (finishedRef.current) return;
       finishedRef.current = true;
       es.close();
@@ -79,8 +93,8 @@ export function TurnStageLine({ turnId, onComplete, onFailed }: TurnStageLinePro
         onComplete(payload.output);
         return;
       }
-      if (payload.state === "FAILED") {
-        onFailed?.(payload.error || "Turn failed");
+      if (payload.state === "FAILED" || payload.state === "ABANDONED") {
+        onFailed?.({ error: payload.error || "Turn failed", stage: payload.stage, state: payload.state });
         return;
       }
       void finishFromPoll();
@@ -107,7 +121,7 @@ export function TurnStageLine({ turnId, onComplete, onFailed }: TurnStageLinePro
         pollRef.current = null;
       }
     };
-  }, [turnId, onComplete, onFailed]);
+  }, [turnId, onComplete, onFailed, onReconcile]);
 
   if (!turnId) return null;
 

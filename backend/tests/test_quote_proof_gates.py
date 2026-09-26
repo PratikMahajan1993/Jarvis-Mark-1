@@ -8,6 +8,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from app import db
+from app.config import settings
 from app.quote import build_quote, quote_to_pdf, verify_quote
 
 
@@ -49,7 +50,8 @@ def test_zero_unit_price_blocks():
     assert "unit_prices" in failed
 
 
-def test_machine_without_rate_blocks():
+def test_machine_without_rate_blocks(monkeypatch):
+    monkeypatch.setattr(settings, "masterdata_enabled", False)
     session = "pg1-machine-no-rate"
     _minimal_send_ready(session)
     db.add_memory(session, "last_quote_machine", "Demo CNC vertical mill")
@@ -60,7 +62,8 @@ def test_machine_without_rate_blocks():
     assert "mhr_rate" in failed
 
 
-def test_rate_without_machine_blocks():
+def test_rate_without_machine_blocks(monkeypatch):
+    monkeypatch.setattr(settings, "masterdata_enabled", False)
     session = "pg1-rate-no-machine"
     _minimal_send_ready(session)
     db.add_memory(session, "last_quote_machine", "")
@@ -71,7 +74,8 @@ def test_rate_without_machine_blocks():
     assert "mhr_machine" in failed
 
 
-def test_machine_not_in_demo_table_blocks():
+def test_machine_not_in_demo_table_blocks(monkeypatch):
+    monkeypatch.setattr(settings, "masterdata_enabled", False)
     session = "pg1-unknown-machine"
     _minimal_send_ready(session)
     db.add_memory(session, "last_quote_machine", "Mystery five-axis")
@@ -103,7 +107,8 @@ def test_dated_rm_basis_stale_blocks_send():
     assert result["stop"] is True
 
 
-def test_missing_delivery_warns_draft_blocks_send():
+def test_missing_delivery_warns_draft_blocks_send(monkeypatch):
+    monkeypatch.setattr(settings, "masterdata_enabled", False)
     session = "pg1-delivery-stage"
     _minimal_send_ready(session)
     db.add_memory(session, "last_quote_delivery_days", "")
@@ -119,7 +124,8 @@ def test_missing_delivery_warns_draft_blocks_send():
     assert send["verdict"] == "block"
 
 
-def test_qty_rate_mismatch_blocks():
+def test_qty_rate_mismatch_blocks(monkeypatch):
+    monkeypatch.setattr(settings, "masterdata_enabled", False)
     session = "pg1-qty-rate"
     db.add_memory(session, "last_quote_drawing", "fixture-drawing.pdf")
     db.add_memory(session, "last_quote_delivery_days", "7")

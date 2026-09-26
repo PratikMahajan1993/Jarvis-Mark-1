@@ -46,6 +46,10 @@ Jarvis is a **24/7 AI office assistant** for a precision machining company. It r
 | **Vision** | Drawing analysis (until local vision exists) | Gemini |
 | **Fallback** | Hermes timeout (>30s) or unavailable | Ollama (local) → Gemini |
 
+Casual gateway calls cap at 12s; tool-ops and quotes stay at 30s; an open Hermes circuit skips the gateway.
+
+Hermes shop turns use `POST /v1/runs` and the event stream (tool lines and text deltas). Jarvis sends the new sentence plus the Hermes session id in `data/hermes_sessions.json`. Reasoning effort is minimal for short chat, low for ordinary shop work, and medium only when `is_quote_start` is true. A 07:30 Asia/Kolkata Hermes cron caches the morning brief; asking for a brief still gathers live when that cache is empty.
+
 ---
 
 ## 2. HUD Architecture (Locked)

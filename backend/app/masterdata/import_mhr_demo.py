@@ -1,4 +1,8 @@
-"""Idempotent backfill from mhr-demo.md into machines + machine_hour_rates (demo floors)."""
+"""Deprecated markdown backfill from mhr-demo.md.
+
+Obsolete once ``masterdata_enabled`` is on — SQL seed is the source.
+Kept so an explicit import can still load a markdown table in tests.
+"""
 
 from __future__ import annotations
 

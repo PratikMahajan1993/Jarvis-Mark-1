@@ -497,19 +497,65 @@ export function classifyDecision(text: string): "yes" | "no" | null {
 const GLANCE_STORE = "jarvis.spokenGlance";
 const spokenGlanceKeys = new Set<string>();
 let glanceStoreLoaded = false;
-let cachedVoice: SpeechSynthesisVoice | null = null;
-let activeSpeech: SpeechSynthesisUtterance | null = null;
 let activeAudio: HTMLAudioElement | null = null;
+let activeSource: AudioBufferSourceNode | null = null;
+let playbackCtx: AudioContext | null = null;
+let unlockAudio: HTMLAudioElement | null = null;
 let speakSeq = 0;
 let speakAbort: AbortController | null = null;
+
+const SILENT_WAV =
+  "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=";
+
+function playbackContext(): AudioContext | null {
+  if (typeof window === "undefined") return null;
+  const Ctor =
+    window.AudioContext ||
+    (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  if (!Ctor) return null;
+  if (!playbackCtx) playbackCtx = new Ctor();
+  return playbackCtx;
+}
+
+/** Call from a click or keypress so a later Voicebox clip is allowed to play. */
+export function primeVoicePlayback() {
+  if (typeof window === "undefined") return;
+  const ctx = playbackContext();
+  if (ctx && ctx.state !== "running") void ctx.resume();
+  if (!unlockAudio) {
+    unlockAudio = new Audio();
+    unlockAudio.setAttribute("playsinline", "true");
+  }
+  if (!unlockAudio.paused) return;
+  unlockAudio.src = SILENT_WAV;
+  void unlockAudio.play().then(() => unlockAudio?.pause()).catch(() => undefined);
+}
+
+if (typeof window !== "undefined") {
+  const prime = () => primeVoicePlayback();
+  window.addEventListener("pointerdown", prime, true);
+  window.addEventListener("keydown", prime, true);
+}
 
 function apiRoot(): string {
   return (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").replace(/\/$/, "");
 }
 
+function stopSource() {
+  if (!activeSource) return;
+  try {
+    activeSource.onended = null;
+    activeSource.stop();
+  } catch {
+    /* already stopped */
+  }
+  activeSource = null;
+}
+
 function stopAudio() {
   speakAbort?.abort();
   speakAbort = null;
+  stopSource();
   if (activeAudio) {
     try {
       activeAudio.onended = null;
@@ -552,35 +598,7 @@ export function claimGlanceSpeech(key: string): boolean {
   return true;
 }
 
-function speakBrowser(text: string, onEnd?: () => void) {
-  if (typeof window === "undefined" || !window.speechSynthesis) {
-    onEnd?.();
-    return;
-  }
-  window.speechSynthesis.cancel();
-  const utterance = new SpeechSynthesisUtterance(text);
-  const voice = pickVoice();
-  if (voice) utterance.voice = voice;
-  utterance.rate = 1.02;
-  utterance.pitch = 0.95;
-  let finished = false;
-  const done = () => {
-    if (finished) return;
-    finished = true;
-    if (activeSpeech === utterance) activeSpeech = null;
-    deafUntil = Date.now() + 500;
-    onEnd?.();
-  };
-  utterance.onend = done;
-  utterance.onerror = done;
-  activeSpeech = utterance;
-  window.setTimeout(() => {
-    if (activeSpeech !== utterance) return;
-    window.speechSynthesis.speak(utterance);
-  }, 40);
-}
-
-/** Fetch Voicebox WAV only — caller decides whether to play (avoids late double-speak). */
+/** Fetch Voicebox WAV only — caller decides whether to play. */
 async function fetchVoicebox(text: string, seq: number): Promise<Blob | null> {
   if (typeof window === "undefined") return null;
   const controller = new AbortController();
@@ -604,9 +622,44 @@ async function fetchVoicebox(text: string, seq: number): Promise<Blob | null> {
   }
 }
 
-function playVoiceboxBlob(blob: Blob, onEnd?: () => void) {
+function playVoiceboxBlob(blob: Blob, onEnd: (() => void) | undefined, seq: number) {
+  const ctx = playbackContext();
+  if (ctx) {
+    void blob
+      .arrayBuffer()
+      .then(async (raw) => {
+        if (seq !== speakSeq) return;
+        if (ctx.state !== "running") await ctx.resume();
+        if (seq !== speakSeq) return;
+        const decoded = await ctx.decodeAudioData(raw.slice(0));
+        if (seq !== speakSeq) return;
+        stopSource();
+        const source = ctx.createBufferSource();
+        source.buffer = decoded;
+        source.connect(ctx.destination);
+        activeSource = source;
+        source.onended = () => {
+          if (activeSource !== source) return;
+          activeSource = null;
+          deafUntil = Date.now() + 500;
+          onEnd?.();
+        };
+        source.start(0);
+      })
+      .catch(() => {
+        if (seq !== speakSeq) return;
+        playVoiceboxElement(blob, onEnd);
+      });
+    return;
+  }
+  playVoiceboxElement(blob, onEnd);
+}
+
+function playVoiceboxElement(blob: Blob, onEnd?: () => void) {
   const url = URL.createObjectURL(blob);
-  const audio = new Audio(url);
+  const audio = unlockAudio ?? new Audio();
+  if (!unlockAudio) unlockAudio = audio;
+  audio.src = url;
   activeAudio = audio;
   let finished = false;
   const done = () => {
@@ -622,125 +675,135 @@ function playVoiceboxBlob(blob: Blob, onEnd?: () => void) {
   void audio.play().catch(() => done());
 }
 
-function handOffToBrowserEnd(onEnd?: () => void) {
-  if (!activeSpeech) {
-    onEnd?.();
-    return;
-  }
-  const utterance = activeSpeech;
-  const prev = utterance.onend;
-  utterance.onend = (event) => {
-    if (typeof prev === "function") prev.call(utterance, event);
-    onEnd?.();
-  };
-}
-
-function pickVoice(): SpeechSynthesisVoice | undefined {
-  if (cachedVoice) return cachedVoice;
-  if (typeof window === "undefined" || !window.speechSynthesis) return undefined;
-  const voices = window.speechSynthesis.getVoices();
-  cachedVoice =
-    voices.find((voice) => /en-GB|Daniel|Google UK/i.test(`${voice.name} ${voice.lang}`)) ||
-    voices.find((voice) => voice.lang.startsWith("en")) ||
-    voices[0] ||
-    null;
-  return cachedVoice || undefined;
-}
-
 export function isSpeaking(): boolean {
-  return Boolean(activeSpeech || activeAudio) || Date.now() < deafUntil;
+  return Boolean(activeAudio || activeSource) || Date.now() < deafUntil;
 }
 
 let lastSpokenText = "";
 let lastSpokenAt = 0;
 
+type QueuedSentence = {
+  text: string;
+  enabled: boolean;
+  onEnd?: () => void;
+};
+
+const sentenceQueue: QueuedSentence[] = [];
+const speechIdleWaiters: Array<() => void> = [];
+let queueHold = false;
+let speechGen = 0;
+
+function speechBusy(): boolean {
+  return queueHold || Boolean(activeAudio || activeSource) || sentenceQueue.length > 0;
+}
+
+function drainSpeechQueue(gen: number) {
+  if (gen !== speechGen) return;
+  queueHold = false;
+  const next = sentenceQueue.shift();
+  if (next) {
+    speak(next.text, next.enabled, next.onEnd, { force: true, queue: true });
+    return;
+  }
+  const waiters = speechIdleWaiters.splice(0);
+  waiters.forEach((fn) => fn());
+}
+
+/** Drop queued sentences. A new turn or cancel must not keep the previous clip's tail. */
+export function resetSpeechQueue() {
+  speechGen += 1;
+  queueHold = false;
+  sentenceQueue.length = 0;
+  speechIdleWaiters.length = 0;
+  silence();
+}
+
+export function whenSpeechIdle(callback: () => void) {
+  if (!speechBusy()) {
+    callback();
+    return;
+  }
+  speechIdleWaiters.push(callback);
+}
+
 export function speak(
   text: string,
   enabled = true,
   onEnd?: () => void,
-  options?: { force?: boolean; voiceboxOnly?: boolean },
+  options?: { force?: boolean; queue?: boolean },
 ) {
   if (!enabled || !text || typeof window === "undefined") {
     onEnd?.();
     return;
   }
-  const force = Boolean(options?.force);
-  // Single-flight: same line or overlapping speak → keep the in-flight audio.
-  if (!force && activeSpeech?.text === text) return;
-  if (!force && activeAudio && text === lastSpokenText && Date.now() - lastSpokenAt < 2500) {
-    onEnd?.();
+  const queued = Boolean(options?.queue);
+  if (queued && speechBusy()) {
+    sentenceQueue.push({ text, enabled, onEnd });
     return;
   }
-  if (!force && text === lastSpokenText && Date.now() - lastSpokenAt < 90000) {
+  const gen = speechGen;
+  if (queued) queueHold = true;
+  else {
+    speechGen += 1;
+    sentenceQueue.length = 0;
+    queueHold = false;
+  }
+  const end = () => {
     onEnd?.();
+    if (queued) drainSpeechQueue(gen);
+  };
+  const force = Boolean(options?.force);
+  if (!force && activeAudio && text === lastSpokenText && performance.now() - lastSpokenAt < 2500) {
+    end();
+    return;
+  }
+  if (!force && text === lastSpokenText && performance.now() - lastSpokenAt < 90000) {
+    end();
     return;
   }
   lastSpokenText = text;
-  lastSpokenAt = Date.now();
+  lastSpokenAt = performance.now();
   const words = text.split(/\s+/).filter(Boolean).length;
   deafUntil = Date.now() + Math.min(12000, 900 + words * 320);
   speakSeq += 1;
   const seq = speakSeq;
   stopAudio();
-  if (window.speechSynthesis) window.speechSynthesis.cancel();
-  activeSpeech = null;
-
-  // Bridge: if Voicebox is cold, start browser speech quickly; cut over to Mark
-  // only if Voicebox arrives within ~1.4s of the bridge. Late arrivals must not
-  // play — otherwise the user hears the full line again ~10–20s later.
-  const voiceboxOnly = Boolean(options?.voiceboxOnly);
-  const BRIDGE_CUTOVER_MS = 1400;
-  let bridgeStartedAt = 0;
-  const bridgeTimer = voiceboxOnly
-    ? 0
-    : window.setTimeout(() => {
-        if (seq !== speakSeq || activeAudio) return;
-        bridgeStartedAt = Date.now();
-        speakBrowser(text);
-      }, 160);
+  if (typeof window !== "undefined" && window.speechSynthesis) {
+    window.speechSynthesis.cancel();
+  }
 
   void (async () => {
-    const blob = await fetchVoicebox(text, seq);
-    window.clearTimeout(bridgeTimer);
+    let blob = await fetchVoicebox(text, seq);
     if (seq !== speakSeq) return;
-
-    if (blob) {
-      const bridgeLate =
-        !voiceboxOnly && bridgeStartedAt > 0 && Date.now() - bridgeStartedAt >= BRIDGE_CUTOVER_MS;
-      if (bridgeLate) {
-        // Browser already carried (or finished) the line; keep cache warm, no replay.
-        handOffToBrowserEnd(onEnd);
-        return;
-      }
-      if (activeSpeech) {
-        if (window.speechSynthesis) window.speechSynthesis.cancel();
-        activeSpeech = null;
-      }
-      playVoiceboxBlob(blob, onEnd);
-      return;
-    }
-
-    if (voiceboxOnly) {
+    if (!blob) {
       await new Promise((resolve) => window.setTimeout(resolve, 400));
       if (seq !== speakSeq) return;
-      const retry = await fetchVoicebox(text, seq);
+      blob = await fetchVoicebox(text, seq);
       if (seq !== speakSeq) return;
-      if (retry) {
-        playVoiceboxBlob(retry, onEnd);
-        return;
-      }
-      onEnd?.();
+    }
+    if (blob) {
+      playVoiceboxBlob(blob, end, seq);
       return;
     }
-
-    if (!activeSpeech) speakBrowser(text, onEnd);
-    else handOffToBrowserEnd(onEnd);
+    end();
   })();
 }
 
+export function enqueueSentence(text: string, enabled = true, onEnd?: () => void) {
+  const sentence = text.trim();
+  if (!sentence) {
+    onEnd?.();
+    return;
+  }
+  speak(sentence, enabled, onEnd, { force: true, queue: true });
+}
+
 export function silence() {
+  speechGen += 1;
+  queueHold = false;
+  sentenceQueue.length = 0;
+  speechIdleWaiters.length = 0;
   speakSeq += 1;
-  activeSpeech = null;
   deafUntil = Date.now() + 450;
   stopAudio();
   if (typeof window !== "undefined" && window.speechSynthesis) {

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+import asyncio
 import threading
-import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable
 
@@ -49,10 +49,48 @@ def refresh_running_lease(turn_id: str) -> None:
         )
 
 
+def refresh_executing_lease(turn_id: str) -> None:
+    """Heartbeat an EXECUTING turn. Does not change stage and does not requeue."""
+    now = db.utc_now()
+    expires = lease_expires_at_from(now)
+    with db.connect() as conn:
+        conn.execute(
+            """
+            UPDATE turns
+            SET heartbeat_at = ?, lease_expires_at = ?, updated_at = ?
+            WHERE id = ? AND state = ?
+            """,
+            (now, expires, now, turn_id, store.STATE_EXECUTING),
+        )
+
+
+async def heartbeat_while_executing(
+    turn_id: str,
+    *,
+    interval_sec: float | None = None,
+) -> None:
+    """Refresh the EXECUTING lease until the turn leaves that state.
+
+    Expiry is fail-closed: the reaper marks FAILED and does not schedule another send.
+    """
+    interval = events.HEARTBEAT_INTERVAL_SEC if interval_sec is None else interval_sec
+    while True:
+        row = store.get_turn(turn_id)
+        if not row or row["state"] != store.STATE_EXECUTING:
+            return
+        refresh_executing_lease(turn_id)
+        await asyncio.sleep(interval)
+
+
 def _is_never_auto_retry_stage(stage: str) -> bool:
     if stage == "confirm":
         return True
     return stage.startswith("tool:") and stage.endswith("_send")
+
+
+def _executing_expired_error(stage: str) -> str:
+    named = stage or "unknown"
+    return f"FAILED({named}): executing lease expired; not retried automatically"
 
 
 def _failure_error(stage: str) -> str:
@@ -82,6 +120,34 @@ def _list_expired_running(now_iso: str) -> list[dict[str, Any]]:
     return [dict(row) for row in rows]
 
 
+def _unarmed_executing_cutoff(now_iso: str) -> str:
+    base = _parse_utc(now_iso)
+    return (base - timedelta(seconds=LEASE_DURATION_SEC)).isoformat()
+
+
+def _list_expired_executing(now_iso: str) -> list[dict[str, Any]]:
+    """EXECUTING rows whose lease expired, or that never armed a lease within the window."""
+    cutoff = _unarmed_executing_cutoff(now_iso)
+    with db.connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT *
+            FROM turns
+            WHERE state = ?
+              AND (
+                (lease_expires_at IS NOT NULL AND lease_expires_at < ?)
+                OR (
+                  lease_expires_at IS NULL
+                  AND (updated_at IS NULL OR updated_at < ?)
+                )
+              )
+            ORDER BY COALESCE(lease_expires_at, updated_at) ASC
+            """,
+            (store.STATE_EXECUTING, now_iso, cutoff),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
 def _requeue_turn(turn_id: str, stage: str, attempt: int) -> None:
     now = db.utc_now()
     with db.connect() as conn:
@@ -103,12 +169,18 @@ def _fail_expired_turn(turn_id: str, stage: str, error: str) -> None:
     events.append_turn_event(turn_id, store.STATE_FAILED, stage or "failed")
 
 
+def _fail_expired_executing(turn_id: str, stage: str) -> None:
+    """FAILED with the stage column unchanged. Never schedules another send."""
+    store.fail_turn(turn_id, _executing_expired_error(stage))
+    events.append_turn_event(turn_id, store.STATE_FAILED, stage)
+
+
 def reaper_pass(
     *,
     schedule_turn: Callable[[str], None] | None = None,
     now_iso: str | None = None,
 ) -> int:
-    """Mark expired RUNNING turns failed or requeue per stage policy. Returns rows handled."""
+    """Expire RUNNING leases (retry or fail) and EXECUTING leases (fail, never retry)."""
     now = now_iso or db.utc_now()
     handled = 0
     for row in _list_expired_running(now):
@@ -125,6 +197,12 @@ def reaper_pass(
             continue
 
         _fail_expired_turn(turn_id, stage, _failure_error(stage))
+        handled += 1
+
+    for row in _list_expired_executing(now):
+        turn_id = str(row["id"])
+        stage = str(row.get("stage") or "").strip()
+        _fail_expired_executing(turn_id, stage)
         handled += 1
 
     return handled

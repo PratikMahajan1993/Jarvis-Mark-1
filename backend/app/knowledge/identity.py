@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import sqlite3
 from dataclasses import dataclass, field
 from typing import Any, Literal
@@ -146,6 +147,14 @@ def resolve_drawing_identity(
                 )
 
         cid = (customer_id or "").strip()
+        if cid:
+            from ..config import settings
+            from ..masterdata.aliases import resolve_customer_alias
+
+            if settings.masterdata_enabled:
+                resolved = resolve_customer_alias(connection, cid)
+                if resolved:
+                    cid = resolved
         dno = (drawing_no or "").strip()
         rev = (revision or "").strip()
         if cid and dno and rev:
@@ -189,3 +198,42 @@ def resolve_drawing_identity(
         return _resolve(conn)
     with db.connect() as connection:
         return _resolve(connection)
+
+
+def _remember(session_id: str, key: str, value: str) -> None:
+    if session_id and value:
+        db.add_memory(session_id, key, value)
+
+
+def resolve_drawing_identity_tool(
+    session_id: str = "",
+    drawing_sha256: str = "",
+    fingerprint_text: str = "",
+    customer_id: str = "",
+    drawing_no: str = "",
+    revision: str = "",
+) -> dict[str, Any]:
+    """Tool wrapper. Revision change includes changed fields; never a silent reuse."""
+    result = resolve_drawing_identity(
+        drawing_sha256=drawing_sha256,
+        fingerprint_text=fingerprint_text,
+        customer_id=customer_id,
+        drawing_no=drawing_no,
+        revision=revision,
+    )
+    body = result.to_dict()
+    body["ok"] = True
+    body["summary"] = (
+        format_revision_change_summary(result) if result.kind == "revision_change" else ""
+    )
+    if result.kind == "revision_change":
+        names = ", ".join(result.changed_fields) or "none yet"
+        body["banner"] = f"This is a new revision — confirmed fields changed: {names}"
+    else:
+        body["banner"] = ""
+    if session_id:
+        _remember(session_id, "last_drawing_identity", json.dumps(body))
+        linked = result.part_revision_id or ""
+        if result.kind in {"exact", "revision_change"} and linked:
+            _remember(session_id, "last_part_revision_id", linked)
+    return body

@@ -169,7 +169,8 @@ def test_verify_fails_labour_scope_with_rm_price():
     assert result["passed"] is False
 
 
-def test_verify_fails_mhr_below_demo_minimum():
+def test_verify_fails_mhr_below_demo_minimum(monkeypatch):
+    monkeypatch.setattr(settings, "masterdata_enabled", False)
     session = "verify-mhr-floor"
     _seed_good_quote(session)
     db.add_memory(session, "last_quote_machine", "Demo CNC vertical mill")
@@ -179,7 +180,8 @@ def test_verify_fails_mhr_below_demo_minimum():
     assert "mhr_demo_floor" in failed
 
 
-def test_verify_fails_rm_estimate_without_source_note():
+def test_verify_fails_rm_estimate_without_source_note(monkeypatch):
+    monkeypatch.setattr(settings, "masterdata_enabled", False)
     session = "verify-rm-estimate"
     _seed_good_quote(session)
     db.add_memory(session, "last_quote_rm_source", "estimate")

@@ -49,26 +49,60 @@ def kind_label(category: str) -> str:
 _BRAIN_SEMAPHORE = threading.Semaphore(3)
 _SESSION_LOCKS_GUARD = threading.Lock()
 _SESSION_LOCKS: dict[str, threading.Lock] = {}
+_SESSION_LOCK_CAP = 256
 _DEFAULT_BRAIN_SESSION = COMMAND_SESSION
 
 
-def _session_brain_lock(session_id: str) -> threading.Lock:
-    with _SESSION_LOCKS_GUARD:
-        lock = _SESSION_LOCKS.get(session_id)
-        if lock is None:
-            lock = threading.Lock()
-            _SESSION_LOCKS[session_id] = lock
-        return lock
+class BrainLockTimeout(Exception):
+    """A brain turn could not take a process-wide permit before the wait limit."""
+
+
+def _drop_unlocked_session_locks(keep: str) -> None:
+    """Drop idle session locks once the map is over the cap. Caller holds the guard.
+
+    A lock that is currently acquired stays. `keep` stays even if it is not held yet.
+    """
+    if len(_SESSION_LOCKS) <= _SESSION_LOCK_CAP:
+        return
+    for sid in list(_SESSION_LOCKS):
+        if len(_SESSION_LOCKS) <= _SESSION_LOCK_CAP:
+            return
+        if sid == keep:
+            continue
+        lock = _SESSION_LOCKS.get(sid)
+        if lock is not None and not lock.locked():
+            del _SESSION_LOCKS[sid]
+
+
+def _acquire_session_brain_lock(session_id: str) -> threading.Lock:
+    """Return the per-session lock already acquired, pruning idle entries over the cap."""
+    while True:
+        with _SESSION_LOCKS_GUARD:
+            lock = _SESSION_LOCKS.get(session_id)
+            if lock is None:
+                lock = threading.Lock()
+                _SESSION_LOCKS[session_id] = lock
+            if len(_SESSION_LOCKS) > _SESSION_LOCK_CAP:
+                _drop_unlocked_session_locks(session_id)
+            lock = _SESSION_LOCKS[session_id]
+            if lock.acquire(blocking=False):
+                return lock
+        lock.acquire()
+        with _SESSION_LOCKS_GUARD:
+            if _SESSION_LOCKS.get(session_id) is lock:
+                return lock
+        lock.release()
 
 
 @contextmanager
 def brain_lock(session_id: str | None = None) -> Iterator[None]:
     """One brain turn per session; at most 3 brain turns process-wide."""
     sid = (session_id or _DEFAULT_BRAIN_SESSION).strip() or _DEFAULT_BRAIN_SESSION
-    session_lock = _session_brain_lock(sid)
-    session_lock.acquire()
+    session_lock = _acquire_session_brain_lock(sid)
     try:
-        _BRAIN_SEMAPHORE.acquire()
+        wait_sec = float(settings.hermes_timeout_sec) + 5.0
+        if not _BRAIN_SEMAPHORE.acquire(timeout=wait_sec):
+            raise BrainLockTimeout(f"Brain permit unavailable after {wait_sec:g}s")
         try:
             yield
         finally:
@@ -687,15 +721,12 @@ def _chat_with_fallback(
 
     effective_media = media
     if _media_has_drawing_bytes(media) and not owner_spend:
-        effective_media = [
-            {
-                "text": (
-                    "(Drawing bytes withheld — cloud vision requires an explicit owner spend. "
-                    "Answer from local context and conversation only.)"
-                )
-            }
-        ]
-        system = system + "\nYou do not have the drawing image; do not invent dimensions."
+        withheld = (
+            "Drawing bytes were present and were removed because owner_spend is false. "
+            "Do not invent dimensions."
+        )
+        effective_media = [{"text": withheld}]
+        system = system + "\n" + withheld
 
     models = [preferred or settings.gemini_model]
     drawing_model = (settings.gemini_drawing_model or "").strip()

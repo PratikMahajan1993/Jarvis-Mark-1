@@ -503,6 +503,204 @@ def jarvis_browser_queue_action(title: str, summary: str, url: str, evidence_id:
     )
 
 
+@mcp.tool()
+def jarvis_masterdata_options() -> str:
+    """List active machines, materials, and customers from master data. Read-only."""
+    return _dump(execute_tool("masterdata_options", {}, _session()))
+
+
+@mcp.tool()
+def jarvis_masterdata_resolve_alias(kind: str, alias: str) -> str:
+    """Resolve an alias by exact spelling. Unresolved means ask — do not guess a similar name."""
+    return _dump(execute_tool("masterdata_resolve_alias", {"kind": kind, "alias": alias}, _session()))
+
+
+@mcp.tool()
+def jarvis_masterdata_add_alias(kind: str, canonical_id: str, alias: str, source: str = "manual") -> str:
+    """Attach an exact alias to a canonical customer, machine, or supplier."""
+    return _dump(
+        execute_tool(
+            "masterdata_add_alias",
+            {"kind": kind, "canonical_id": canonical_id, "alias": alias, "source": source},
+            _session(),
+        )
+    )
+
+
+@mcp.tool()
+def jarvis_masterdata_seed() -> str:
+    """Idempotent master-data seed. Does not overwrite owner edits."""
+    return _dump(execute_tool("masterdata_seed", {}, _session()))
+
+
+@mcp.tool()
+def jarvis_masterdata_supersede(entity: str, old_id: str, effective_from: str = "", name: str = "", grade: str = "") -> str:
+    """Supersede an authoritative master row. Does not hard-delete."""
+    return _dump(
+        execute_tool(
+            "masterdata_supersede",
+            {
+                "entity": entity,
+                "old_id": old_id,
+                "effective_from": effective_from,
+                "name": name,
+                "grade": grade,
+            },
+            _session(),
+        )
+    )
+
+
+@mcp.tool()
+def jarvis_resolve_drawing_identity(
+    drawing_sha256: str,
+    fingerprint_text: str = "",
+    customer_id: str = "",
+    drawing_no: str = "",
+    revision: str = "",
+) -> str:
+    """Resolve drawing identity. A revision change returns the confirmed-field diff."""
+    return _dump(
+        execute_tool(
+            "resolve_drawing_identity",
+            {
+                "drawing_sha256": drawing_sha256,
+                "fingerprint_text": fingerprint_text,
+                "customer_id": customer_id,
+                "drawing_no": drawing_no,
+                "revision": revision,
+            },
+            _session(),
+        )
+    )
+
+
+@mcp.tool()
+def jarvis_confirm_drawing_fact(
+    entity_id: str,
+    field: str,
+    value: str,
+    entity_type: str = "part_revision",
+    unit: str = "",
+    source_ref: str = "",
+) -> str:
+    """Confirm a candidate drawing fact. High-value fields need the value repeated."""
+    return _dump(
+        execute_tool(
+            "confirm_drawing_fact",
+            {
+                "entity_type": entity_type,
+                "entity_id": entity_id,
+                "field": field,
+                "value": value,
+                "unit": unit,
+                "source_ref": source_ref,
+            },
+            _session(),
+        )
+    )
+
+
+@mcp.tool()
+def jarvis_recall_drawing_knowledge(drawing_sha256: str = "", entity_id: str = "") -> str:
+    """Recall a drawing from owner-confirmed facts only."""
+    return _dump(
+        execute_tool(
+            "recall_drawing_knowledge",
+            {"drawing_sha256": drawing_sha256, "entity_id": entity_id},
+            _session(),
+        )
+    )
+
+
+@mcp.tool()
+def jarvis_log_downtime(machine_id: str, minutes: float, reason: str = "", machine_name: str = "") -> str:
+    """Log downtime the operator stated."""
+    return _dump(
+        execute_tool(
+            "log_downtime",
+            {
+                "machine_id": machine_id,
+                "minutes": minutes,
+                "reason": reason,
+                "machine_name": machine_name,
+            },
+            _session(),
+        )
+    )
+
+
+@mcp.tool()
+def jarvis_log_scrap(machine_id: str, qty: float, unit: str = "pcs", cause: str = "") -> str:
+    """Log scrap quantity the operator stated."""
+    return _dump(
+        execute_tool(
+            "log_scrap",
+            {"machine_id": machine_id, "qty": qty, "unit": unit, "cause": cause},
+            _session(),
+        )
+    )
+
+
+@mcp.tool()
+def jarvis_log_oee(machine_id: str, oee_pct: float) -> str:
+    """Log an OEE percent the operator stated."""
+    return _dump(execute_tool("log_oee", {"machine_id": machine_id, "oee_pct": oee_pct}, _session()))
+
+
+@mcp.tool()
+def jarvis_log_stock(component_id: str, on_hand: float, allocated: float = 0, unit: str = "pcs") -> str:
+    """Log component stock the operator stated."""
+    return _dump(
+        execute_tool(
+            "log_stock",
+            {
+                "component_id": component_id,
+                "on_hand": on_hand,
+                "allocated": allocated,
+                "unit": unit,
+            },
+            _session(),
+        )
+    )
+
+
+@mcp.tool()
+def jarvis_log_vendor_turnaround(vendor: str, days: float, last_delivery: str = "") -> str:
+    """Log vendor turnaround days the operator stated."""
+    return _dump(
+        execute_tool(
+            "log_vendor_turnaround",
+            {"vendor": vendor, "days": days, "last_delivery": last_delivery},
+            _session(),
+        )
+    )
+
+
+@mcp.tool()
+def jarvis_get_machine_status(machine_id: str) -> str:
+    """Read projected machine status. Asks when nothing is logged."""
+    return _dump(execute_tool("get_machine_status", {"machine_id": machine_id}, _session()))
+
+
+@mcp.tool()
+def jarvis_get_vendor_turnaround(vendor: str) -> str:
+    """Read average vendor turnaround from logged events."""
+    return _dump(execute_tool("get_vendor_turnaround", {"vendor": vendor}, _session()))
+
+
+@mcp.tool()
+def jarvis_get_component_stock(component_id: str) -> str:
+    """Read component stock from logged events."""
+    return _dump(execute_tool("get_component_stock", {"component_id": component_id}, _session()))
+
+
+@mcp.tool()
+def jarvis_get_oee_trend(days: int = 30) -> str:
+    """Read logged OEE points for the day window."""
+    return _dump(execute_tool("get_oee_trend", {"days": days}, _session()))
+
+
 def main() -> None:
     mcp.run(transport="stdio")
 

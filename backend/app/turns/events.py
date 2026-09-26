@@ -23,7 +23,7 @@ def append_turn_event(turn_id: str, state: str, stage: str) -> int:
             (turn_id, state, stage, now),
         )
         event_id = int(cur.lastrowid or 0)
-        if state == store.STATE_RUNNING:
+        if state in (store.STATE_RUNNING, store.STATE_EXECUTING):
             from .reaper import lease_expires_at_from
 
             expires = lease_expires_at_from(now)
@@ -93,9 +93,19 @@ async def heartbeat_while_running(
     while True:
         await asyncio.sleep(interval)
         row = store.get_turn(turn_id)
-        if not row or row["state"] != store.STATE_RUNNING:
+        if not row:
             return
-        append_turn_event(turn_id, store.STATE_RUNNING, "working")
+        state = row["state"]
+        if state == store.STATE_RUNNING:
+            append_turn_event(turn_id, store.STATE_RUNNING, "working")
+            continue
+        if state == store.STATE_EXECUTING:
+            # External effect may already be in flight — keep the lease, never requeue.
+            from .reaper import refresh_executing_lease
+
+            refresh_executing_lease(turn_id)
+            continue
+        return
 
 
 def publish_terminal_event(turn_id: str) -> None:

@@ -5,7 +5,10 @@ from __future__ import annotations
 import threading
 import time
 
-from app.conversations import brain_lock
+import pytest
+
+from app.config import settings
+from app.conversations import BrainLockTimeout, brain_lock
 
 
 def test_different_sessions_do_not_block_each_other() -> None:
@@ -128,3 +131,52 @@ def test_no_session_id_uses_default_and_serializes() -> None:
     t1.join(timeout=2.0)
     assert second_in.wait(timeout=2.0)
     t2.join(timeout=2.0)
+
+
+def test_semaphore_timeout_raises_and_does_not_keep_a_permit(monkeypatch) -> None:
+    # hermes_timeout_sec + 5 == 0.2s so the wait stays inside this test.
+    monkeypatch.setattr(settings, "hermes_timeout_sec", -4.8)
+    release_all = threading.Event()
+    three_held = threading.Event()
+    held_count = 0
+    held_guard = threading.Lock()
+
+    def hold(session: str) -> None:
+        nonlocal held_count
+        with brain_lock(session):
+            with held_guard:
+                held_count += 1
+                if held_count == 3:
+                    three_held.set()
+            release_all.wait(timeout=5.0)
+
+    holders = [
+        threading.Thread(target=hold, args=(f"cap-{i}",), name=f"cap-{i}") for i in range(3)
+    ]
+    for thread in holders:
+        thread.start()
+    assert three_held.wait(timeout=2.0)
+
+    with pytest.raises(BrainLockTimeout):
+        with brain_lock("cap-wait"):
+            raise AssertionError("permit acquired after timeout")
+
+    # The timed-out waiter must not have released a permit it never took.
+    with pytest.raises(BrainLockTimeout):
+        with brain_lock("cap-wait-2"):
+            raise AssertionError("permit acquired after timeout")
+
+    release_all.set()
+    for thread in holders:
+        thread.join(timeout=2.0)
+
+    entered = threading.Event()
+
+    def after() -> None:
+        with brain_lock("cap-wait"):
+            entered.set()
+
+    follower = threading.Thread(target=after, name="cap-after")
+    follower.start()
+    assert entered.wait(timeout=2.0)
+    follower.join(timeout=2.0)

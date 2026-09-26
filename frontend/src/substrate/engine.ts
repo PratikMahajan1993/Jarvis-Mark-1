@@ -38,6 +38,8 @@ const PILOT_SCALE = 0.15;
 const WEIGHT_EPS = 0.01;
 const BREATH_PERIOD_S = 7;
 const BREATH_AMP = 0.06;
+/** Coalesce GPU-switch loss/restore so one flicker does not rebuild and post ready. */
+const CONTEXT_LOSS_DEBOUNCE_MS = 500;
 
 function generateNoiseTexture(size = EYE_NOISE_SIZE): Uint8Array {
   const data = new Uint8Array(size * size * 4);
@@ -157,6 +159,8 @@ export class SubstrateEngine {
 
   private onContextLost: ((e: Event) => void) | null = null;
   private onContextRestored: (() => void) | null = null;
+  private contextDebounce: ReturnType<typeof setTimeout> | null = null;
+  private pendingContext: "lost" | "restored" | null = null;
 
   constructor(postOut: (msg: SubstrateOut) => void, options: EngineOptions = {}) {
     this.postOut = postOut;
@@ -211,6 +215,11 @@ export class SubstrateEngine {
 
   dispose() {
     this.disposed = true;
+    if (this.contextDebounce !== null) {
+      clearTimeout(this.contextDebounce);
+      this.contextDebounce = null;
+    }
+    this.pendingContext = null;
     this.stopLoop();
     this.detachContextListeners();
     const gl = this.renderer?.gl;
@@ -242,30 +251,11 @@ export class SubstrateEngine {
     this.onContextLost = (e: Event) => {
       e.preventDefault();
       if (this.disposed) return;
-      this.contextLost = true;
-      this.stopLoop();
-      this.clearGpuRefs();
-      this.postOut({ type: "contextLost" });
+      this.scheduleContextEvent("lost");
     };
     this.onContextRestored = () => {
       if (!this.canvas || this.disposed) return;
-      try {
-        this.contextLost = false;
-        this.buildGpu(this.canvas);
-        if (!this.renderer) {
-          this.contextLost = true;
-          this.postOut({ type: "contextLost" });
-          return;
-        }
-        this.postOut({ type: "ready", webgl2: Boolean(this.renderer.isWebgl2) });
-        this.settledPosted = false;
-        this.maybePostSettled();
-        this.syncMotion();
-      } catch (err) {
-        console.error("[substrate] context restore failed", err);
-        this.contextLost = true;
-        this.postOut({ type: "contextLost" });
-      }
+      this.scheduleContextEvent("restored");
     };
     canvas.addEventListener("webglcontextlost", this.onContextLost as EventListener);
     canvas.addEventListener("webglcontextrestored", this.onContextRestored as EventListener);
@@ -284,6 +274,53 @@ export class SubstrateEngine {
     }
     this.onContextLost = null;
     this.onContextRestored = null;
+  }
+
+  /** Last loss/restore in a 500ms window wins: one rebuild, or one contextLost. */
+  private scheduleContextEvent(kind: "lost" | "restored") {
+    this.pendingContext = kind;
+    if (kind === "lost") {
+      this.contextLost = true;
+      this.stopLoop();
+    }
+    if (this.contextDebounce !== null) {
+      clearTimeout(this.contextDebounce);
+    }
+    this.contextDebounce = setTimeout(() => {
+      this.contextDebounce = null;
+      this.flushContextEvent();
+    }, CONTEXT_LOSS_DEBOUNCE_MS);
+  }
+
+  private flushContextEvent() {
+    const kind = this.pendingContext;
+    this.pendingContext = null;
+    if (this.disposed || !kind) return;
+    if (kind === "lost") {
+      this.contextLost = true;
+      this.stopLoop();
+      this.clearGpuRefs();
+      this.postOut({ type: "contextLost" });
+      return;
+    }
+    if (!this.canvas) return;
+    try {
+      this.contextLost = false;
+      this.buildGpu(this.canvas);
+      if (!this.renderer) {
+        this.contextLost = true;
+        this.postOut({ type: "contextLost" });
+        return;
+      }
+      this.postOut({ type: "ready", webgl2: Boolean(this.renderer.isWebgl2) });
+      this.settledPosted = false;
+      this.maybePostSettled();
+      this.syncMotion();
+    } catch (err) {
+      console.error("[substrate] context restore failed", err);
+      this.contextLost = true;
+      this.postOut({ type: "contextLost" });
+    }
   }
 
   private clearGpuRefs() {
@@ -399,6 +436,7 @@ export class SubstrateEngine {
     setSpringTarget(this.springs.accentB, preset.accent[2], doSnap);
     setSpringTarget(this.springs.dim, preset.dim, doSnap);
     if (doSnap) this.maybePostSettled();
+    if (this.reducedMotion) this.drawSnappedFrame();
   }
 
   private snapAllSprings() {
@@ -431,6 +469,7 @@ export class SubstrateEngine {
     this.cssH = Math.max(1, height);
     this.deviceDpr = Math.max(0.1, dpr || 1);
     this.applyRendererSize();
+    if (this.reducedMotion) this.drawSnappedFrame();
   }
 
   private applyRendererSize() {
@@ -455,11 +494,9 @@ export class SubstrateEngine {
       this.renderFrame(this.frozenTime);
       return;
     }
-    // reducedMotion → springs snapped, loop at 30 fps, uTime frozen
+    // reducedMotion → one snapped frame, then the loop stays stopped.
     if (this.reducedMotion) {
-      this.frozen = true;
-      if (!this.frozenTime) this.frozenTime = performance.now();
-      this.startLoop();
+      this.drawSnappedFrame();
       return;
     }
     this.frozen = false;
@@ -472,6 +509,15 @@ export class SubstrateEngine {
     this.raf = 0;
   }
 
+  /** One frozen frame. Further draws wait for resize, lens change, or motion restored. */
+  private drawSnappedFrame() {
+    if (this.disposed || this.contextLost) return;
+    this.frozen = true;
+    if (!this.frozenTime) this.frozenTime = performance.now();
+    this.stopLoop();
+    this.renderFrame(this.frozenTime);
+  }
+
   private effectiveFpsCap(): number {
     if (this.reducedMotion) return 30;
     return Math.min(this.baseFpsCap, this.targetFps);
@@ -482,6 +528,10 @@ export class SubstrateEngine {
     this.lastFrame = 0;
     const tick = (time: number) => {
       this.raf = requestAnimationFrame(tick);
+      if (this.reducedMotion) {
+        this.stopLoop();
+        return;
+      }
       if (this.disposed || this.contextLost || this.hidden) return;
       const minFrame = 1000 / this.effectiveFpsCap();
       if (this.lastFrame && time - this.lastFrame < minFrame) return;

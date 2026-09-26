@@ -172,6 +172,19 @@ def detect_inbound_drawings() -> list[jobs.Rfq]:
     return created
 
 
+_DRAWING_ANCHOR = re.compile(
+    r"[A-Za-z]:\\|[\\/]{2}|\.(?:pdf|png|jpe?g|tif|tiff|dxf|dwg|step|stp)\b",
+    re.I,
+)
+
+
+def reason_rfq_has_anchor(*, mail_id: str = "", conversation_id: str = "", message: str = "") -> bool:
+    """True when a drawing is already named: mail, conversation, or a path in the message."""
+    if (mail_id or "").strip() or (conversation_id or "").strip():
+        return True
+    return bool(_DRAWING_ANCHOR.search(message or ""))
+
+
 def intake(
     *,
     mail_id: str = "",

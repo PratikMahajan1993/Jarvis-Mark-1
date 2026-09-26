@@ -1,4 +1,8 @@
-"""Idempotent backfill from files/client-names.md into customers + customer_aliases."""
+"""Deprecated markdown backfill from client-names.md.
+
+Obsolete once ``masterdata_enabled`` is on — SQL seed is the source.
+Kept so an explicit import can still load a markdown list in tests.
+"""
 
 from __future__ import annotations
 

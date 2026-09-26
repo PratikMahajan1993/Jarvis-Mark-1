@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import sqlite3
+import uuid
 from typing import Any
 
 from .. import db
 
-_HIGH_VALUE_FIELDS = frozenset({"material", "scope", "qty"})
+_HIGH_VALUE_FIELDS = frozenset({"material", "scope", "qty", "quantity"})
 
 
 def field_requires_value_confirm(field: str) -> bool:
@@ -176,5 +177,115 @@ def reject_fact(
 
     if conn is not None:
         return _run(conn)
+    with db.connect() as connection:
+        return _run(connection)
+
+
+def confirm_drawing_fact(
+    session_id: str = "",
+    entity_type: str = "part_revision",
+    entity_id: str = "",
+    field: str = "",
+    value: str = "",
+    unit: str = "",
+    source_ref: str = "",
+) -> dict[str, Any]:
+    """Owner confirms a candidate. High-value fields require the value. Result is owner_confirmed."""
+    del session_id
+    et = (entity_type or "").strip() or "part_revision"
+    eid = (entity_id or "").strip()
+    field_name = (field or "").strip()
+    if not eid or not field_name:
+        return {"ok": False, "error": "entity_id and field required"}
+    supplied = _normalize_value(value)
+    if field_requires_value_confirm(field_name) and not supplied:
+        return {
+            "ok": False,
+            "error": "value_required",
+            "field": field_name,
+            "state": "candidate",
+        }
+    actor = "owner"
+    now = db.utc_now()
+
+    def _run(connection: sqlite3.Connection) -> dict[str, Any]:
+        from .cards import ensure_card, refresh_card_counts
+
+        card_id = ensure_card(connection, et, eid)
+        row = connection.execute(
+            """
+            SELECT id, value FROM entity_facts
+            WHERE card_id = ? AND field = ? AND state = 'candidate'
+            ORDER BY created_at DESC, id DESC
+            LIMIT 1
+            """,
+            (card_id, field_name),
+        ).fetchone()
+        if row and (
+            not field_requires_value_confirm(field_name)
+            or _normalize_value(str(row["value"])) == supplied
+        ):
+            out = confirm_fact(
+                str(row["id"]),
+                actor,
+                supplied or str(row["value"]),
+                conn=connection,
+                now=now,
+            )
+            if not out.get("ok"):
+                return out
+            connection.execute(
+                "UPDATE entity_facts SET source_kind = 'owner_confirmed' WHERE id = ?",
+                (row["id"],),
+            )
+            refresh_card_counts(connection, card_id, now)
+            out["source_kind"] = "owner_confirmed"
+            out["entity_id"] = eid
+            return out
+        if row:
+            connection.execute(
+                "UPDATE entity_facts SET state = 'superseded' WHERE id = ?",
+                (row["id"],),
+            )
+        if not supplied:
+            return {
+                "ok": False,
+                "error": "value_required",
+                "field": field_name,
+                "state": "candidate",
+            }
+        fact_id = f"fact-{uuid.uuid4().hex[:12]}"
+        connection.execute(
+            """
+            INSERT INTO entity_facts (
+              id, card_id, field, value, unit, source_kind, source_ref,
+              confidence, state, confirmed_by, confirmed_at, created_at
+            ) VALUES (?, ?, ?, ?, ?, 'owner_confirmed', ?, 1, 'confirmed', ?, ?, ?)
+            """,
+            (
+                fact_id,
+                card_id,
+                field_name,
+                supplied,
+                (unit or "").strip(),
+                source_ref,
+                actor,
+                now,
+                now,
+            ),
+        )
+        refresh_card_counts(connection, card_id, now)
+        return {
+            "ok": True,
+            "fact_id": fact_id,
+            "state": "confirmed",
+            "source_kind": "owner_confirmed",
+            "confirmed_by": actor,
+            "confirmed_at": now,
+            "field": field_name,
+            "value": supplied,
+            "entity_id": eid,
+        }
+
     with db.connect() as connection:
         return _run(connection)

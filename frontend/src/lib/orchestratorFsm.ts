@@ -15,7 +15,7 @@ import type { PendingAction } from "./types";
  *     (unlike approve, which moves straight to `EXECUTING` and hides it).
  */
 export type JarvisState =
-  | { mode: "IDLE" }
+  | { mode: "IDLE"; error?: string }
   | { mode: "LISTENING" }
   | { mode: "THINKING"; message: string; stage?: string }
   | { mode: "SPEAKING"; text: string }
@@ -49,7 +49,9 @@ export type JarvisEvent =
   | { type: "HITL_LISTEN_STOP" }
   | { type: "DECIDE_APPROVE"; actionId: string }
   | { type: "DECIDE_REJECT"; actionId: string }
+  | { type: "RESUME_THINKING" }
   | { type: "RESET" }
+  | { type: "SHOW_ERROR"; message: string }
   | { type: "RECONCILE"; turn: ServerTurn | null };
 
 export const INITIAL_JARVIS_STATE: JarvisState = { mode: "IDLE" };
@@ -85,6 +87,18 @@ export function failureLineForTurn(turn: ServerTurn): string {
   return "The brain dropped that. Retry?";
 }
 
+function withoutIdleError(state: JarvisState): JarvisState {
+  if (state.mode === "IDLE" && !state.error) return state;
+  return { mode: "IDLE" };
+}
+
+/** IDLE plus the failure line. Same reference when that line is already showing. */
+function idleWithError(state: JarvisState, message: string): JarvisState {
+  const text = message.trim() || "The brain dropped that. Retry?";
+  if (state.mode === "IDLE" && state.error === text) return state;
+  return { mode: "IDLE", error: text };
+}
+
 /** Pure ledger snapshot → event (nominal mapping from IDLE; duplicated in backend tests). */
 export function hydrate(turn: ServerTurn | null): JarvisEvent {
   if (!turn) return { type: "RESET" };
@@ -108,7 +122,7 @@ export function hydrate(turn: ServerTurn | null): JarvisEvent {
     return { type: "RESET" };
   }
   if (st === "FAILED" || st === "ABANDONED") {
-    return { type: "RESET" };
+    return { type: "SHOW_ERROR", message: failureLineForTurn(turn) };
   }
   if (st === "DONE") {
     return { type: "RESET" };
@@ -120,6 +134,8 @@ function applyHydrateToState(_state: JarvisState, event: JarvisEvent): JarvisSta
   switch (event.type) {
     case "RESET":
       return { mode: "IDLE" };
+    case "SHOW_ERROR":
+      return idleWithError({ mode: "IDLE" }, event.message);
     case "SEND": {
       const text = event.text.trim();
       if (!text) return { mode: "IDLE" };
@@ -142,7 +158,7 @@ function applyHydrateToState(_state: JarvisState, event: JarvisEvent): JarvisSta
 
 function reconcileLedgerState(state: JarvisState, turn: ServerTurn | null): JarvisState {
   if (!turn) {
-    return state.mode === "IDLE" ? state : { mode: "IDLE" };
+    return withoutIdleError(state);
   }
 
   const st = String(turn.state || "").toUpperCase();
@@ -151,7 +167,7 @@ function reconcileLedgerState(state: JarvisState, turn: ServerTurn | null): Jarv
   if (st === "AWAITING_HITL") {
     const action = turn.pending_action;
     if (!action || !pendingStillOpen(turn)) {
-      return state.mode === "IDLE" ? state : { mode: "IDLE" };
+      return withoutIdleError(state);
     }
     if (
       state.mode === "AWAITING_HITL" &&
@@ -167,7 +183,7 @@ function reconcileLedgerState(state: JarvisState, turn: ServerTurn | null): Jarv
   if (st === "EXECUTING") {
     const actionId = String(turn.pending_action_id || turn.pending_action?.id || "").trim();
     if (!actionId) {
-      return state.mode === "IDLE" ? state : { mode: "IDLE" };
+      return withoutIdleError(state);
     }
     if (state.mode === "EXECUTING" && state.actionId === actionId) return state;
     return { mode: "EXECUTING", actionId };
@@ -185,11 +201,11 @@ function reconcileLedgerState(state: JarvisState, turn: ServerTurn | null): Jarv
   }
 
   if (st === "FAILED" || st === "ABANDONED") {
-    return state.mode === "IDLE" ? state : { mode: "IDLE" };
+    return idleWithError(state, failureLineForTurn(turn));
   }
 
   if (st === "DONE") {
-    return state.mode === "IDLE" ? state : { mode: "IDLE" };
+    return withoutIdleError(state);
   }
 
   return state;
@@ -208,7 +224,10 @@ export function transition(state: JarvisState, event: JarvisEvent): JarvisState 
       return reconcileLedgerState(state, event.turn);
 
     case "RESET":
-      return state.mode === "IDLE" ? state : { mode: "IDLE" };
+      return withoutIdleError(state);
+
+    case "SHOW_ERROR":
+      return idleWithError(state, event.message);
 
     case "SEND": {
       const text = event.text.trim();
@@ -277,6 +296,10 @@ export function transition(state: JarvisState, event: JarvisEvent): JarvisState 
         return state;
       }
       return { ...state, listening: false, resolving: true };
+
+    case "RESUME_THINKING":
+      if (state.mode === "EXECUTING") return { mode: "THINKING", message: "Working…" };
+      return state;
 
     default:
       return state;

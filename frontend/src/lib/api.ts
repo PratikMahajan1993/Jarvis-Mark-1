@@ -194,6 +194,16 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ session_id: sessionId, stage }),
     }),
+  drawingIdentity: (sessionId = "default") =>
+    json<import("@/lib/pane/knowledge").DrawingIdentity>(
+      `/api/knowledge/drawing-identity?session_id=${encodeURIComponent(sessionId)}`,
+    ),
+  recallDrawing: (sessionId = "default", entityId = "") => {
+    const params = new URLSearchParams({ session_id: sessionId });
+    if (entityId) params.set("entity_id", entityId);
+    return json<import("@/lib/pane/knowledge").RecallPayload>(`/api/knowledge/recall?${params.toString()}`);
+  },
+  shopFloor: () => json<import("@/lib/pane/knowledge").ShopFloorPayload>("/api/shop/floor"),
   findQuoteDrawing: (sessionId = "default", partHint = "") =>
     json<{
       ok: boolean;
@@ -207,11 +217,53 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ session_id: sessionId, part_hint: partHint }),
     }),
-  chat: (message: string, sessionId = "default") =>
+  chat: (message: string, sessionId = "default", idempotencyKey?: string) =>
     json<ChatResponse | { turn_id: string; state: string }>("/api/chat", {
       method: "POST",
       body: JSON.stringify({ message, session_id: sessionId }),
+      headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined,
     }),
+  startHermesRun: (message: string, sessionId = "default") =>
+    json<{ run_id: string; status: string }>("/api/hermes/runs", {
+      method: "POST",
+      body: JSON.stringify({ message, session_id: sessionId }),
+    }),
+  hermesRunEvents: (runId: string, signal?: AbortSignal) =>
+    fetch(`${apiBase()}/api/hermes/runs/${encodeURIComponent(runId)}/events`, {
+      signal,
+      headers: mutatingAuthHeaders("GET"),
+    }),
+  stopHermesRun: (runId: string) =>
+    json<{ run_id: string; status: string }>(`/api/hermes/runs/${encodeURIComponent(runId)}/stop`, {
+      method: "POST",
+      body: "{}",
+    }),
+  approveHermesRun: (runId: string, choice: "once" | "deny", requestId = "") =>
+    json<Record<string, unknown>>(`/api/hermes/runs/${encodeURIComponent(runId)}/approval`, {
+      method: "POST",
+      body: JSON.stringify({ choice, request_id: requestId }),
+    }),
+  briefingCache: () =>
+    json<{ cached?: boolean; speak?: string }>("/api/briefing/cache"),
+  extractText: async (file: File) => {
+    const body = new FormData();
+    body.append("file", file);
+    const response = await fetch(`${apiBase()}/api/extract/text`, {
+      method: "POST",
+      body,
+      headers: mutatingAuthHeaders("POST"),
+    });
+    if (!response.ok) {
+      throw new Error(`Extract failed (${response.status})`);
+    }
+    return (await response.json()) as {
+      ok: boolean;
+      drawing?: boolean;
+      message?: string;
+      text?: string;
+      filename?: string;
+    };
+  },
   dropDrawing: async (file: File) => {
     const body = new FormData();
     body.append("file", file);
@@ -412,4 +464,39 @@ export const api = {
       method: "POST",
       body: JSON.stringify(body),
     }),
+  masterdataList: (entity: string) =>
+    json<{ ok: boolean; items: Array<Record<string, unknown>> }>(`/api/masterdata/${entity}`),
+  masterdataCreate: (entity: string, fields: Record<string, unknown>) =>
+    json<{ ok: boolean; id: string }>(`/api/masterdata/${entity}`, {
+      method: "POST",
+      body: JSON.stringify({ fields }),
+    }),
+  masterdataReplace: (entity: string, id: string, fields: Record<string, unknown>) =>
+    json<{ ok: boolean; id: string; superseded: string }>(`/api/masterdata/${entity}/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify({ fields }),
+    }),
+  masterdataAliases: (kind: string) =>
+    json<{ ok: boolean; items: Array<Record<string, unknown>> }>(`/api/masterdata/aliases?kind=${encodeURIComponent(kind)}`),
+  masterdataAddAlias: (kind: string, canonicalId: string, alias: string) =>
+    json<{ ok: boolean }>(`/api/masterdata/aliases`, {
+      method: "POST",
+      body: JSON.stringify({ kind, canonical_id: canonicalId, alias, source: "manual" }),
+    }),
+  masterdataRemoveAlias: (kind: string, alias: string) =>
+    json<{ ok: boolean }>(
+      `/api/masterdata/aliases?kind=${encodeURIComponent(kind)}&alias=${encodeURIComponent(alias)}`,
+      { method: "DELETE" },
+    ),
+  masterdataResolve: (kind: string, alias: string) =>
+    json<{ ok: boolean; canonical_id: string | null; resolved: boolean }>(
+      `/api/masterdata/resolve?kind=${encodeURIComponent(kind)}&alias=${encodeURIComponent(alias)}`,
+    ),
+  masterdataOptions: () =>
+    json<{
+      ok: boolean;
+      machines: Array<{ id: string; name: string; machine_type: string }>;
+      materials: Array<{ id: string; grade: string }>;
+      customers: Array<{ id: string; name: string }>;
+    }>("/api/masterdata/options"),
 };

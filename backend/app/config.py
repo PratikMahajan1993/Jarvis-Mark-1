@@ -84,8 +84,10 @@ class Settings(BaseSettings):
     # Turn ledger (accept-then-work); dark until HUD reconciles against server rows.
     turn_ledger_enabled: bool = False
 
-    # Master data (parties/materials/suppliers); default off — dual-read with client-names.md.
-    masterdata_enabled: bool = False
+    # Master data (parties/materials/suppliers). On by default; markdown name/rate
+    # files are no longer the production source. Set MASTERDATA_ENABLED=false to
+    # fall back to mhr-demo.md and client-names.md.
+    masterdata_enabled: bool = True
 
     # Engineering bench vision queue (needs_vision list + owner analyse action); default off.
     vision_bench_enabled: bool = False

@@ -6,6 +6,8 @@ import subprocess
 from pathlib import Path
 from typing import Any, Callable
 
+import httpx
+
 from .. import db
 from ..connectors import calendar as calendar_conn
 from ..connectors import drive as drive_conn
@@ -174,6 +176,30 @@ def execute_tool(name: str, args: dict[str, Any], session_id: str) -> dict[str, 
     from ..metrics import new_mission_id, record_mission_step
 
     mission_id = new_mission_id()
+
+    def _fail(
+        exc: BaseException,
+        *,
+        error: str,
+        error_class: str,
+        retryable: bool,
+    ) -> dict[str, Any]:
+        db.add_audit(session_id, name, str(exc), "error")
+        record_mission_step(
+            session_id=session_id,
+            mission_id=mission_id,
+            step=1,
+            role="result",
+            detail=str(exc)[:800],
+            status="error",
+        )
+        return {
+            "ok": False,
+            "error": error,
+            "error_class": error_class,
+            "retryable": retryable,
+        }
+
     handler = HANDLERS.get(name)
     if not handler:
         db.add_audit(session_id, name, f"Unknown tool {name}", "error")
@@ -234,27 +260,18 @@ def execute_tool(name: str, args: dict[str, Any], session_id: str) -> dict[str, 
                 pass
         return result
     except TypeError as exc:
-        db.add_audit(session_id, name, str(exc), "error")
-        record_mission_step(
-            session_id=session_id,
-            mission_id=mission_id,
-            step=1,
-            role="result",
-            detail=str(exc)[:800],
-            status="error",
+        return _fail(
+            exc,
+            error=f"Bad arguments for {name}: {exc}",
+            error_class="validation",
+            retryable=False,
         )
-        return {"ok": False, "error": f"Bad arguments for {name}: {exc}"}
+    except httpx.TimeoutException as exc:
+        return _fail(exc, error=str(exc), error_class="retryable", retryable=True)
+    except httpx.HTTPError as exc:
+        return _fail(exc, error=str(exc), error_class="retryable", retryable=True)
     except Exception as exc:
-        db.add_audit(session_id, name, str(exc), "error")
-        record_mission_step(
-            session_id=session_id,
-            mission_id=mission_id,
-            step=1,
-            role="result",
-            detail=str(exc)[:800],
-            status="error",
-        )
-        return {"ok": False, "error": str(exc)}
+        return _fail(exc, error=str(exc), error_class="fatal", retryable=False)
 
 
 def _get_briefing(session_id: str, **_: Any) -> dict[str, Any]:
@@ -923,6 +940,18 @@ def _sync_mailbox(session_id: str, days: int = 100, force: bool = False, **_: An
     from ..mail_sync import kick_bulk
 
     result = kick_bulk(days=days, force=force)
+    try:
+        from ..memory.ingest_queue import IngestPriority, IngestTask, try_enqueue
+
+        try_enqueue(
+            IngestTask(
+                kind="mail_attachment",
+                payload={"limit": 20},
+                priority=IngestPriority.HIGH,
+            )
+        )
+    except Exception:
+        pass
     started = result.get("started")
     speak = "Mailbox sync is running in the background." if started else "Mailbox sync is already up to date or running."
     return _ok(result, speak=speak)
@@ -956,7 +985,11 @@ def _reason_rfq(
     message: str = "",
     **_: Any,
 ) -> dict[str, Any]:
-    from ..rfq import glance_critical, intake
+    from ..rfq import glance_critical, intake, reason_rfq_has_anchor
+
+    if not reason_rfq_has_anchor(mail_id=mail_id, conversation_id=conversation_id, message=message):
+        speak = "Which drawing — inbox attachment, file on the desk, or photo?"
+        return _ok({"refused": True}, speak=speak)
 
     result = intake(
         mail_id=mail_id,
@@ -1977,7 +2010,7 @@ TOOL_SCHEMAS = [
                     "machine": {"type": "string"},
                     "machining_rate": {
                         "type": "string",
-                        "description": "Must not be below demo minimum in mhr-demo.md when machine is listed there",
+                        "description": "Must be at or above the machine-hour floor in master data for the named machine",
                     },
                     "line_items": {"type": "array"},
                 },
@@ -2080,3 +2113,15 @@ TOOL_SCHEMAS = [
         },
     },
 ]
+
+from ..masterdata.tool_handlers import HANDLERS as _MASTERDATA_HANDLERS
+from ..masterdata.tool_handlers import SCHEMAS as _MASTERDATA_SCHEMAS
+
+HANDLERS.update(_MASTERDATA_HANDLERS)
+TOOL_SCHEMAS.extend(_MASTERDATA_SCHEMAS)
+
+from ..knowledge.phase2_tools import HANDLERS as _PHASE2_HANDLERS
+from ..knowledge.phase2_tools import SCHEMAS as _PHASE2_SCHEMAS
+
+HANDLERS.update(_PHASE2_HANDLERS)
+TOOL_SCHEMAS.extend(_PHASE2_SCHEMAS)

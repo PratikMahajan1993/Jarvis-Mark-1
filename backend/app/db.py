@@ -1270,7 +1270,11 @@ def safe_export_path(name: str) -> Path:
     clean = Path(name).name
     if not clean or clean in {".", ".."}:
         raise ValueError("Invalid file name")
-    target = (settings.exports_dir / clean).resolve()
-    if settings.exports_dir.resolve() not in target.parents and target != settings.exports_dir.resolve():
+    candidate = settings.exports_dir / clean
+    if candidate.is_symlink():
+        raise ValueError("Exports must stay inside the workspace folder")
+    exports_root = settings.exports_dir.resolve()
+    target = candidate.resolve()
+    if target == exports_root or target.is_dir() or not target.is_relative_to(exports_root):
         raise ValueError("Exports must stay inside the workspace folder")
     return target

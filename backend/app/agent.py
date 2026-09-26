@@ -1034,6 +1034,7 @@ def _run_agent(message: str, session_id: str = "default", route=None) -> ChatRes
     from .conversations import chat_drawing, is_drawing_session
     from .config import settings as app_settings
     from .hermes.bridge import hermes_available, run_hermes_turn
+    from .hermes.runs import HermesRunStopped
     from .intent import Intent
 
     prefs = db.get_preferences()
@@ -1145,6 +1146,12 @@ def _run_agent(message: str, session_id: str = "default", route=None) -> ChatRes
             )
             hermes_last_error[0] = None
             return result
+        except HermesRunStopped:
+            speak = "Stopped."
+            db.add_message(session_id, "assistant", speak)
+            db.add_audit(session_id, "hermes", "stopped", "ok")
+            hermes_last_error[0] = None
+            return _chat_response(session_id, speak=speak)
         except Exception as exc:
             err = str(exc)
             db.add_audit(session_id, "hermes", err[:400], "error")

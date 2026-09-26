@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import GradientText from "@/components/react-bits/GradientText";
 import SpotlightCard from "@/components/react-bits/SpotlightCard";
+import { FreshnessBadge } from "@/components/bench/FreshnessBadge";
 
 type CandidateFact = {
   id: string;
@@ -18,6 +19,8 @@ type CardPayload = {
   found?: boolean;
   facts?: CandidateFact[];
   candidates?: CandidateFact[];
+  freshness?: { updated_at?: string; stale?: boolean };
+  card?: { updated_at?: string };
 };
 
 function apiBase(): string {
@@ -59,6 +62,7 @@ function formatValue(fact: CandidateFact): string {
 
 function formatSource(fact: CandidateFact): string {
   const kind = (fact.source_kind || "").trim();
+  if (kind === "vision_suggestion") return "vision";
   const ref = (fact.source_ref || "").trim();
   if (kind && ref) return `${kind} · ${ref}`;
   return kind || ref || "unknown source";
@@ -67,22 +71,46 @@ function formatSource(fact: CandidateFact): string {
 export function FactConfirmChips({
   entityType = "",
   entityId = "",
+  sessionId = "",
 }: {
   entityType?: string;
   entityId?: string;
+  sessionId?: string;
 }) {
-  const et = entityType.trim();
-  const eid = entityId.trim();
+  const et = entityType.trim() || "part_revision";
+  const [eid, setEid] = useState(entityId.trim());
   const [candidates, setCandidates] = useState<CandidateFact[]>([]);
+  const [freshness, setFreshness] = useState<{ updated_at?: string; stale?: boolean } | null>(null);
   const [visible, setVisible] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [draftValues, setDraftValues] = useState<Record<string, string>>({});
   const [editingId, setEditingId] = useState<string | null>(null);
 
+  useEffect(() => {
+    const explicit = entityId.trim();
+    if (explicit) {
+      setEid(explicit);
+      return;
+    }
+    if (!sessionId.trim()) return;
+    let cancelled = false;
+    void fetch(`${apiBase()}/api/knowledge/drawing-identity?session_id=${encodeURIComponent(sessionId)}`)
+      .then(async (res) => {
+        if (!res.ok || cancelled) return;
+        const body = (await res.json()) as { part_revision_id?: string | null };
+        if (!cancelled && body.part_revision_id) setEid(body.part_revision_id);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [entityId, sessionId]);
+
   const refresh = useCallback(async () => {
     if (!et || !eid) {
       setVisible(false);
       setCandidates([]);
+      setFreshness(null);
       return;
     }
     try {
@@ -99,6 +127,7 @@ export function FactConfirmChips({
         setCandidates([]);
         return;
       }
+      setFreshness(data.freshness ?? (data.card?.updated_at ? { updated_at: data.card.updated_at } : null));
       const list = data.candidates ?? [];
       if (!list.length) {
         setVisible(false);
@@ -176,11 +205,14 @@ export function FactConfirmChips({
       className="shrink-0 rounded-2xl border border-[color:var(--border)] bg-black/40 backdrop-blur-md"
       bodyClassName="p-4"
     >
-      <p className="mb-3 font-mono text-[10px] uppercase tracking-[0.22em]">
-        <GradientText className="font-mono text-[10px] uppercase tracking-[0.22em]" animationSpeed={9}>
-          Confirm facts
-        </GradientText>
-      </p>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <p className="font-mono text-[10px] uppercase tracking-[0.22em]">
+          <GradientText className="font-mono text-[10px] uppercase tracking-[0.22em]" animationSpeed={9}>
+            Confirm facts
+          </GradientText>
+        </p>
+        <FreshnessBadge updatedAt={freshness?.updated_at} stale={freshness?.stale} />
+      </div>
       <ul className="space-y-2">
         {candidates.map((fact) => {
           const high = isHighValueField(fact.field);
@@ -207,7 +239,7 @@ export function FactConfirmChips({
                   />
                 ) : (
                   <span className="font-display text-sm text-[color:var(--fg)]/95">
-                    {displayValue || "—"}
+                    {displayValue || "—"} [{formatSource(fact)}]
                   </span>
                 )}
               </div>

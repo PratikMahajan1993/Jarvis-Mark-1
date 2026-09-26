@@ -295,6 +295,11 @@ def load_revision_facts(conn: sqlite3.Connection, revision_id: str) -> dict[str,
     for row in rows:
         if len(row) > 1 and not str(row[1]).strip() and meta.get("material"):
             row[1] = meta["material"]
+    machine_ids: list[str] = []
+    for ln in lines:
+        mid = str(ln["machine_id"] or "").strip()
+        if mid and mid not in machine_ids:
+            machine_ids.append(mid)
     return {
         "revision_id": revision_id,
         "artifact_id": meta.get("spreadsheet_artifact_id") or "",
@@ -308,6 +313,7 @@ def load_revision_facts(conn: sqlite3.Connection, revision_id: str) -> dict[str,
         "rm_source_note": meta.get("rm_source_note") or "",
         "rm_price": meta.get("rm_price") or "",
         "machine": meta.get("machine") or "",
+        "machine_id": machine_ids[0] if len(machine_ids) == 1 else "",
         "machining_rate": meta.get("machining_rate") or "",
         "delivery_days": rev["delivery_days"],
     }

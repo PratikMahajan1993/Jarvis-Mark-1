@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import mimetypes
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
@@ -22,6 +23,7 @@ from .ledger import (
 from .schema import ensure_vision_schema
 
 ProviderFn = Callable[[], dict[str, Any]]
+_VISION_PROVIDER_TIMEOUT_SEC = 180
 
 
 def file_sha256(path: Path) -> str:
@@ -361,6 +363,28 @@ def _queue_cap_override(
     return pending
 
 
+def _release_expired_claim(conn: Any, *, cycle_start: str, digest: str) -> None:
+    """Free a claimed row that outlived the provider timeout. Does not call the provider."""
+    row = conn.execute(
+        """
+        SELECT id, created_at FROM vision_quota_usage
+        WHERE cycle_start = ? AND file_sha256 = ? AND state = 'claimed'
+        """,
+        (cycle_start, digest),
+    ).fetchone()
+    if row is None:
+        return
+    try:
+        created = datetime.fromisoformat(str(row["created_at"] or ""))
+    except ValueError:
+        return
+    if created.tzinfo is None:
+        created = created.replace(tzinfo=timezone.utc)
+    age = (datetime.now(timezone.utc) - created.astimezone(timezone.utc)).total_seconds()
+    if age > _VISION_PROVIDER_TIMEOUT_SEC:
+        release_claim(conn, str(row["id"]))
+
+
 def dispatch_drawing_vision(
     path: str | Path,
     *,
@@ -398,40 +422,6 @@ def dispatch_drawing_vision(
             "file_sha256": digest,
             "error": "Cloud vision requires owner_spend.",
         }
-
-    threshold = vision_page_threshold()
-    if pages > threshold:
-        index = local_sheet_index(file_path)
-        set_analysis_state(digest, "needs_vision")
-        return {
-            "ok": False,
-            "analysis_state": "needs_vision",
-            "path": str(file_path),
-            "name": file_path.name,
-            "file_sha256": digest,
-            "page_count": pages,
-            "sheet_index": index,
-            "error": f"Pack has {pages} sheets (threshold {threshold}). Review the sheet index before spending a unit.",
-        }
-
-    if settings.masterdata_enabled and owner_spend:
-        consent_err = _customer_vision_consent_error(customer_id)
-        if consent_err:
-            set_analysis_state(
-                digest,
-                "needs_vision",
-                display_name=file_path.name,
-                path=str(file_path.resolve()),
-            )
-            return {
-                "ok": False,
-                "analysis_state": "needs_vision",
-                "path": str(file_path),
-                "name": file_path.name,
-                "file_sha256": digest,
-                "customer_id": customer_id,
-                "error": consent_err,
-            }
 
     if settings.knowledge_cards_enabled and owner_spend:
         from ..knowledge.identity import format_revision_change_summary, resolve_drawing_identity
@@ -503,11 +493,46 @@ def dispatch_drawing_vision(
                 "analysis_state": "needs_vision",
             }
 
+    threshold = vision_page_threshold()
+    if pages > threshold:
+        index = local_sheet_index(file_path)
+        set_analysis_state(digest, "needs_vision")
+        return {
+            "ok": False,
+            "analysis_state": "needs_vision",
+            "path": str(file_path),
+            "name": file_path.name,
+            "file_sha256": digest,
+            "page_count": pages,
+            "sheet_index": index,
+            "error": f"Pack has {pages} sheets (threshold {threshold}). Review the sheet index before spending a unit.",
+        }
+
+    if settings.masterdata_enabled and owner_spend:
+        consent_err = _customer_vision_consent_error(customer_id)
+        if consent_err:
+            set_analysis_state(
+                digest,
+                "needs_vision",
+                display_name=file_path.name,
+                path=str(file_path.resolve()),
+            )
+            return {
+                "ok": False,
+                "analysis_state": "needs_vision",
+                "path": str(file_path),
+                "name": file_path.name,
+                "file_sha256": digest,
+                "customer_id": customer_id,
+                "error": consent_err,
+            }
+
     claim_id: str | None = None
     reused = False
     with db.connect() as conn:
         ensure_vision_schema(conn)
         conn.execute("BEGIN IMMEDIATE")
+        _release_expired_claim(conn, cycle_start=cycle, digest=digest)
         claim = claim_unit(
             conn,
             cycle_start=cycle,

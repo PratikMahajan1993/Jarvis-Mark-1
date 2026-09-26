@@ -5,10 +5,11 @@ from __future__ import annotations
 import hashlib
 import math
 import re
+import threading
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
+from typing import Any, Iterable
 
 DIM = 384
 HASH_EMBEDDING_MODEL = "hash-v1"
@@ -19,6 +20,23 @@ _TOKEN = re.compile(r"[a-z0-9]{2,}", re.I)
 
 # Tests may monkeypatch this path; production uses data_dir/models/<ONNX_MODEL_FILENAME>.
 _onnx_model_path_override: Path | None = None
+
+_session_lock = threading.Lock()
+_session_cache: dict[str, Any] = {}
+
+
+def _cached_inference_session(path: Path) -> Any:
+    """Reuse a successful InferenceSession for this model path. Failures are not cached."""
+    import onnxruntime as ort
+
+    key = str(path)
+    with _session_lock:
+        cached = _session_cache.get(key)
+        if cached is not None:
+            return cached
+        session = ort.InferenceSession(str(path), providers=["CPUExecutionProvider"])
+        _session_cache[key] = session
+        return session
 
 
 def onnx_model_path() -> Path:
@@ -66,12 +84,9 @@ class ResolvedEmbedder:
 
 def _try_open_onnx_embedder(path: Path) -> tuple[Callable[[str], list[float]] | None, str | None]:
     try:
-        import onnxruntime as ort
+        session = _cached_inference_session(path)
     except ImportError:
         return None, "onnxruntime not installed; keeping hash-v1"
-
-    try:
-        session = ort.InferenceSession(str(path), providers=["CPUExecutionProvider"])
     except Exception as exc:
         return None, f"cannot load ONNX model at {path}: {exc}"
 
@@ -82,6 +97,18 @@ def _try_open_onnx_embedder(path: Path) -> tuple[Callable[[str], list[float]] | 
             f"real embeddings enabled but tokenizer not wired for ONNX model at {path}",
         )
     return None, f"ONNX model at {path} is not supported by the hash fallback slot yet"
+
+
+def embed_document(text: str) -> tuple[list[float], dict[str, str | int]]:
+    """Embed text and label the vector. Hash fallback is provider='hash', never silent ONNX."""
+    resolved = resolve_embedder()
+    vector = resolved.embed(text)
+    provider = "hash" if resolved.model_name == HASH_EMBEDDING_MODEL else "onnx"
+    return vector, {
+        "model_id": resolved.model_name,
+        "dim": len(vector),
+        "provider": provider,
+    }
 
 
 def resolve_embedder(*, model_path: Path | None = None) -> ResolvedEmbedder:

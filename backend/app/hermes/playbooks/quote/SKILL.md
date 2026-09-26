@@ -14,6 +14,8 @@ description: >-
 
 Turn an identified drawing or RFQ into a correct machining quotation, proof it, and queue customer email under HITL Authorize. One Hermes brain; tools own mail, files, sheet, PDF, and proof.
 
+When a turn needs several quote or shop tool calls, batch them with `execute_code` instead of one model turn per call. External writes still go through the Jarvis tools and only queue Authorize. `jarvis_quote_send` queues the customer email; it does not send.
+
 ## When to use this
 
 Casual or typo-rich starts are fine. Same playbook for every door:

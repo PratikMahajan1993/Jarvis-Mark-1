@@ -14,7 +14,7 @@ from typing import Any
 from . import db
 from .config import settings
 from .hermes.hitl import request_human_approval
-from .memory.ingest import ingest_drawing_summary
+from .memory.ingest import ingest_drawing_summary, schedule_drawing_ingest
 from .tools import documents
 
 _PLAYBOOK_ROOT = Path(__file__).resolve().parent / "hermes" / "playbooks" / "quote"
@@ -70,6 +70,11 @@ def _latest_memory(session_id: str, key: str) -> str:
     return ""
 
 
+def _vision_summary_is_error(summary: str) -> bool:
+    text = (summary or "").strip().lower()
+    return not text or text.startswith("error") or text.startswith("runtimeerror")
+
+
 def _is_tbd(value: str) -> bool:
     text = (value or "").strip().lower()
     return not text or text in {"tbd", "n/a", "na", "unknown", "?"}
@@ -111,13 +116,24 @@ def analyze_drawing_vision(
         arrival="owner_bench",
         spent_by="owner_bench",
     )
-    if out.get("ok") and out.get("summary"):
+    if out.get("ok") and out.get("summary") and not _vision_summary_is_error(str(out.get("summary") or "")):
         file_path = Path(path)
-        ingest_drawing_summary(
-            file_path.name,
-            str(out["summary"])[:2000],
-            meta={"path": str(file_path)},
-        )
+        summary = str(out["summary"])[:2000]
+        meta = {"path": str(file_path)}
+        queued = schedule_drawing_ingest(file_path.name, summary, meta=meta)
+        if not queued:
+            ingest_drawing_summary(file_path.name, summary, meta=meta)
+        if settings.knowledge_cards_enabled and not out.get("recalled"):
+            from .knowledge.cards import record_vision_candidates
+
+            entity_id = str(out.get("part_revision_id") or out.get("file_sha256") or "")
+            if entity_id:
+                record_vision_candidates(
+                    "part_revision",
+                    entity_id,
+                    str(out["summary"])[:4000],
+                    source_ref=str(out.get("file_sha256") or ""),
+                )
     if session_id:
         file_path = Path(path)
         if file_path.is_file():
@@ -351,26 +367,25 @@ def build_quote(
                 machining_rate=eff_machining_rate,
             )
         db.add_memory(session_id, "last_quote_revision_id", revision_id)
-    else:
-        db.add_memory(session_id, "last_quote", artifact["id"])
-        db.add_memory(session_id, "last_quote_name", artifact["name"])
-        db.add_memory(session_id, "last_quote_rows", json.dumps(rows))
-        db.add_memory(session_id, "last_quote_columns", json.dumps(columns))
-        db.add_memory(session_id, "last_quote_material", material or str(items[0].get("material") or ""))
-        db.add_memory(session_id, "last_quote_customer", customer)
-        db.add_memory(session_id, "last_quote_part_name", part_name or "Component")
-        if (scope or "").strip():
-            db.add_memory(session_id, "last_quote_scope", scope.strip().lower())
-        if (rm_source or "").strip():
-            db.add_memory(session_id, "last_quote_rm_source", rm_source.strip().lower())
-        if (rm_source_note or "").strip():
-            db.add_memory(session_id, "last_quote_rm_source_note", rm_source_note.strip())
-        if rm_price is not None and str(rm_price).strip():
-            db.add_memory(session_id, "last_quote_rm_price", str(rm_price).strip())
-        if (machine or "").strip():
-            db.add_memory(session_id, "last_quote_machine", machine.strip())
-        if machining_rate is not None and str(machining_rate).strip():
-            db.add_memory(session_id, "last_quote_machining_rate", str(machining_rate).strip())
+    db.add_memory(session_id, "last_quote", artifact["id"])
+    db.add_memory(session_id, "last_quote_name", artifact["name"])
+    db.add_memory(session_id, "last_quote_rows", json.dumps(rows))
+    db.add_memory(session_id, "last_quote_columns", json.dumps(columns))
+    db.add_memory(session_id, "last_quote_material", material or str(items[0].get("material") or ""))
+    db.add_memory(session_id, "last_quote_customer", customer)
+    db.add_memory(session_id, "last_quote_part_name", part_name or "Component")
+    if (scope or "").strip():
+        db.add_memory(session_id, "last_quote_scope", scope.strip().lower())
+    if (rm_source or "").strip():
+        db.add_memory(session_id, "last_quote_rm_source", rm_source.strip().lower())
+    if (rm_source_note or "").strip():
+        db.add_memory(session_id, "last_quote_rm_source_note", rm_source_note.strip())
+    if rm_price is not None and str(rm_price).strip():
+        db.add_memory(session_id, "last_quote_rm_price", str(rm_price).strip())
+    if (machine or "").strip():
+        db.add_memory(session_id, "last_quote_machine", machine.strip())
+    if machining_rate is not None and str(machining_rate).strip():
+        db.add_memory(session_id, "last_quote_machining_rate", str(machining_rate).strip())
     # Best-effort Google Sheet mirror when shop sheets connector works
     sheet_ref = ""
     try:
@@ -993,6 +1008,37 @@ def verify_quote(*, session_id: str, stage: str = "draft", to: str = "", subject
                     "last_quote_rm_basis_date",
                 )
             )
+        if settings.masterdata_enabled:
+            material_name = _fact("material").strip() if revision_facts else _latest_memory(session_id, "last_quote_material").strip()
+            as_of_day = basis_date[:10] if basis_date and not _is_tbd(basis_date) else _quote_calendar_today().isoformat()
+            from .masterdata.lookup import (
+                material_id_for_grade,
+                supplier_rm_quote_as_of,
+                sync_client_names_if_enabled,
+            )
+
+            with db.connect() as conn:
+                sync_client_names_if_enabled(conn)
+                mid = material_id_for_grade(conn, material_name)
+                found = supplier_rm_quote_as_of(conn, mid, as_of_day) if mid else None
+            if found is None:
+                checks.append(
+                    _check(
+                        "rm_quote_as_of",
+                        False,
+                        f"No supplier RM quote for {material_name or 'material'} as of {as_of_day}",
+                        "supplier_rm_quotes",
+                    )
+                )
+            else:
+                checks.append(
+                    _check(
+                        "rm_quote_as_of",
+                        True,
+                        f"RM quote {found['id']} as of {as_of_day}",
+                        "supplier_rm_quotes",
+                    )
+                )
 
     rm_source = (
         _fact("rm_source").strip().lower()
@@ -1066,9 +1112,17 @@ def verify_quote(*, session_id: str, stage: str = "draft", to: str = "", subject
                 )
 
                 as_of = datetime.now(ZoneInfo(settings.tz)).date().isoformat()
+                quoted_machine_id = ""
+                if revision_facts is not None:
+                    quoted_machine_id = str(revision_facts.get("machine_id") or "").strip()
                 with db.connect() as conn:
                     sync_mhr_demo_if_enabled(conn)
-                    rate_row = machine_hour_rate_as_of(conn, machine_type=machine, as_of=as_of)
+                    rate_row = machine_hour_rate_as_of(
+                        conn,
+                        machine_type=machine,
+                        as_of=as_of,
+                        machine_id=quoted_machine_id or None,
+                    )
                     floor = (
                         rate_row["min_mhr_minor"] / 100.0 if rate_row is not None else None
                     )
@@ -1219,6 +1273,8 @@ def verify_quote(*, session_id: str, stage: str = "draft", to: str = "", subject
                 )
             )
 
+    checks.extend(_knowledge_proof_checks(session_id))
+
     result = _finalize_verify(checks)
     if pdf_ok and pdf_file:
         digest = pdf_file_sha256(pdf_file)
@@ -1301,15 +1357,88 @@ def _remember_drawing(session_id: str, path: Path) -> None:
     db.add_memory(session_id, "last_quote_drawing_path", str(path))
 
 
+def _knowledge_proof_checks(session_id: str) -> list[dict[str, Any]]:
+    """Stale cards and unconfirmed high-value facts are quote-proof blockers."""
+    if not settings.knowledge_cards_enabled or not session_id:
+        return []
+    entity_id = _latest_memory(session_id, "last_part_revision_id").strip()
+    if not entity_id:
+        return []
+    from .knowledge.cards import is_stale, read_card
+    from .knowledge.confirm import field_requires_value_confirm
+
+    card = read_card("part_revision", entity_id)
+    if not card.get("found"):
+        return []
+    checks: list[dict[str, Any]] = []
+    pending = [
+        fact
+        for fact in card.get("candidates") or []
+        if field_requires_value_confirm(str(fact.get("field") or ""))
+    ]
+    if pending:
+        names = ", ".join(str(fact.get("field") or "") for fact in pending)
+        checks.append(
+            _check(
+                "unconfirmed_drawing_fact",
+                False,
+                f"price from unconfirmed drawing fact: {names}",
+                "entity_facts",
+            )
+        )
+    else:
+        checks.append(
+            _check(
+                "unconfirmed_drawing_fact",
+                True,
+                "No unconfirmed high-value drawing facts",
+                "entity_facts",
+            )
+        )
+    meta = card.get("card") or {}
+    if is_stale(meta, "drawing_card"):
+        checks.append(
+            _check(
+                "drawing_card_fresh",
+                False,
+                "Stale drawing card excluded from verify_quote",
+                "entity_cards",
+            )
+        )
+    else:
+        checks.append(
+            _check(
+                "drawing_card_fresh",
+                True,
+                f"Drawing card updated {meta.get('updated_at') or ''}",
+                "entity_cards",
+            )
+        )
+    return checks
+
+
 def _found(session_id: str, path: Path, source: str) -> dict[str, Any]:
     resolved = path.resolve()
     _remember_drawing(session_id, resolved)
-    return {
+    body: dict[str, Any] = {
         "ok": True,
         "path": str(resolved),
         "filename": resolved.name,
         "source": source,
     }
+    if settings.knowledge_cards_enabled and session_id:
+        from .knowledge.identity import resolve_drawing_identity_tool
+        from .vision.gate import file_sha256
+
+        identity = resolve_drawing_identity_tool(
+            session_id=session_id,
+            drawing_sha256=file_sha256(resolved),
+            customer_id=_latest_memory(session_id, "last_quote_customer"),
+            drawing_no=_latest_memory(session_id, "last_drawing_no"),
+            revision=_latest_memory(session_id, "last_drawing_revision"),
+        )
+        body["identity"] = identity
+    return body
 
 
 def _ask(candidates: list[dict[str, Any]], message: str = "") -> dict[str, Any]:

@@ -1,7 +1,8 @@
 "use client";
 
-import { FormEvent, useEffect, useRef } from "react";
+import { FormEvent, KeyboardEvent, useEffect, useRef } from "react";
 import GlareHover from "@/components/react-bits/GlareHover";
+import { primeVoicePlayback } from "@/lib/voice";
 
 export function CommandBaton({
   value,
@@ -30,8 +31,9 @@ export function CommandBaton({
     if (!hidden && !disabled) inputRef.current?.focus();
   }, [hidden, disabled]);
 
-  function handleSubmit(event: FormEvent) {
+  function handleSubmit(event: FormEvent | KeyboardEvent) {
     event.preventDefault();
+    primeVoicePlayback();
     const next = value.trim();
     if (!next || disabled) return;
     onSubmit(next);
@@ -70,6 +72,12 @@ export function CommandBaton({
           type="text"
           value={value}
           onChange={(event) => onChange(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key !== "Enter" || event.shiftKey) return;
+            event.preventDefault();
+            primeVoicePlayback();
+            handleSubmit(event);
+          }}
           placeholder={placeholder}
           autoComplete="off"
           disabled={disabled}

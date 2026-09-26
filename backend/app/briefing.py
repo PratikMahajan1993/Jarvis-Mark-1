@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -348,6 +349,57 @@ def build_briefing() -> dict:
     speak = fallback_briefing_speak(facts)
     scene = briefing_scene(facts, speak)
     return {"speak": speak, "scene": scene, **facts}
+
+
+def _briefing_local_date() -> str:
+    return datetime.now(ZoneInfo("Asia/Kolkata")).date().isoformat()
+
+
+def store_morning_brief() -> dict:
+    """Gather a fresh brief and cache it for the desk. Used by the 07:30 cron."""
+    payload = build_briefing()
+    stored = {
+        "speak": payload.get("speak") or "",
+        "scene": payload.get("scene") or {},
+        "local_date": _briefing_local_date(),
+        "cached": True,
+    }
+    with db.connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO briefing_cache (id, local_date, payload, created_at)
+            VALUES (1, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                local_date = excluded.local_date,
+                payload = excluded.payload,
+                created_at = excluded.created_at
+            """,
+            (_briefing_local_date(), json.dumps(stored), db.utc_now()),
+        )
+    return stored
+
+
+def read_morning_cache() -> dict | None:
+    """Today's cached brief in Asia/Kolkata, or None when the desk should ask live."""
+    try:
+        with db.connect() as conn:
+            row = conn.execute(
+                "SELECT local_date, payload FROM briefing_cache WHERE id = 1"
+            ).fetchone()
+    except Exception:
+        return None
+    if not row:
+        return None
+    if str(row["local_date"] or "") != _briefing_local_date():
+        return None
+    try:
+        payload = json.loads(row["payload"] or "{}")
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(payload, dict) or not str(payload.get("speak") or "").strip():
+        return None
+    payload["cached"] = True
+    return payload
 
 
 _WORDS = {
