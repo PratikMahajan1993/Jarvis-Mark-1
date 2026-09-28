@@ -125,6 +125,16 @@ class Settings(BaseSettings):
     def db_path(self) -> Path:
         return self.data_dir / "jarvis.db"
 
+    def validate_startup(self) -> list[str]:
+        errors: list[str] = []
+        if not self.gemini_api_key:
+            errors.append("GEMINI_API_KEY required for semantic router")
+        if not self.hermes_api_key and self.hermes_enabled:
+            errors.append("HERMES_API_KEY required when Hermes enabled")
+        if not self.jarvis_api_token:
+            errors.append("JARVIS_API_TOKEN required for mutating endpoints")
+        return errors
+
 
 settings = Settings()
 assert settings.canvas_dir is not None

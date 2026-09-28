@@ -67,18 +67,26 @@ def chat(
     return _to_ollama_message(data)
 
 
-def chat_casual(
+_CASUAL_MODEL_FALLBACKS: tuple[str, ...] = ("gemini-3.8-flash",)
+
+
+def _quota_or_rate_limit(detail: str) -> bool:
+    low = (detail or "").lower()
+    return any(
+        token in low
+        for token in ("quota", "rate limit", "rate-limit", "resource exhausted", "429")
+    )
+
+
+def _chat_casual_once(
     messages: list[dict[str, Any]],
     *,
-    timeout: float = 45,
-    temperature: float = 0.9,
-    max_output_tokens: int = 120,
+    used: str,
+    timeout: float,
+    temperature: float,
+    max_output_tokens: int,
 ) -> dict[str, Any]:
-    """Fast witty small talk — no tools, minimal thinking, keep-alive HTTP."""
-    if not settings.gemini_api_key:
-        raise OllamaError("GEMINI_API_KEY is empty.")
     body = _casual_payload(messages, temperature=temperature, max_output_tokens=max_output_tokens)
-    used = settings.gemini_model.strip() or settings.gemini_model
     url = f"{_API}/models/{used}:generateContent"
     client = _shared_client(timeout)
     try:
@@ -100,6 +108,39 @@ def chat_casual(
     except httpx.HTTPError as exc:
         raise OllamaError(str(exc)) from exc
     return _to_ollama_message(data)
+
+
+def chat_casual(
+    messages: list[dict[str, Any]],
+    *,
+    timeout: float = 45,
+    temperature: float = 0.9,
+    max_output_tokens: int = 120,
+) -> dict[str, Any]:
+    """Fast witty small talk — no tools, minimal thinking, keep-alive HTTP."""
+    if not settings.gemini_api_key:
+        raise OllamaError("GEMINI_API_KEY is empty.")
+    primary = (settings.gemini_model or "").strip() or settings.gemini_model
+    chain: list[str] = [primary]
+    for alt in _CASUAL_MODEL_FALLBACKS:
+        if alt and alt not in chain:
+            chain.append(alt)
+
+    last_err = ""
+    for used in chain:
+        try:
+            return _chat_casual_once(
+                messages,
+                used=used,
+                timeout=timeout,
+                temperature=temperature,
+                max_output_tokens=max_output_tokens,
+            )
+        except OllamaError as exc:
+            last_err = str(exc)
+            if not _quota_or_rate_limit(last_err):
+                raise
+    raise OllamaError(last_err or "Gemini casual chat failed.")
 
 
 def iter_casual_deltas(

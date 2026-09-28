@@ -129,6 +129,11 @@ app.add_middleware(
 
 
 def startup() -> None:
+    import logging
+
+    _log = logging.getLogger(__name__)
+    for err in settings.validate_startup():
+        _log.error("CONFIG ERROR: %s", err)
     db.init_db()
     if settings.masterdata_enabled:
         from .masterdata.seed_master_data import seed_master_data

@@ -18,6 +18,8 @@ def social_fallback(message: str, prefs: dict) -> str:
     cleaned = re.sub(r"[!.?,]", "", (text or "").strip())
     cleaned = re.sub(r"\s+", " ", cleaned).lower()
     who = prefs.get("display_name") or "Sir"
+    if re.search(r"\bwhat'?s up\b", cleaned) or cleaned.startswith("hey "):
+        return f"All present, {who}. What do you need?"
     replies = {
         "how are you": f"In order, {who}. What do you need?",
         "how are you doing": f"In order, {who}. What do you need?",

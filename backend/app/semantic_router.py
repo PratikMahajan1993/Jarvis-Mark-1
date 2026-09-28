@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import re
+from dataclasses import dataclass
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
@@ -18,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 ROUTER_MODEL = "gemini-3.6-flash"
 
-SYSTEM = """You are Jarvis's thin semantic router for a machine-shop work HUD.
+ROUTER_SYSTEM = """You are Jarvis's thin semantic router for a machine-shop work HUD.
 Classify the operator utterance into exactly one intent and one orchestra agent.
 
 intents:
@@ -39,6 +40,8 @@ target_agent codes:
 Pick the best single agent. confidence is 0.0–1.0.
 """
 
+SYSTEM = ROUTER_SYSTEM
+
 
 class IntentClassification(BaseModel):
     intent: Literal["ui_command", "casual_chat", "vision_task", "tool_ops"]
@@ -58,27 +61,47 @@ _WORK_MARKERS = (
     "mail",
     "inbox",
     "gmail",
+    "unread",
     "calendar",
     "schedule",
-    "sheet",
-    "oee",
+    "agenda",
+    "brief",
+    "briefing",
+    "research",
+    "look up",
+    "look this up",
+    "drive",
+    "spreadsheet",
+    "excel",
+    "xlsx",
+    "gemini",
+    "pdf",
+    "drawing",
+    "attachment",
+    "enquiry",
+    "inquiry",
+    "quotation",
     "quote",
-    "send",
+    "price",
+    "prices",
+    "meeting",
     "draft",
     "reply",
-    "drive",
-    "attachment",
-    "authorize",
-    "authorise",
+    "forward",
+    "document",
+    "docx",
+    "workbook",
+    "sheet",
     "rfq",
     "cnc",
-    "drawing",
-    "pdf",
-    "blueprint",
-    "inbox",
-    "unread",
-    "brief me",
-    "briefing",
+    "g-code",
+    "gcode",
+    "program from scratch",
+    "oee",
+    "shop log",
+    "shop sheet",
+    "production sheet",
+    "efficiency",
 )
 
 
@@ -148,25 +171,7 @@ def _fallback(message: str) -> IntentClassification:
         return IntentClassification(intent="ui_command", target_agent="SYS", confidence=0.55)
     if any(word in low for word in ("drawing", "pdf", "dimension", "blueprint", "print", "markup", "vision")):
         return IntentClassification(intent="vision_task", target_agent="DAT.03", confidence=0.5)
-    if any(
-        word in low
-        for word in (
-            "email",
-            "mail",
-            "inbox",
-            "gmail",
-            "calendar",
-            "schedule",
-            "sheet",
-            "oee",
-            "rfq",
-            "quote",
-            "send",
-            "draft",
-            "reply",
-            "drive",
-        )
-    ) and not _casual_definition(message):
+    if any(marker in low for marker in _WORK_MARKERS) and not _casual_definition(message):
         agent: Literal["RES.01", "SEC.02", "DAT.03", "OPS.04", "SYS"] = "OPS.04"
         if any(word in low for word in ("inbox", "unread", "read", "open", "from", "attachment")):
             agent = "SEC.02"
@@ -194,11 +199,12 @@ async def classify_intent(message: str) -> IntentClassification:
         from google.genai import types
 
         client = genai.Client(api_key=settings.gemini_api_key)
+        router_input = f"User: {text}\nAssistant:"
         response = await client.aio.models.generate_content(
             model=ROUTER_MODEL,
-            contents=text,
+            contents=router_input,
             config=types.GenerateContentConfig(
-                system_instruction=SYSTEM,
+                system_instruction=ROUTER_SYSTEM,
                 temperature=0.0,
                 max_output_tokens=64,
                 response_mime_type="application/json",
@@ -223,6 +229,24 @@ async def classify_intent(message: str) -> IntentClassification:
         logger.warning("semantic_router fallback: %s", exc)
 
     return _fallback(text)
+
+
+@dataclass(frozen=True)
+class RouterResult:
+    kind: str
+    target_agent: str
+    confidence: float
+
+
+def classify(message: str) -> RouterResult:
+    """Sync router entry for tests and tooling — mirrors agent.py routing stack."""
+    text = (message or "").strip()
+    hit = try_obvious_casual(text)
+    if hit is not None:
+        c = hit
+    else:
+        c = classify_intent_sync(text)
+    return RouterResult(kind=c.intent, target_agent=c.target_agent, confidence=c.confidence)
 
 
 def classify_intent_sync(message: str) -> IntentClassification:
