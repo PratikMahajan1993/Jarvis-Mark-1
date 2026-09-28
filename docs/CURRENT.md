@@ -8,7 +8,7 @@
 - **Jarvis** = 24/7 shop HUD + voice + HITL + connectors + local RAG/memory + office-day cards.
 - **One Hermes brain** on `http://127.0.0.1:8642` (gateway). Gemini/Ollama = overflow, vision, semantic router, and fallback.
 - **Orchestra codes** `RES.01` / `SEC.02` / `DAT.03` / `OPS.04` in `backend/app/agents.py` are **HUD labels**, not separate agents.
-- **Voicebox** = local TTS (`:17493`, `/generate` + cache); browser plays once (`frontend/src/lib/voice.ts`).
+- **Speech** = Gemini TTS, voice Charon. Browser plays one WAV from `POST /api/tts` (`frontend/src/lib/voice.ts`). Out of calls on every speech model: the line stays on screen and Jarvis stays silent.
 - **Agent map** = `AGENTS.md` + `.cursor/skills/` + `.cursor/rules/`.
 
 ## HUD

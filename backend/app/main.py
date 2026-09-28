@@ -202,12 +202,7 @@ def startup() -> None:
             ensure_playbooks_installed()
         except Exception:
             pass
-    try:
-        from .voicebox import warm_voicebox
-
-        warm_voicebox()
-    except Exception:
-        pass
+    # Speech is Gemini TTS on the first spoken line. Do not warm Voicebox here.
     try:
         from .hermes.bridge import warm_hermes
 
@@ -263,14 +258,19 @@ def api_health() -> dict:
         status["voicebox"] = vb.status_payload()
     except Exception:
         status["voicebox"] = {"enabled": bool(settings.voicebox_enabled), "available": False}
+    try:
+        from . import gemini_tts
+
+        status["tts"] = gemini_tts.status_payload()
+    except Exception:
+        status["tts"] = {"provider": "gemini", "voice": settings.gemini_tts_voice}
 
     # `ok` used to be hardcoded True, so a dead Ollama or a missing Gemini key could never
     # surface as unhealthy. A live chat turn actually succeeds if *either* the brain provider
     # (Gemini/Ollama) is ready, *or* Hermes is enabled and reachable (agent.py falls back to
     # the brain whenever Hermes is unavailable, and routes through Hermes directly when it is
     # up) — so Hermes being down with a healthy brain fallback is a real "ok", not a failure.
-    # Voicebox never gates this: `frontend/src/lib/voice.ts` always has a browser-TTS fallback,
-    # so a Voicebox outage is a documented degraded-speech state, not an outage of the app.
+    # Speech never gates this. A TTS failure leaves the reply on screen and the desk silent.
     brain_ready = bool(status.get("ok")) and bool(status.get("model_ready"))
     hermes_status = status.get("hermes") or {}
     hermes_ready = bool(hermes_status.get("enabled")) and bool(hermes_status.get("available"))
@@ -319,8 +319,8 @@ def api_live_log_recent(limit: int = 80) -> dict:
 
 @app.post("/api/tts")
 def api_tts(payload: TtsRequest) -> Response:
-    """Proxy local Voicebox TTS so the browser avoids CORS to :17493."""
-    from . import voicebox as vb
+    """Gemini speech. The browser plays this WAV. A failure leaves the desk silent."""
+    from . import gemini_tts
 
     text = (payload.text or "").strip()
     if not text:
@@ -329,12 +329,12 @@ def api_tts(payload: TtsRequest) -> Response:
     ok = False
     err_msg = ""
     try:
-        wav = vb.synthesize(text, profile=payload.profile or None, language=payload.language or "en")
+        wav = gemini_tts.synthesize(text, profile=payload.profile or None, language=payload.language or "en")
         ok = True
         return Response(content=wav, media_type="audio/wav")
     except Exception as exc:
         err_msg = str(exc)[:200]
-        # 503: Voicebox unreachable or synthesis failed. The desk does not speak another voice.
+        # 503: speech failed or every TTS model is out of calls. The HUD already shows the text.
         raise HTTPException(503, err_msg) from exc
     finally:
         try:
@@ -613,7 +613,7 @@ async def api_chat(payload: ChatRequest, request: Request) -> dict:
     speak = str(data.get("speak") or "").strip()
     if speak:
         try:
-            from .voicebox import prefetch_tts
+            from .gemini_tts import prefetch_tts
 
             prefetch_tts(speak)
         except Exception:
@@ -706,7 +706,7 @@ def api_confirm(payload: ConfirmRequest, request: Request) -> dict:
     speak = str(data.get("speak") or "").strip()
     if speak:
         try:
-            from .voicebox import prefetch_tts
+            from .gemini_tts import prefetch_tts
 
             prefetch_tts(speak)
         except Exception:

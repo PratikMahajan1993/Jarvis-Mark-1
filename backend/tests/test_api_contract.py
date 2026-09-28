@@ -209,7 +209,7 @@ def _clear_session_tables() -> None:
 def api_client(monkeypatch):
     _clear_session_tables()
     monkeypatch.setattr(settings, "gemini_api_key", "")
-    monkeypatch.setattr("app.voicebox.prefetch_tts", lambda *_a, **_k: None)
+    monkeypatch.setattr("app.gemini_tts.prefetch_tts", lambda *_a, **_k: None)
 
     from app.main import app
 

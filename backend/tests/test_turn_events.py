@@ -144,7 +144,7 @@ def test_flag_off_chat_shape_unchanged(monkeypatch):
     _clear_turn_data()
     monkeypatch.setattr(settings, "turn_ledger_enabled", False)
     monkeypatch.setattr(settings, "gemini_api_key", "")
-    monkeypatch.setattr("app.voicebox.prefetch_tts", lambda *_a, **_k: None)
+    monkeypatch.setattr("app.gemini_tts.prefetch_tts", lambda *_a, **_k: None)
 
     from app.main import app
 

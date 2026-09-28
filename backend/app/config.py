@@ -35,6 +35,13 @@ class Settings(BaseSettings):
     gemini_api_key: str = ""
     gemini_model: str = "gemini-3.6-flash"
     gemini_drawing_model: str = "gemini-3.1-pro"
+    # Desk speech. Charon is a male prebuilt voice. Economy is used only after
+    # both 3.8 models are out of calls.
+    gemini_tts_voice: str = "Charon"
+    gemini_tts_model: str = "gemini-3.8-flash-lite-tts"
+    gemini_tts_fallback_model: str = "gemini-3.8-flash-tts"
+    gemini_tts_economy_model: str = "gemini-2.5-flash-preview-tts"
+    gemini_tts_timeout_sec: float = 30.0
     jarvis_host: str = "127.0.0.1"
     jarvis_port: int = 8000
     jarvis_api_token: str = ""

@@ -33,9 +33,11 @@ def test_resolve_profile_does_not_substitute_another_name():
         vb.resolve_profile(client, "Mark")
 
 
-def test_api_tts_returns_503_not_502_on_voicebox_error():
+def test_api_tts_returns_503_when_speech_fails():
     client = TestClient(app)
-    with patch.object(vb, "synthesize", side_effect=vb.VoiceboxTtsError("Voicebox generate failed (422): bad")):
+    from app import gemini_tts
+
+    with patch.object(gemini_tts, "synthesize", side_effect=gemini_tts.GeminiTtsError("Gemini speech quota is exhausted", exhausted=True)):
         response = client.post("/api/tts", json={"text": "Hello there"})
     assert response.status_code == 503
-    assert "Voicebox generate failed" in response.json()["detail"]
+    assert "quota" in response.json()["detail"].lower()

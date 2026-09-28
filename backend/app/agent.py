@@ -2134,7 +2134,7 @@ async def run_ledger_chat_turn(turn_id: str) -> None:
         speak = str(data.get("speak") or "").strip()
         if speak:
             try:
-                from .voicebox import prefetch_tts
+                from .gemini_tts import prefetch_tts
 
                 prefetch_tts(speak)
             except Exception:

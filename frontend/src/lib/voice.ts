@@ -511,7 +511,7 @@ function playbackContext(): AudioContext | null {
   return playbackCtx;
 }
 
-/** Resume audio during a click or keypress. A later Voicebox clip can then play. */
+/** Resume audio during a click or keypress. A later Gemini clip can then play. */
 export function ensureAudioContextUnlocked() {
   const ctx = playbackContext();
   if (ctx && ctx.state !== "running") void ctx.resume();
@@ -570,8 +570,8 @@ export function claimGlanceSpeech(key: string): boolean {
   return true;
 }
 
-/** Fetch a Voicebox WAV. Playback is separate and always this blob. */
-async function fetchVoicebox(text: string): Promise<Blob | null> {
+/** Fetch a Gemini WAV. Playback is this blob. A failed fetch leaves the desk silent. */
+async function fetchSpeech(text: string): Promise<Blob | null> {
   if (typeof window === "undefined") return null;
   const controller = new AbortController();
   speakAbort = controller;
@@ -628,7 +628,7 @@ function playBuffer(blob: Blob, gen: number): Promise<void> {
   });
 }
 
-/** The only way a reply is spoken. Fetches a Voicebox WAV and plays that buffer. */
+/** The only way a reply is spoken. Fetches a Gemini WAV and plays that buffer. */
 export function speakText(text: string): Promise<void> {
   const line = text.trim();
   if (!line || typeof window === "undefined") return Promise.resolve();
@@ -637,12 +637,12 @@ export function speakText(text: string): Promise<void> {
   const job = speakChain.then(async () => {
     if (gen !== playGen) return;
     ensureAudioContextUnlocked();
-    let blob = await fetchVoicebox(line);
+    let blob = await fetchSpeech(line);
     if (gen !== playGen) return;
     if (!blob) {
       await new Promise((resolve) => window.setTimeout(resolve, 400));
       if (gen !== playGen) return;
-      blob = await fetchVoicebox(line);
+      blob = await fetchSpeech(line);
     }
     if (!blob || gen !== playGen) return;
     await playBuffer(blob, gen);

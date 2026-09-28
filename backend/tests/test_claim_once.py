@@ -108,7 +108,7 @@ def test_confirm_idempotency_key_replays_response():
     idem = f"confirm-{uuid.uuid4().hex}"
 
     with patch("app.connectors.email.send_email", return_value={"id": "x", "thread_id": "t"}):
-        with patch("app.voicebox.prefetch_tts", lambda *_a, **_k: None):
+        with patch("app.gemini_tts.prefetch_tts", lambda *_a, **_k: None):
             with TestClient(app) as client:
                 first = client.post(
                     "/api/confirm",

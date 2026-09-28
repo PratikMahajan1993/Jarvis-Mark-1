@@ -19,7 +19,7 @@ description: >
 - **HUD:** Next.js App Router, `OrchestratorShell.tsx` + strict FSM in `frontend/src/lib/orchestratorFsm.ts`
 - **API:** FastAPI `backend/app/main.py` → agent/tools/conversations
 - **Brain:** Hermes gateway `http://127.0.0.1:8642` preferred; Gemini/Ollama fallback
-- **TTS:** Voicebox `http://127.0.0.1:17493` — Jarvis calls **`/generate`**, browser plays WAV from `/api/tts`
+- **TTS:** Gemini TTS, male voice Charon. `gemini-3.8-flash-lite-tts`, then `gemini-3.8-flash-tts`, then `gemini-2.5-flash-preview-tts` only when both are out of calls. Browser plays WAV from `/api/tts`. Quota exhaustion stays silent.
 - **Memory:** SQLite under `data/memory/` is the source of truth. Search reads the local LanceDB mirror when it is available, and SQLite when it is not.
 
 ## Ownership
@@ -32,14 +32,14 @@ description: >
 | Quote playbook | `quote.py`, `hermes/playbooks/quote/`, `hermes/mcp_server.py`, `intent.is_quote_start`, Hermes timeout fallback in `agent.py` — see skill `jarvis-quote-playbook` |
 | HUD workspaces | `frontend/.../hudWorkspace.ts` — talk-jump to Engineering **only from monitor** |
 | Conversations desk | `conversations.py`, `db.py` (`MAX_EXPANDED = 3`) |
-| Speak / prefetch | `voicebox.py`, `main.py` `/api/tts`, `frontend/src/lib/voice.ts` |
+| Speak / prefetch | `gemini_tts.py`, `main.py` `/api/tts`, `frontend/src/lib/voice.ts` |
 | Suggested tasks / weather | `office_day.py`, `SuggestedTasksPanel.tsx`, `WeatherCard.tsx` |
 | HITL | `pending_actions` + `HitlModal` (Authorize/Reject); `loadSessionSurface` restores first pending on session load |
 | Capability turn log | `turn_log.py` → `work/LAST_TURNS.md` + `/api/turns/recent` |
 
 ## Do not
 
-- Call Voicebox `/speak` (double audio on machine + browser)
+- Speak through Voicebox or `speechSynthesis`. Desk speech is Gemini TTS only.
 - Put board scroll on SpotlightCard outer wrapper
 - Raise concurrent open notes above 3 without an explicit product decision
 - Replace Orchestrator with HudShell as the primary desk

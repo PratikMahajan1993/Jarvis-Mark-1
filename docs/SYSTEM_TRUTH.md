@@ -32,7 +32,7 @@ Jarvis is a **24/7 AI office assistant** for a precision machining company. It r
 | HUD (Next.js) | `http://127.0.0.1:3000` | `frontend/` |
 | API (FastAPI) | `http://127.0.0.1:8000` | `backend/app/` |
 | Hermes Gateway | `http://127.0.0.1:8642` | Local agent |
-| Voicebox TTS | `http://127.0.0.1:17493` | `POST /generate` only |
+| Speech | Gemini TTS | Charon (male) via `POST /api/tts`. Lite, then 3.8 Flash, then 2.5 Flash only when both are out of calls. Quota exhaustion stays silent. |
 | Database | `<repo>/data/jarvis.db` | SQLite |
 | Exports | `<repo>/exports/` | Only write location |
 | Hermes Sessions | `<repo>/data/hermes_sessions.json` | File-based mapping |

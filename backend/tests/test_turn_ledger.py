@@ -36,7 +36,7 @@ def ledger_client(monkeypatch):
     _clear_turns()
     monkeypatch.setattr(settings, "turn_ledger_enabled", True)
     monkeypatch.setattr(settings, "gemini_api_key", "")
-    monkeypatch.setattr("app.voicebox.prefetch_tts", lambda *_a, **_k: None)
+    monkeypatch.setattr("app.gemini_tts.prefetch_tts", lambda *_a, **_k: None)
 
     async def _fast_route(_message: str):
         from app.semantic_router import IntentClassification
@@ -121,7 +121,7 @@ def test_flag_off_chat_shape_unchanged(monkeypatch):
     _clear_turns()
     monkeypatch.setattr(settings, "turn_ledger_enabled", False)
     monkeypatch.setattr(settings, "gemini_api_key", "")
-    monkeypatch.setattr("app.voicebox.prefetch_tts", lambda *_a, **_k: None)
+    monkeypatch.setattr("app.gemini_tts.prefetch_tts", lambda *_a, **_k: None)
 
     from app.main import app
 
