@@ -73,10 +73,13 @@ Hermes thread map: `data/hermes_sessions.json` (separate from playbook files). P
 ## Scroll Overhaul (branch cursor/scroll-substrate-overhaul-401c)
 
 - Single vertical page: Monitor, Casual, Engineering sections (Lenis + snap, `core/scroll/`). PageUp/PageDown and Alt+1-9 navigate.
-- Landing gates (`core/landing/`), server section hints (`section_hint.py`), scroll director (`core/scroll/director.ts`).
-- TaskDock: parked approvals and engineering tasks; Engineering deck carousel; baton autosave; `/api/drafts/{key}`.
-- Feature platform: `app/core/features.py`, `/api/events` SSE, `frontend/src/sdk`, `npm run new:feature`, `npm run api:schema`.
-- Known gaps: voice level producer, weather not yet ported to a feature, deck lacks pdf thumbnails/quote chips, parked-approval expiry toast, Space vs mic key, snap lock vs mandatory.
+- Landing gates (`core/landing/`): substrate, fonts, desk, monitor and casual (real DOM presence), engineering (section chunk + DrawingViewer + pdf.js prefetched). Min 1.4 s (0.6 s on refresh), cap 4 s.
+- Server section hints (`section_hint.py`) and scroll director (`core/scroll/director.ts`).
+- TaskDock: parked approvals and engineering tasks; parked-approval expiry toast (30 min default, `toastStore`/`ToastLayer`).
+- Engineering deck carousel with quote-step chip and parked-approval badge; baton autosave; `/api/drafts/{key}`.
+- Voice: `voice.ts` posts an analyser RMS `level` to the substrate. Space stays the mic key and never scrolls the page.
+- Feature platform: `app/core/features.py`, `/api/events` SSE, `frontend/src/sdk` (`Slot`, `defineFeature`, `defineCard`, hooks), `npm run new:feature`, `npm run api:schema`. Weather is the first feature (`frontend/src/features/weather`, Monitor rail slot).
+- Known gaps: scroll snap "lock" vs "mandatory" (owner decision pending), deck pdf thumbnails only when focus carries a URL, HITL-to-chip shared-layout morph not implemented, substrate sim cost above the 6 ms budget while blending, `lib/pane/` helpers not yet migrated.
 - `npm run perf` runs the perf gate.
 
 ## Runtime Notes
