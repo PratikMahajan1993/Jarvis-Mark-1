@@ -1,7 +1,9 @@
 "use client";
 
 import { LayoutGroup, motion } from "motion/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { EngineeringDeck, engineeringTasks } from "./EngineeringDeck";
+import { registerServerDraft } from "@/core/desk/drafts";
 import { ConverseStrip } from "@/components/bench/ConverseStrip";
 import { DrawingStage, type StageFocusMode } from "@/components/bench/DrawingStage";
 import { QuoteSheet, quoteSheetRowsForScene } from "@/components/bench/QuoteSheet";
@@ -47,6 +49,17 @@ export default function EngineeringSection({ id }: SectionProps) {
   const drawingChat = useDesk((s) => s.drawingChat);
   const [focusMode, setFocusMode] = useState<StageFocusMode>("normal");
   const areas = AREAS[focusMode];
+  const conversations = useDesk((s) => s.desk);
+  const tasks = engineeringTasks(conversations);
+  const activeConversationId = useDesk((s) => s.activeConversationId);
+
+  useEffect(
+    () =>
+      registerServerDraft(() =>
+        activeConversationId ? { key: `engineering-${activeConversationId}`, body: { focusMode } } : null,
+      ),
+    [activeConversationId, focusMode],
+  );
 
   const hasDrawing = Boolean(
     drawingChat?.open !== false &&
@@ -58,6 +71,7 @@ export default function EngineeringSection({ id }: SectionProps) {
       }),
   );
 
+  const noActiveTask = !hasDrawing;
   return (
     <LayoutGroup id="engineering">
       <div className="grid h-full grid-cols-12 grid-rows-8 gap-3" data-focus={focusMode}>
@@ -71,6 +85,16 @@ export default function EngineeringSection({ id }: SectionProps) {
             onFocusModeChange={setFocusMode}
           />
         </motion.div>
+
+        {noActiveTask ? (
+          <div className="pointer-events-auto absolute inset-x-[8%] top-[14%] z-[2] h-[46%]" data-slot="engineering.deck-empty">
+            <EngineeringDeck items={tasks} hero />
+          </div>
+        ) : tasks.length ? (
+          <div className="absolute bottom-16 left-2 z-[2] h-52 w-40" data-slot="engineering.side">
+            <EngineeringDeck items={tasks} hero={false} />
+          </div>
+        ) : null}
 
         <motion.div layout transition={SPRING.pane} className="relative min-h-0 min-w-0" style={{ gridArea: areas.sheet }}>
           <QuoteSheet scene={scene} hasDrawing={hasDrawing} sessionId={sessionId} focused={focusMode === "stage"} />

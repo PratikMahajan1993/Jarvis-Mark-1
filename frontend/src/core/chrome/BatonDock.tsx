@@ -7,7 +7,8 @@ import { TurnStageLine } from "@/components/orchestrator/TurnStageLine";
 import * as desk from "@/core/desk/controller";
 import { useTurnView } from "@/core/desk/useTurnView";
 import type { SectionDef } from "@/core/sections/defineSection";
-import { setDesk, useDesk } from "@/core/stores/deskStore";
+import { loadBatonText, saveBatonText } from "@/core/desk/drafts";
+import { setDesk, useDesk, getDesk } from "@/core/stores/deskStore";
 import { useSectionState } from "@/core/stores/sectionStore";
 
 const DIM = { opacity: 0.35, filter: "blur(2px)", scale: 0.98 };
@@ -32,6 +33,16 @@ export function BatonDock({ sections }: { sections: readonly SectionDef[] }) {
     if (scrolling && !wasScrolling.current) setEngaged(false);
     wasScrolling.current = scrolling;
   }, [scrolling]);
+
+  useEffect(() => {
+    if (!getDesk().compose) setDesk({ compose: loadBatonText(active) });
+    // Per-section text is restored once the section becomes active, unless something is already typed.
+  }, [active]);
+
+  useEffect(() => {
+    const t = window.setTimeout(() => saveBatonText(active, compose), 2000);
+    return () => window.clearTimeout(t);
+  }, [active, compose]);
 
   const sectionAllowsBaton = sections.find((s) => s.id === active)?.baton !== false;
   const hidden = hitl || !sectionAllowsBaton;

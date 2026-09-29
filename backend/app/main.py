@@ -87,6 +87,9 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Jarvis Command Center", version="0.1.0", lifespan=lifespan)
 app.include_router(masterdata_router)
+from .drafts import router as drafts_router
+
+app.include_router(drafts_router)
 
 _LOCAL_CLIENT_HOSTS = frozenset({"127.0.0.1", "::1", "localhost", "testclient"})
 _MUTATING_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
