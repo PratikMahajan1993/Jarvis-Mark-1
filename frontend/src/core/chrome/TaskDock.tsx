@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "motion/react";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import * as desk from "@/core/desk/controller";
 import { useDesk } from "@/core/stores/deskStore";
 import { startParkedExpiryWatcher, useTaskQueue } from "@/core/stores/taskQueueStore";
@@ -14,7 +14,9 @@ const ENGINEERING_KINDS = new Set(["drawing", "workflow", "job"]);
  * A chip only reopens the full Authorize / Reject modal; it can never decide.
  */
 export function TaskDock() {
-  const parked = useTaskQueue((s) => s.items.filter((a) => s.parkedIds.includes(a.id)));
+  const items = useTaskQueue((s) => s.items);
+  const parkedIds = useTaskQueue((s) => s.parkedIds);
+  const parked = useMemo(() => items.filter((a) => parkedIds.includes(a.id)), [items, parkedIds]);
   const conversations = useDesk((s) => s.desk);
   const engineering = conversations.filter((c) => ENGINEERING_KINDS.has((c.kindLabel || "").toLowerCase()));
   const count = parked.length + (engineering.length ? 1 : 0);
