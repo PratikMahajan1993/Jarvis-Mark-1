@@ -52,7 +52,13 @@ export type JarvisEvent =
   | { type: "RESUME_THINKING" }
   | { type: "RESET" }
   | { type: "SHOW_ERROR"; message: string }
-  | { type: "RECONCILE"; turn: ServerTurn | null };
+  | { type: "RECONCILE"; turn: ServerTurn | null; parkedIds?: readonly string[] }
+  /** Park the open approval in the task dock: AWAITING_HITL → IDLE for that action. */
+  | { type: "HITL_PARK"; actionId: string }
+  /** Reopen a parked approval: IDLE | LISTENING → AWAITING_HITL. */
+  | { type: "HITL_RESUME"; action: PendingAction }
+  /** A section hint (server `ui` or explicit command). State is unchanged; only effects. */
+  | { type: "ROUTE_HINT"; section: string; reason: string; from?: string };
 
 export const INITIAL_JARVIS_STATE: JarvisState = { mode: "IDLE" };
 
@@ -156,7 +162,11 @@ function applyHydrateToState(_state: JarvisState, event: JarvisEvent): JarvisSta
   }
 }
 
-function reconcileLedgerState(state: JarvisState, turn: ServerTurn | null): JarvisState {
+function reconcileLedgerState(
+  state: JarvisState,
+  turn: ServerTurn | null,
+  parkedIds: readonly string[] = [],
+): JarvisState {
   if (!turn) {
     return withoutIdleError(state);
   }
@@ -167,6 +177,9 @@ function reconcileLedgerState(state: JarvisState, turn: ServerTurn | null): Jarv
   if (st === "AWAITING_HITL") {
     const action = turn.pending_action;
     if (!action || !pendingStillOpen(turn)) {
+      return withoutIdleError(state);
+    }
+    if (parkedIds.includes(action.id)) {
       return withoutIdleError(state);
     }
     if (
@@ -221,7 +234,7 @@ function reconcileLedgerState(state: JarvisState, turn: ServerTurn | null): Jarv
 export function transition(state: JarvisState, event: JarvisEvent): JarvisState {
   switch (event.type) {
     case "RECONCILE":
-      return reconcileLedgerState(state, event.turn);
+      return reconcileLedgerState(state, event.turn, event.parkedIds);
 
     case "RESET":
       return withoutIdleError(state);
@@ -301,6 +314,19 @@ export function transition(state: JarvisState, event: JarvisEvent): JarvisState 
       if (state.mode === "EXECUTING") return { mode: "THINKING", message: "Working…" };
       return state;
 
+    case "HITL_PARK":
+      if (state.mode !== "AWAITING_HITL" || state.resolving || state.action.id !== event.actionId) {
+        return state;
+      }
+      return { mode: "IDLE" };
+
+    case "HITL_RESUME":
+      if (state.mode !== "IDLE" && state.mode !== "LISTENING") return state;
+      return { mode: "AWAITING_HITL", action: event.action, listening: false, resolving: false };
+
+    case "ROUTE_HINT":
+      return state;
+
     default:
       return state;
   }
@@ -328,4 +354,48 @@ export function listenAllowed(state: JarvisState): boolean {
  * "start a new discussion" actions. */
 export function isBusy(state: JarvisState): boolean {
   return state.mode === "THINKING" || state.mode === "EXECUTING" || (state.mode === "AWAITING_HITL" && state.resolving);
+}
+
+export type PresenceMode = "idle" | "listening" | "thinking" | "speaking" | "hitl";
+
+/** Orb presence for a turn state. EXECUTING reads as thinking. */
+export function presenceFor(state: JarvisState): PresenceMode {
+  switch (state.mode) {
+    case "LISTENING":
+      return "listening";
+    case "THINKING":
+    case "EXECUTING":
+      return "thinking";
+    case "SPEAKING":
+      return "speaking";
+    case "AWAITING_HITL":
+      return "hitl";
+    default:
+      return "idle";
+  }
+}
+
+export type TurnEffect =
+  | { kind: "orb-mode"; mode: PresenceMode }
+  | { kind: "scroll"; section: string; reason: string; source: "auto" }
+  | { kind: "autosave"; reason: string };
+
+/**
+ * Pure side-effect descriptors for one transition. The turn store runs them;
+ * the reducer never touches the DOM, the substrate or the scroll position.
+ */
+export function effectsFor(prev: JarvisState, next: JarvisState, event: JarvisEvent): TurnEffect[] {
+  const out: TurnEffect[] = [];
+  const before = presenceFor(prev);
+  const after = presenceFor(next);
+  if (before !== after) out.push({ kind: "orb-mode", mode: after });
+  if (event.type === "ROUTE_HINT" && event.section) {
+    if (event.from === "engineering" && event.section !== "engineering") {
+      out.push({ kind: "autosave", reason: "leave-engineering" });
+    }
+    if (event.section !== event.from) {
+      out.push({ kind: "scroll", section: event.section, reason: event.reason, source: "auto" });
+    }
+  }
+  return out;
 }

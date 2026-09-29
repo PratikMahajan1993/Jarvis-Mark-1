@@ -52,6 +52,8 @@ export type PendingAction = {
   tool_name?: string;
   irreversibility?: number;
   consequence?: string;
+  status?: string;
+  session_id?: string;
 };
 
 export type ActivityEvent = {
