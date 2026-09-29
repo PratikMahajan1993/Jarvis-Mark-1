@@ -8,14 +8,10 @@ import {
   sceneAttachments,
 } from "@/lib/viewerMatch";
 import { DrawingViewer } from "@/components/DrawingViewer";
-import { playFocus } from "@/lib/pane/conductor";
-import { setFocusMode, useDisplayLens, usePane } from "@/lib/pane/paneStore";
 import type { QuoteSheetRow } from "@/lib/pane/quoteContract";
 import { CalloutPins } from "./CalloutPins";
 
-/** Match LENS_SUBSTRATE.bench centre — keep the mat clear so the substrate pilot can show. */
-const PILOT_HOLE =
-  "radial-gradient(circle at 4.5% 7.5%, transparent 0 7.5%, #000 9%)";
+export type StageFocusMode = "normal" | "stage";
 
 function isViewableDrawing(att: MailAttachment): boolean {
   if (!isSavedLocal(att)) return false;
@@ -39,43 +35,38 @@ function pickDrawingAttachment(
   return null;
 }
 
-function enterFocus() {
-  setFocusMode("stage");
-  playFocus(true);
-}
-
-function leaveFocus() {
-  setFocusMode("normal");
-  playFocus(false);
-}
-
-function toggleFocus(current: "normal" | "stage") {
-  if (current === "stage") leaveFocus();
-  else enterFocus();
-}
-
 export function DrawingStage({
   scene,
   focus,
   pinRows = [],
+  active,
+  focusMode,
+  onFocusModeChange,
 }: {
   scene: Scene;
   focus?: Record<string, unknown>;
   /** Ledger rows that may carry callout regions. */
   pinRows?: QuoteSheetRow[];
+  /** Engineering is the active section: F / Escape / double-click toggle focus. */
+  active: boolean;
+  focusMode: StageFocusMode;
+  onFocusModeChange: (mode: StageFocusMode) => void;
 }) {
   const drawing = useMemo(() => pickDrawingAttachment(scene, focus), [scene, focus]);
-  const displayLens = useDisplayLens();
-  const focusMode = usePane((s) => s.focusMode);
-  const benchActive = displayLens === "bench";
+
+  const toggleFocus = useCallback(
+    (current: StageFocusMode) => onFocusModeChange(current === "stage" ? "normal" : "stage"),
+    [onFocusModeChange],
+  );
+  const leaveFocus = useCallback(() => onFocusModeChange("normal"), [onFocusModeChange]);
 
   const onDoubleClick = useCallback(() => {
-    if (!benchActive) return;
+    if (!active) return;
     toggleFocus(focusMode);
-  }, [benchActive, focusMode]);
+  }, [active, focusMode, toggleFocus]);
 
   useEffect(() => {
-    if (!benchActive) return;
+    if (!active) return;
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
       const tag = target?.tagName;
@@ -94,7 +85,7 @@ export function DrawingStage({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [benchActive, focusMode]);
+  }, [active, focusMode, toggleFocus, leaveFocus]);
 
   return (
     <div
@@ -107,8 +98,6 @@ export function DrawingStage({
         style={{
           background: "var(--mat, oklch(16% 0.004 240))",
           boxShadow: "inset 0 0 0 8px transparent, inset 0 0 24px rgba(0,0,0,0.45)",
-          WebkitMaskImage: PILOT_HOLE,
-          maskImage: PILOT_HOLE,
         }}
       />
 

@@ -454,7 +454,8 @@ export function DrawingViewer({
       <div className={chatMode ? "flex min-h-0 flex-1" : "contents"}>
       <div
         ref={viewportRef}
-        className={`relative min-h-0 flex-1 overflow-hidden ${mode === "pan" ? "cursor-grab active:cursor-grabbing" : "cursor-crosshair"}`}
+        data-lenis-prevent
+        className={`relative min-h-0 flex-1 overflow-hidden overscroll-contain ${mode === "pan" ? "cursor-grab active:cursor-grabbing" : "cursor-crosshair"}`}
         onWheel={onWheel}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
@@ -488,7 +489,7 @@ export function DrawingViewer({
         </div>
       </div>
       {chatMode ? (
-        <aside className="w-80 shrink-0 overflow-y-auto border-l border-[color:var(--border)] bg-[#070b10] p-4">
+        <aside data-lenis-prevent className="w-80 shrink-0 overflow-y-auto overscroll-contain border-l border-[color:var(--border)] bg-[#070b10] p-4">
           <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-[color:var(--accent)]/70">From the sheet</p>
           <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-[color:var(--fg)]/90">
             {notes.trim() || "Looking at the drawing."}

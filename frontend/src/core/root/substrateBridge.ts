@@ -16,6 +16,8 @@ export type JarvisSubstrateGlobal = SubstrateBridgeState & {
   latest: SubstrateOut | null;
   /** Forward SubstrateIn (e.g. a quality override) from the console or headless tooling. */
   post?: (msg: SubstrateIn) => void;
+  /** The latest message of a kind the page posted (orb blend, mode…), for headless checks. */
+  lastPosted?: (type: SubstrateIn["type"]) => SubstrateIn | undefined;
 };
 
 declare global {
@@ -60,6 +62,7 @@ function publishGlobal(latest: SubstrateOut | null) {
     ...state,
     latest,
     post: (msg) => postSubstrate(msg),
+    lastPosted: (type) => lastByType.get(type),
   };
 }
 

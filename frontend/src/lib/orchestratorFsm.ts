@@ -1,7 +1,7 @@
 import type { PendingAction } from "./types";
 
 /**
- * OrchestratorShell's macro-state. Exactly one of these is ever true — no
+ * The desk's turn macro-state. Exactly one of these is ever true — no
  * independent `busy`/`listening`/`sending`/`confirmListening` booleans that
  * could combine into a contradictory reading (e.g. "listening" while
  * "speaking"). `AWAITING_HITL` carries two extra booleans scoped to itself

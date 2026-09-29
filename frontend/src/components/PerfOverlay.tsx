@@ -54,7 +54,7 @@ export function PerfOverlay() {
         WebGL contexts: <span className="tabular-nums text-white">{snap.webglContextCount}</span>
       </p>
       <p className="whitespace-nowrap">
-        OrchestratorShell commits:{" "}
+        Desk commits:{" "}
         <span className="tabular-nums text-white">{snap.orchestratorShellCommits}</span>
       </p>
     </div>

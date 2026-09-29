@@ -153,7 +153,8 @@ export function SuggestedTasksPanel({
       </div>
       <div
         data-tasks-scroll
-        className="min-h-0 flex-1 space-y-3 overflow-y-auto overflow-x-hidden pr-1 [scrollbar-width:thin] [scrollbar-color:rgba(125,255,224,0.25)_transparent]"
+        data-lenis-prevent
+        className="min-h-0 flex-1 space-y-3 overflow-y-auto overflow-x-hidden overscroll-contain pr-1 [scrollbar-width:thin] [scrollbar-color:rgba(125,255,224,0.25)_transparent]"
       >
         {tasks.length ? (
           tasks.map((task) => (
