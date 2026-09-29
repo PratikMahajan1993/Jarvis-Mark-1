@@ -1,5 +1,11 @@
 import type { HudWorkspace } from "@/components/orchestrator/hudWorkspace";
-import type { Lens } from "@/substrate/protocol";
+export type Lens = "watch" | "converse" | "bench";
+
+export const LENS_SECTION: Record<Lens, string> = {
+  watch: "monitor",
+  converse: "casual",
+  bench: "engineering",
+};
 
 export type PanelId =
   | "voice"

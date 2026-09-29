@@ -1,7 +1,7 @@
 import gsap from "gsap";
-import { LENS_SUBSTRATE, type SubstrateIn } from "@/substrate/protocol";
-import type { Lens } from "@/substrate/protocol";
-import { LENS_THEME } from "./lenses";
+import type { SubstrateIn } from "@/substrate/protocol";
+import { postSubstrate } from "@/core/root/substrateBridge";
+import { LENS_SECTION, LENS_THEME, type Lens } from "./lenses";
 import { DURATION, EASE } from "./springs";
 
 export type ConductorSubstrate = {
@@ -19,14 +19,12 @@ export type ConductorCtx = {
 let ctx: ConductorCtx | null = null;
 let activeTimeline: gsap.core.Timeline | null = null;
 
-const absNow = () => performance.timeOrigin + performance.now();
-
 function substratePost(msg: SubstrateIn) {
   if (ctx?.substrate) {
     ctx.substrate.post(msg);
     return;
   }
-  window.__JARVIS_SUBSTRATE__?.post?.(msg);
+  postSubstrate(msg);
 }
 
 function statusTitleEl(root: HTMLElement): HTMLElement | null {
@@ -42,7 +40,6 @@ export function bindConductor(next: Partial<ConductorCtx>): void {
 
 export function snapLensTheme(root: HTMLElement, lens: Lens): void {
   const T = LENS_THEME[lens];
-  const sub = LENS_SUBSTRATE[lens];
   gsap.set(root, {
     "--bg": T.bg,
     "--surface": T.surface,
@@ -53,7 +50,6 @@ export function snapLensTheme(root: HTMLElement, lens: Lens): void {
     "--mat": T.mat,
     "--grid-opacity": T.gridOpacity,
     "--vignette-opacity": T.vignetteOpacity,
-    "--substrate-dim": sub.dim,
   });
 }
 
@@ -67,7 +63,8 @@ export function playLens(to: Lens): void {
   // Lens gestures coalesce on the main thread — snap tokens once per target so
   // @property repaints do not run a multi-frame GSAP loop during FLIP.
   snapLensTheme(root, to);
-  substratePost({ type: "lens", lens: to, t0: absNow() });
+  const section = LENS_SECTION[to];
+  substratePost({ type: "orb", from: section, to: section, blend: 0 });
 
   activeTimeline = null;
   if (ctx) ctx.tl = undefined;

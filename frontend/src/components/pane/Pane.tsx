@@ -20,7 +20,8 @@ import { Dock } from "./Dock";
 import { Field } from "./Field";
 import { PanePanel } from "./PanePanel";
 import { StatusCluster } from "./StatusCluster";
-import { Substrate } from "./Substrate";
+import { postSubstrate } from "@/core/root/substrateBridge";
+import { CASUAL_ORB, ENGINEERING_ORB, MONITOR_ORB } from "@/core/sections/orbs";
 import { useSyncWorkspaceLens } from "./LensTabs";
 import { Vignette } from "./Vignette";
 import { usePaneIdleDim } from "./usePaneIdleDim";
@@ -112,6 +113,13 @@ export function Pane({
   }, []);
 
   useEffect(() => {
+    postSubstrate({
+      type: "sections",
+      specs: { monitor: MONITOR_ORB, casual: CASUAL_ORB, engineering: ENGINEERING_ORB },
+    });
+  }, []);
+
+  useEffect(() => {
     if (initialized.current) return;
     initialized.current = true;
     const boot = lensForWorkspace(workspace);
@@ -123,8 +131,7 @@ export function Pane({
 
   useEffect(() => {
     setPresenceMode(modeToPresence(orchestratorMode));
-    const post = window.__JARVIS_SUBSTRATE__?.post;
-    post?.({ type: "mode", mode: modeToPresence(orchestratorMode) });
+    postSubstrate({ type: "mode", mode: modeToPresence(orchestratorMode) });
   }, [orchestratorMode]);
 
   const bench = displayLens === "bench";
@@ -137,7 +144,6 @@ export function Pane({
         .join(" ")}
       data-pane-root
     >
-      <Substrate />
       <Field />
       <MotionConfig reducedMotion="user">
         <LayoutGroup id="pane">

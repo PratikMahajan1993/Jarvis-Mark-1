@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useSyncExternalStore } from "react";
-import type { Lens } from "@/substrate/protocol";
+import type { Lens } from "./lenses";
 import type { PresenceMode } from "@/substrate/protocol";
 import { LENS_LAYOUT, PANEL_IDS } from "./lenses";
 import { playLens } from "./conductor";
@@ -50,7 +50,7 @@ function emit() {
 
 function resetGestureGates(lens: Lens) {
   pendingLens = lens;
-  workerReady = false;
+  workerReady = true;
   heroPanelsPending = PANEL_IDS.filter((id) => LENS_LAYOUT[lens][id].depth === 0).length;
   heroReady = heroPanelsPending === 0;
 }

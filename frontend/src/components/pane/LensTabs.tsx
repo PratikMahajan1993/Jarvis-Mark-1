@@ -5,7 +5,7 @@ import type { HudWorkspace } from "@/components/orchestrator/hudWorkspace";
 import { WORKSPACE_LABELS } from "@/components/orchestrator/hudWorkspace";
 import { lensForWorkspace, workspaceForLens } from "@/lib/pane/lenses";
 import { getPaneState, setLens, useLens } from "@/lib/pane/paneStore";
-import type { Lens } from "@/substrate/protocol";
+import type { Lens } from "@/lib/pane/lenses";
 
 const LENS_ORDER: Lens[] = ["watch", "converse", "bench"];
 const LENS_TO_WORKSPACE: Record<Lens, HudWorkspace> = {

@@ -1,8 +1,6 @@
 "use client";
 
 import gsap from "gsap";
-import { EYE_INTERNAL_SCALE } from "@/substrate/presence.frag";
-import type { SubstrateIn } from "@/substrate/protocol";
 import { tiltTo } from "./conductor";
 
 const GLANCE_MS = 600;
@@ -11,10 +9,6 @@ const IDLE_MS_DEFAULT = 4 * 60 * 1000;
 const IDLE_MS_DEV = 2000;
 const PANE_BRIGHT_IDLE = 0.7;
 const PANE_BRIGHT_WAKE = 1;
-
-function substratePost(msg: SubstrateIn) {
-  window.__JARVIS_SUBSTRATE__?.post?.(msg);
-}
 
 export function idleWaitMs(): number {
   if (typeof window === "undefined") return IDLE_MS_DEFAULT;
@@ -63,7 +57,7 @@ function drainGlanceQueue(root: HTMLElement) {
   }
 
   glanceActive = true;
-  substratePost({ type: "glance", x: norm.x, y: norm.y, ms: GLANCE_MS });
+  void norm;
 
   const dock = root.querySelector<HTMLElement>("[data-dock]");
   const reduced = prefersReducedMotion();
@@ -114,10 +108,5 @@ export function setPaneIdleDim(root: HTMLElement, dim: boolean): void {
       duration: dim ? 0.7 : 0.28,
       ease: dim ? "power2.inOut" : "power3.out",
     });
-  }
-  if (dim) {
-    substratePost({ type: "quality", scale: EYE_INTERNAL_SCALE, fps: 30 });
-  } else {
-    substratePost({ type: "quality", scale: EYE_INTERNAL_SCALE, fps: 60 });
   }
 }
