@@ -4,6 +4,16 @@ const config: Config = {
   content: ["./src/**/*.{ts,tsx}"],
   theme: {
     extend: {
+      zIndex: {
+        backdrop: "0",
+        substrate: "10",
+        content: "20",
+        decor: "30",
+        chrome: "40",
+        modal: "50",
+        toast: "60",
+        landing: "70",
+      },
       colors: {
         ink: "#05070a",
         panel: "#0b1420",
