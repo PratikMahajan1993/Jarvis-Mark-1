@@ -80,8 +80,8 @@ Each decision has an ID (`X#`). Phase 3 commits and tests cite these IDs.
 | Section | Formula | Placement | Dim | State controls |
 |---|---|---|---|---|
 | Casual | Cortex Dinamico (idle = owner export) | Large, centred; outer shell about 78% of content height | 1.0 | Synaptic Chaos, Pulse Speed (Neuroactivity for HITL amber) |
-| Monitor | ASCI System (default formula) | Tall: 70% of viewport height, bottom edge above the command baton | 1.0 | Flow Speed, Organic Distortion |
-| Engineering | CHAT GPT (default formula) | Side orb at the right edge, upper third | 0.35 | Generic modifiers |
+| Monitor | ASCI System (idle = owner export) | Tall: 70% of viewport height, bottom edge above the command baton | 1.0 | Flow Speed, Organic Distortion |
+| Engineering | CHAT GPT (default formula, no controls) | Side orb at the right edge, upper third | 0.35 | Generic modifiers |
 
 - **Colour** comes from the formula. Section UI accents (the Casual mint, for example) stay in the DOM theme.
 - **Between sections,** the worker evaluates **both** neighbouring formulas and blends their targets by scroll position (smoothstep). Placement blends the same way. At rest, only one formula runs.
@@ -100,7 +100,7 @@ Each decision has an ID (`X#`). Phase 3 commits and tests cite these IDs.
   - **Two layers of smoothing:** the per-particle easing (k = 1 − 0.9^(dt·60)), plus placement springs. Fast flicks and Lenis snaps therefore still read as a glide.
   - **Direct jumps:** when the director jumps across sections (for example Monitor → Engineering), the morph goes **straight from origin to destination** on the scroll's own progress. It does not flash through the shape of the section in between.
   - **Wave, not a cloud-swap.** Each particle starts its morph slightly offset by index (a stagger of about 15% of the blend), with a small outward bulge mid-morph. The shape visibly unfolds into the next one instead of 20,000 particles crossing randomly.
-  - **One shared clock** for all formulas, so a shape never restarts or jumps when you arrive at it. State control values keep easing through a morph.
+  - **Clocks never restart.** Every formula's clock runs from boot, even when its section is off screen, so a shape never resets or jumps when you arrive at it. Speed controls change the clock's *rate*, never multiply total time, so the phase stays continuous. State control values keep easing through a morph.
   - **Frames are protected during a morph:** the simulation stays at 60 Hz. If over budget, bloom resolution drops first.
   - **Reduced motion:** no wave or bulge. Particles snap to the destination shape with a 200 ms fade.
   - **Acceptance:**

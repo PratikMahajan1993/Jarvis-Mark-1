@@ -193,7 +193,10 @@ Job(id, every_s=None, cron=None, fn=..., run_on_start=False)
 - **Uniforms (swarm and composite):** `uView` / `uProjection` (camera at z = 100, 60° field of view, auto-rotate), `uPlacement` (screen centre and height fit), `uDim`, `uTint`, `uTintMix`, `uBrightness`, `uBloomStrength`, `uBloomRadius`. **Removed:** `uEye`, `uOrb`, `uNoiseTexture`, and every eye and glow property.
 - **Scroll → orb:** `useScroll()` and `useTransform()` produce a scroll position in section units. `useMotionValueEvent` resolves `{ from, to, blend }` from the section registry; this is pure and tested.
   - During a director jump, `from` and `to` are the origin and destination, and `blend` is the jump's own progress.
-  - The worker applies the index stagger and mid-morph bulge (X5) and keeps one shared formula clock. The result is posted **at most once per frame**, and only when it changes by more than epsilon. State control values ease inside the engine.
+  - The worker applies the index stagger and mid-morph bulge (X5).
+  - Each formula has its own integrated clock that never restarts: `clock += dt × rate`, where `rate` = state speed ÷ idle speed for its `speedControls`, or the generic rate when it has none.
+  - At boot the worker samples each formula's idle bounding box, so `placement.height` fits any formula's world units.
+  - The `{ from, to, blend }` result is posted **at most once per frame**, and only when it changes by more than epsilon. State control values ease inside the engine.
 - **Hosting:** mounted once in `JarvisRoot`, which the App Router never unmounts across navigation. StrictMode-safe: the canvas is created in the effect and disposed in cleanup. The `window.__JARVIS_SUBSTRATE__` debug handle stays.
 
 ## P7 — Data layer
@@ -245,7 +248,7 @@ It is idempotent and refuses an id that already exists.
 
 ## P11 — Tests and gates
 
-- **Frontend (Vitest, `npm run test`):** registry validation, orb spec blending, every formula producing finite values for all particles across 10 sampled times, state machine transitions plus `effectsFor`, director rules, and draft debounce. jsdom only where needed.
+- **Frontend (Vitest, `npm run test`):** registry validation, orb spec blending, every formula producing finite values for all particles across 10 sampled times, speed-state changes staying phase-continuous (no particle moving more than 3 units in one frame), state machine transitions plus `effectsFor`, director rules, and draft debounce. jsdom only where needed.
 - **Backend (pytest, offline):** loader collisions, the approval envelope for feature kinds, the `/api/events` stream, the scheduler's single-flight, and `ChatResponse.ui` hints.
 - **Gates:** `npm run lint`, `npm run typecheck`, `npm run test`, pytest, and `npm run perf` on the desk.
 
