@@ -1,7 +1,8 @@
 "use client";
 
 import { MotionConfig } from "motion/react";
-import { Profiler } from "react";
+import { Profiler, useState } from "react";
+import { Landing } from "@/core/landing/Landing";
 import { PerfOverlay } from "@/components/PerfOverlay";
 import { BatonDock } from "@/core/chrome/BatonDock";
 import { Modals } from "@/core/chrome/Modals";
@@ -22,6 +23,7 @@ import { goToSection } from "./controller";
  */
 export function Desk() {
   const perf = isJarvisPerfMode();
+  const [landed, setLanded] = useState(false);
   const tree = (
     <MotionConfig reducedMotion="user">
       <DeskController />
@@ -29,10 +31,17 @@ export function Desk() {
       <Backdrop sections={SECTIONS} />
       <SectionStack sections={SECTIONS} onUserNavigate={goToSection} />
       <DecorLayer sections={SECTIONS} />
-      <StatusCluster />
-      <SectionNav sections={SECTIONS} onNavigate={goToSection} />
-      <BatonDock sections={SECTIONS} />
+      <div
+        className="transition-opacity duration-500"
+        style={{ opacity: landed ? 1 : 0, pointerEvents: landed ? "auto" : "none" }}
+        data-chrome-root
+      >
+        <StatusCluster />
+        <SectionNav sections={SECTIONS} onNavigate={goToSection} />
+        <BatonDock sections={SECTIONS} />
+      </div>
       <Modals />
+      {landed ? null : <Landing onDone={() => setLanded(true)} />}
     </MotionConfig>
   );
 
