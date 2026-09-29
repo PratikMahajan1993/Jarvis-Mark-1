@@ -32,11 +32,6 @@
   inherits: true;
   initial-value: oklch(74% 0.15 160);
 }
-@property --pane-brightness {
-  syntax: "<number>";
-  inherits: true;
-  initial-value: 1;
-}
 
 :root {
   color-scheme: dark;
@@ -66,136 +61,56 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* ---- Orchestrator (Open Design) ------------------------------------ */
+/* ---- Desk layers (X6) --------------------------------------------- */
 
-.orch-root {
-  --pane-brightness: 1;
-  background-color: var(--bg);
-  color: var(--fg);
-  filter: brightness(var(--pane-brightness));
+:root {
+  /* The section content box excludes the chrome (X2). */
+  --chrome-top: 56px;
+  --chrome-bottom: 104px;
+  --nav-w: 124px;
+  /* Reserved for the TaskDock. */
+  --dock-w: 56px;
 }
 
-.orch-root[data-phase="moving"] .pane-dock {
-  contain: layout style;
+/* Chrome and decor follow the active section's theme. */
+html[data-active-section] {
+  transition:
+    --bg 0.7s ease,
+    --surface 0.7s ease,
+    --fg 0.7s ease,
+    --muted 0.7s ease,
+    --border 0.7s ease,
+    --accent 0.7s ease;
 }
 
-.orch-root[data-phase="moving"] [data-panel] {
-  contain: layout paint style;
+html.lenis,
+html.lenis body {
+  height: auto;
+}
+.lenis:not(.lenis-autoToggle).lenis-stopped {
+  overflow: clip;
+}
+.lenis [data-lenis-prevent],
+.lenis [data-lenis-prevent-wheel] {
+  overscroll-behavior: contain;
+}
+.lenis.lenis-smooth iframe {
+  pointer-events: none;
+}
+
+/* SectionNav shows the position; a native scrollbar would only fight the snap. */
+html[data-active-section] {
+  scrollbar-width: none;
+}
+html[data-active-section]::-webkit-scrollbar {
+  display: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .orch-core,
-  .orch-core-halo,
-  .orch-core-nucleus,
-  .orch-ring,
   .orch-activity-orb-live .orch-activity-orb-core,
   .orch-activity-orb-live .orch-activity-orb-ring {
     animation: none !important;
   }
-}
-
-/* ---- Single pane dock (Phase 2) ------------------------------------ */
-
-.pane-dock {
-  display: grid;
-  grid-template-columns: repeat(12, minmax(0, 1fr));
-  grid-template-rows: repeat(8, minmax(0, 1fr));
-  gap: var(--gutter, 12px);
-  padding: calc(var(--status, 56px) + 8px) var(--inset, 16px) calc(var(--strip, 72px) + 8px);
-}
-
-.pane-dock > [data-panel] {
-  position: relative;
-  height: 100%;
-  width: 100%;
-  min-height: 0;
-  min-width: 0;
-}
-
-/* Lens slot map — grid-area only (depth stays on motion).
- * Watch/Converse left rail: notes (rows 1–5) and activity (rows 6–8) share
- * no cells; the 12px grid gap is the gutter between them.
- * Converse agents stop at col 10 so they never enter the tasks rail. */
-/* Watch voice sits under the eye (row 6), not over the pupil. */
-.pane-dock[data-lens="watch"] [data-panel="voice"] { grid-area: 6 / 4 / 7 / 10; }
-.pane-dock[data-lens="watch"] [data-panel="notes"] { grid-area: 1 / 1 / 6 / 4; }
-.pane-dock[data-lens="watch"] [data-panel="weather"] { grid-area: 1 / 10 / 3 / 13; }
-.pane-dock[data-lens="watch"] [data-panel="tasks"] { grid-area: 3 / 10 / 9 / 13; }
-/* Agents sit under the eye (rows 7–8), not over the pupil. */
-.pane-dock[data-lens="watch"] [data-panel="agents"] { grid-area: 7 / 4 / 9 / 10; }
-.pane-dock[data-lens="watch"] [data-panel="activity"] { grid-area: 6 / 1 / 9 / 4; }
-.pane-dock[data-lens="watch"] [data-panel="stage"] { grid-area: 1 / 1 / 7 / 9; }
-.pane-dock[data-lens="watch"] [data-panel="sheet"] { grid-area: 1 / 9 / 9 / 13; }
-
-.pane-dock[data-lens="converse"] [data-panel="voice"] { grid-area: 3 / 4 / 6 / 10; }
-.pane-dock[data-lens="converse"] [data-panel="notes"] { grid-area: 1 / 1 / 6 / 4; }
-.pane-dock[data-lens="converse"] [data-panel="weather"] { grid-area: 1 / 10 / 3 / 13; }
-.pane-dock[data-lens="converse"] [data-panel="tasks"] { grid-area: 3 / 10 / 9 / 13; }
-.pane-dock[data-lens="converse"] [data-panel="agents"] { grid-area: 7 / 4 / 9 / 10; }
-.pane-dock[data-lens="converse"] [data-panel="activity"] { grid-area: 6 / 1 / 9 / 4; }
-.pane-dock[data-lens="converse"] [data-panel="stage"] { grid-area: 1 / 1 / 7 / 9; }
-.pane-dock[data-lens="converse"] [data-panel="sheet"] { grid-area: 1 / 9 / 9 / 13; }
-
-/* Voice / agents over the substrate are bare chrome — never a frost slab. */
-.pane-dock[data-lens="converse"] [data-panel="voice"],
-.pane-dock[data-lens="watch"] [data-panel="voice"],
-.pane-dock[data-lens="converse"] [data-panel="agents"],
-.pane-dock[data-lens="watch"] [data-panel="agents"] {
-  background: transparent !important;
-  box-shadow: none !important;
-  border-radius: 0 !important;
-  overflow: visible !important;
-}
-
-/* Converse voice: open center; keep JarvisCore rings, hide duplicate nucleus. */
-.pane-dock[data-lens="converse"] [data-panel="voice"] {
-  overflow: visible !important;
-}
-.pane-dock[data-lens="converse"] [data-panel="voice"] .orch-core,
-.pane-dock[data-lens="converse"] [data-panel="voice"] .orch-core-halo,
-.pane-dock[data-lens="converse"] [data-panel="voice"] .orch-core-nucleus {
-  opacity: 0 !important;
-}
-.pane-dock[data-lens="converse"] [data-panel="voice"] canvas {
-  opacity: 0;
-}
-.pane-dock[data-lens="converse"] [data-panel="voice"] .orch-hud {
-  opacity: 0.62;
-}
-.pane-dock[data-lens="converse"] [data-panel="voice"] .orch-hud-active {
-  opacity: 0.9;
-}
-
-/* Empty optional panels stay invisible (no frost rectangle).
- * Depth variants set visibility:visible — force-hide empty chrome. */
-.pane-dock [data-panel="weather"][data-empty="1"],
-.pane-dock [data-panel="activity"][data-empty="1"] {
-  visibility: hidden !important;
-  opacity: 0 !important;
-  content-visibility: hidden !important;
-  background: transparent !important;
-  box-shadow: none !important;
-  pointer-events: none !important;
-}
-
-.pane-dock[data-lens="bench"] [data-panel="voice"] { grid-area: 7 / 1 / 9 / 9; }
-.pane-dock[data-lens="bench"] [data-panel="notes"] { grid-area: 1 / 1 / 9 / 2; }
-.pane-dock[data-lens="bench"] [data-panel="weather"] { grid-area: 1 / 10 / 3 / 13; }
-.pane-dock[data-lens="bench"] [data-panel="tasks"] { grid-area: 3 / 10 / 9 / 13; }
-.pane-dock[data-lens="bench"] [data-panel="agents"] { grid-area: 1 / 2 / 2 / 5; }
-.pane-dock[data-lens="bench"] [data-panel="activity"] { grid-area: 6 / 1 / 9 / 4; }
-.pane-dock[data-lens="bench"] [data-panel="stage"] { grid-area: 1 / 1 / 7 / 9; }
-.pane-dock[data-lens="bench"] [data-panel="sheet"] { grid-area: 1 / 9 / 9 / 13; }
-
-/* Bench focus — stage spans; sheet parks to a right-edge tab. */
-.pane-dock[data-lens="bench"][data-focus="stage"] [data-panel="stage"] {
-  grid-area: 1 / 1 / 7 / 13;
-}
-.pane-dock[data-lens="bench"][data-focus="stage"] [data-panel="sheet"] {
-  grid-area: 1 / 12 / 9 / 13;
-}
-.pane-dock[data-lens="bench"][data-focus="stage"] [data-panel="voice"] {
-  grid-area: 7 / 1 / 9 / 13;
 }
 
 .bench-row-hl {
@@ -203,128 +118,6 @@ body {
 }
 .bench-pin-hl {
   box-shadow: 0 0 0 2px color-mix(in oklch, var(--accent) 55%, transparent);
-}
-
-.slot-centre-low {
-  grid-area: 3 / 4 / 6 / 10;
-}
-
-.slot-left-rail {
-  grid-area: 1 / 1 / 6 / 4;
-}
-
-.slot-left-peek {
-  grid-area: 1 / 1 / 9 / 2;
-}
-
-.slot-right-rail-top {
-  grid-area: 1 / 10 / 3 / 13;
-}
-
-.slot-right-rail {
-  grid-area: 3 / 10 / 9 / 13;
-}
-
-.slot-under-centre {
-  grid-area: 7 / 4 / 9 / 10;
-}
-
-.slot-bottom-centre {
-  grid-area: 7 / 4 / 9 / 10;
-}
-
-.slot-bottom-left {
-  grid-area: 6 / 1 / 9 / 4;
-}
-
-.slot-stage {
-  grid-area: 1 / 1 / 7 / 9;
-}
-
-.slot-sheet {
-  grid-area: 1 / 9 / 9 / 13;
-}
-
-.slot-strip {
-  grid-area: 7 / 1 / 9 / 9;
-}
-
-.slot-status {
-  grid-area: 1 / 2 / 2 / 5;
-}
-
-/* Viewport-absolute orchestrator pieces become panel-local inside the dock */
-.pane-dock [data-panel="notes"] > div > div > .absolute {
-  position: relative !important;
-  left: auto !important;
-  top: auto !important;
-  width: 100%;
-  z-index: auto !important;
-}
-
-.pane-dock [data-panel="activity"] .orch-activity {
-  position: relative !important;
-  left: auto !important;
-  top: auto !important;
-  z-index: auto !important;
-}
-
-.pane-dock [data-panel="agents"] .agent-orbit,
-.pane-dock [data-panel="agents"] .absolute.bottom-32 {
-  position: relative !important;
-  inset: auto !important;
-  left: auto !important;
-  top: auto !important;
-  bottom: auto !important;
-  transform: none !important;
-  width: 100%;
-  z-index: auto !important;
-}
-
-.pane-dock [data-panel="stage"] .pointer-events-auto.absolute.inset-x-0 {
-  position: absolute !important;
-  left: 0 !important;
-  right: 0 !important;
-  top: 0 !important;
-  bottom: 0 !important;
-}
-
-.pane-dock [data-panel][data-depth="3"] {
-  pointer-events: none !important;
-}
-
-.pane-frost {
-  background:
-    url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E")
-      0 0/128px 128px,
-    linear-gradient(to bottom, color-mix(in oklch, var(--accent) 12%, transparent), transparent 1px),
-    color-mix(in oklch, var(--surface) 78%, transparent);
-  box-shadow: inset 0 0 0 1px oklch(100% 0 0 / 0.06);
-  border-radius: 1.25rem;
-}
-
-.pane-field {
-  opacity: var(--grid-opacity, 0);
-  background-color: var(--mat, transparent);
-  background-image:
-    linear-gradient(rgba(125, 255, 224, 0.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(125, 255, 224, 0.04) 1px, transparent 1px);
-  background-size: 48px 48px;
-}
-
-.pane-vignette {
-  opacity: var(--vignette-opacity, 0.8);
-  background: radial-gradient(circle, transparent 40%, rgba(0, 0, 0, 0.8) 100%);
-}
-
-.slot-left-peek {
-  width: 40px;
-  overflow: visible;
-}
-
-.slot-left-peek:hover {
-  width: min(280px, 28vw);
-  z-index: 20;
 }
 
 .orch-btn {
@@ -388,150 +181,6 @@ body {
   .agent-sun-active {
     animation: none !important;
   }
-}
-
-.orch-vignette {
-  pointer-events: none;
-  position: absolute;
-  inset: 0;
-  z-index: 100;
-  background: radial-gradient(circle, transparent 40%, rgba(0, 0, 0, 0.8) 100%);
-}
-
-.orch-core {
-  border-radius: 9999px;
-  background:
-    radial-gradient(circle at 50% 42%, oklch(78% 0.14 160 / 0.28) 0%, transparent 42%),
-    radial-gradient(circle, oklch(74% 0.15 160 / 0.22) 0%, transparent 62%);
-  filter: blur(36px);
-  opacity: 0.48;
-  animation: orch-breathe 8s infinite alternate ease-in-out;
-  transition: opacity var(--transition-slow), transform var(--transition-slow);
-}
-
-.orch-core-active {
-  opacity: 0.88;
-  transform: scale(1.12);
-  animation: orch-breathe-fast 4s infinite alternate ease-in-out;
-}
-
-.orch-core-hitl {
-  opacity: 0.18;
-  transform: scale(0.92);
-  animation: none;
-}
-
-.orch-core-halo {
-  background: radial-gradient(circle, oklch(74% 0.15 160 / 0.12) 0%, transparent 70%);
-  filter: blur(28px);
-  opacity: 0.55;
-  transition: opacity var(--transition-slow), transform var(--transition-slow);
-}
-
-.orch-core-halo-active {
-  opacity: 0.9;
-  transform: scale(1.08);
-}
-
-.orch-core-halo-hitl {
-  opacity: 0.2;
-}
-
-.orch-core-nucleus {
-  background:
-    radial-gradient(circle at 35% 30%, oklch(92% 0.06 160 / 0.55) 0%, transparent 45%),
-    radial-gradient(circle, oklch(74% 0.15 160 / 0.55) 0%, oklch(74% 0.15 160 / 0.08) 55%, transparent 72%);
-  box-shadow:
-    0 0 28px 8px color-mix(in srgb, var(--accent) 35%, transparent),
-    inset 0 0 18px color-mix(in srgb, var(--accent) 40%, transparent);
-  opacity: 0.55;
-  animation: orch-breathe 7s infinite alternate ease-in-out;
-  transition: opacity var(--transition-med), transform var(--transition-med), box-shadow var(--transition-med);
-}
-
-.orch-core-nucleus-active {
-  opacity: 0.95;
-  transform: scale(1.12);
-  box-shadow:
-    0 0 40px 14px color-mix(in srgb, var(--accent) 50%, transparent),
-    inset 0 0 22px color-mix(in srgb, var(--accent) 55%, transparent);
-  animation: orch-breathe-fast 3.2s infinite alternate ease-in-out;
-}
-
-.orch-core-nucleus-hitl {
-  opacity: 0.2;
-  animation: none;
-}
-
-.orch-hud {
-  opacity: 0.22;
-  transition: opacity var(--transition-slow);
-}
-
-.orch-hud-active {
-  opacity: 0.62;
-}
-
-.orch-hud-hitl {
-  opacity: 0.08;
-}
-
-.orch-ring {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  border-radius: 9999px;
-  border: 1px solid var(--accent);
-  transform: translate(-50%, -50%);
-}
-
-.orch-ring-0 {
-  width: 240px;
-  height: 240px;
-  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
-  box-shadow: 0 0 24px color-mix(in srgb, var(--accent) 18%, transparent);
-  animation: orch-spin-left 36s linear infinite;
-}
-
-.orch-ring-1 {
-  width: 300px;
-  height: 300px;
-  border-width: 1px 0;
-  opacity: 0.85;
-  animation: orch-spin-right 12s linear infinite;
-}
-
-.orch-ring-2 {
-  width: 340px;
-  height: 340px;
-  border: 1px dashed color-mix(in srgb, var(--muted) 80%, var(--accent) 20%);
-  animation: orch-spin-left 24s linear infinite;
-}
-
-.orch-ring-3 {
-  width: 390px;
-  height: 390px;
-  border: 2px solid transparent;
-  border-top-color: var(--accent);
-  border-bottom-color: var(--accent);
-  opacity: 0.65;
-  animation: orch-spin-right 8s linear infinite;
-}
-
-.orch-ring-ticks {
-  width: 360px;
-  height: 360px;
-  border: none;
-  background:
-    repeating-conic-gradient(
-      from 0deg,
-      color-mix(in srgb, var(--accent) 45%, transparent) 0deg 1.2deg,
-      transparent 1.2deg 18deg
-    );
-  mask-image: radial-gradient(circle, transparent 47%, black 48%, black 50.5%, transparent 51.5%);
-  -webkit-mask-image: radial-gradient(circle, transparent 47%, black 48%, black 50.5%, transparent 51.5%);
-  opacity: 0.35;
-  animation: orch-spin-right 48s linear infinite;
 }
 
 .orch-activity {
@@ -678,25 +327,6 @@ body {
   animation: orch-mic-ripple 1.5s infinite ease-out;
 }
 
-@keyframes orch-breathe {
-  0% { transform: scale(0.85); opacity: 0.2; }
-  100% { transform: scale(1); opacity: 0.4; }
-}
-
-@keyframes orch-breathe-fast {
-  0% { transform: scale(1); opacity: 0.6; }
-  100% { transform: scale(1.15); opacity: 0.9; }
-}
-
-@keyframes orch-spin-right {
-  0% { transform: translate(-50%, -50%) rotate(0deg); }
-  100% { transform: translate(-50%, -50%) rotate(360deg); }
-}
-
-@keyframes orch-spin-left {
-  0% { transform: translate(-50%, -50%) rotate(360deg); }
-  100% { transform: translate(-50%, -50%) rotate(0deg); }
-}
 
 @keyframes orch-slide-in {
   to { opacity: 1; transform: translateY(0); }

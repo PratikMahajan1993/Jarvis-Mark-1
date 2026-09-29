@@ -1,26 +1,25 @@
 ---
 name: jarvis-observation-dispatch
 description: >
-  Dispatch specialized Jarvis background workers when the user reports
-  observations during capability testing or live HUD use. Use when the user
-  describes a UI bug, TTS issue, mail/HITL/workflow problem, or asks to fix
-  something while continuing to test. Always prefer roster agents over ad-hoc
-  generalPurpose.
+  Dispatch a specialized Jarvis background worker, only when the user explicitly
+  asks for one, for an observation reported during capability testing or live
+  HUD use. By default the coordinator fixes observations directly. When a worker
+  is requested, prefer roster agents over ad-hoc generalPurpose.
 ---
 
 # Observation → specialist dispatch
 
 ## When
 
-User is testing and says things like: “this looks wrong”, “latency”, “played twice”,
-“card clipped”, “Authorize failed”, “mail empty”, “weather missing”, or assigns a
-fix while wanting to continue testing elsewhere.
+The user explicitly asks for a background worker to take a fix (for example, so
+they can keep testing elsewhere). Without that request, the coordinator fixes
+the observation itself — this skill does not apply.
 
 ## Steps
 
 1. Classify the observation (UI / voice / workflow / other).
 2. Stay with the user on the next test; **do not** block on the fix.
-3. Delegate to the matching roster worker, in the background, with **`model: composer-2.5-fast`** (Composer 2.5 Fast — required, do not inherit):
+3. Delegate to the matching roster worker, in the background. The user names the model; if they did not, use the default (inherit):
 
 | Signal | Agent (roster name) |
 | ------ | ------------------- |
@@ -42,7 +41,7 @@ Capability ID (if any): <e.g. E2>
 Repro: <steps>
 Context the worker needs: <it cannot see this chat — restate it>
 Likely files: <paths>
-Constraints: follow .cursor/rules/jarvis-core.mdc; no scope creep; no commits unless asked
+Constraints: follow .cursor/rules/core/00-jarvis-core.mdc; no scope creep; no commits unless asked
 Acceptance: <what must be true in HUD/API>
 Return format: DONE / FILES / TRY / GAPS
 ```

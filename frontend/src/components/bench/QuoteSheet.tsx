@@ -12,7 +12,6 @@ import {
   type QuoteSheetRow,
   type QuoteVerifyResult,
 } from "@/lib/pane/quoteContract";
-import { usePane } from "@/lib/pane/paneStore";
 import { SPRING } from "@/lib/pane/springs";
 import { CustomerVisionConsent } from "@/components/orchestrator/engineering/CustomerVisionConsent";
 import { FactConfirmChips } from "@/components/orchestrator/engineering/FactConfirmChips";
@@ -98,6 +97,7 @@ export function QuoteSheet({
   entityId = "",
   hasDrawing = true,
   sessionId = "default",
+  focused = false,
 }: {
   scene: Scene;
   entityType?: string;
@@ -105,6 +105,8 @@ export function QuoteSheet({
   /** False when the Engineering stage has no local drawing. */
   hasDrawing?: boolean;
   sessionId?: string;
+  /** The drawing stage has focus; the sheet parks as a narrow tab. */
+  focused?: boolean;
 }) {
   const [tab, setTab] = useState<SheetTab>("sheet");
   const [findNote, setFindNote] = useState("");
@@ -112,8 +114,6 @@ export function QuoteSheet({
   const [scope, setScope] = useState<"" | "labour" | "with_material">("");
   const [scopeNote, setScopeNote] = useState("");
   const [liveVerify, setLiveVerify] = useState<QuoteVerifyResult | null>(null);
-  const focusMode = usePane((s) => s.focusMode);
-  const focused = focusMode === "stage";
 
   const doc = useMemo(() => resolveDocument(scene), [scene]);
 
@@ -318,7 +318,7 @@ export function QuoteSheet({
         </div>
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto py-2">
+      <div data-lenis-prevent className="min-h-0 flex-1 overflow-y-auto overscroll-contain py-2">
         {tab === "sheet" ? (
           <div className="space-y-3">
             {grouped.map(({ group, rows }) => (

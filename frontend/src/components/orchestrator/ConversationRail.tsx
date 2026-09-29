@@ -9,6 +9,15 @@ export type RailConversation = {
   preview?: string;
   active?: boolean;
   waiting?: boolean;
+  /** X9 deck card fields (from conversation focus / scene when present). */
+  customer?: string;
+  drawingNumber?: string;
+  revision?: string;
+  quoteStep?: string;
+  verifyBlockers?: number;
+  verifyWarnings?: number;
+  draftTotal?: string;
+  thumbnailUrl?: string;
 };
 
 function shortTitle(title: string) {
@@ -84,8 +93,11 @@ export function ConversationRail({
   onSelectAmbient,
   onSelect,
   onNewDiscussion,
+  className = "absolute left-4 top-24 z-[5]",
 }: {
   items: RailConversation[];
+  /** Position classes; the default floats the rail over the page. */
+  className?: string;
   openCount?: number;
   maxOpen?: number;
   ambientActive: boolean;
@@ -100,7 +112,8 @@ export function ConversationRail({
   return (
     <div
       className={[
-        "pointer-events-auto absolute left-4 top-24 z-[5] flex w-[min(280px,88vw)] flex-col gap-2 transition-opacity duration-[600ms]",
+        "pointer-events-auto flex w-[min(280px,88vw)] flex-col gap-2 transition-opacity duration-[600ms]",
+        className,
         dimmed ? "pointer-events-none opacity-15" : "",
       ]
         .filter(Boolean)

@@ -12,12 +12,15 @@ export function HitlModal({
   listening = false,
   busy = false,
   onDecide,
+  onLater,
 }: {
   action: PendingAction | null;
   visible: boolean;
   listening?: boolean;
   busy?: boolean;
   onDecide: (id: string, approved: boolean) => void;
+  /** Park the approval in the task dock for later. Never approves. */
+  onLater?: () => void;
 }) {
   const authRef = useRef<HTMLButtonElement>(null);
 
@@ -91,7 +94,18 @@ export function HitlModal({
               </button>
             </GlareHover>
           </div>
-          <p className="mt-5 font-mono text-[11px] uppercase tracking-[0.18em] text-white/25">
+          {onLater ? (
+            <button
+              type="button"
+              disabled={busy}
+              className="mt-4 font-mono text-[11px] uppercase tracking-[0.18em] text-[color:var(--muted)] transition hover:text-[color:var(--accent)] disabled:opacity-40"
+              onClick={onLater}
+              data-hitl-later
+            >
+              Later
+            </button>
+          ) : null}
+          <p className="mt-3 font-mono text-[11px] uppercase tracking-[0.18em] text-white/25">
             {listening ? "Listening…" : "or say yes / no · press Y / N"}
           </p>
         </div>

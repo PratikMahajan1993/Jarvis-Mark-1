@@ -199,7 +199,7 @@ export function PreferencesPanel({
       >
         <SpotlightCard
           className="flex h-full min-h-0 flex-col rounded-2xl border border-[color:var(--border)] bg-black/45 backdrop-blur-md"
-          bodyClassName="flex min-h-0 flex-1 flex-col overflow-y-auto p-6"
+          bodyClassName="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain p-6"
         >
           <div className="mb-4 flex items-start justify-between gap-3">
             <div>

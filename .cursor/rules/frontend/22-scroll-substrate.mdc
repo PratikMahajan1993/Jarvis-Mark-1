@@ -1,0 +1,195 @@
+---
+description: Scroll-substrate HUD — root-hoisted WebGL SubstrateEngine, 4-tier layer system, Lenis section scroll, orb presets/state modifiers, and the strict templates for adding cards, sections, approvals and features without touching the base.
+globs: frontend/src/**
+alwaysApply: false
+---
+
+# Scroll Substrate (HUD base architecture)
+
+Decisions of record: `docs/overhaul/EXPERIENCE_DECISIONS.md` (`X#`) and `docs/overhaul/PLATFORM_DECISIONS.md` (`P#`). If this rule and those docs disagree, the docs win; fix the rule in the same PR.
+
+## 1. What is locked (never edit for a feature)
+
+| Base piece | Path | Owns |
+|---|---|---|
+| `JarvisRoot` | `core/root/` (mounted by `app/layout.tsx`) | QueryClient, L0 backdrop, L1 substrate, portal roots |
+| Substrate | `substrate/` | The only WebGL context, orb presets, state modifiers |
+| Scroll engine + director | `core/scroll/` | Lenis, snap, scroll progress, auto-scroll rules |
+| Sections | `core/sections/` | Registry, `SectionStack`, `SectionFrame`, slots |
+| Stores | `core/stores/` | Turn FSM runner, desk, task queue, section state |
+| FSM | `lib/orchestratorFsm.ts` | Pure reducer + `effectsFor` — no DOM, no scroll, no fetch |
+
+Features live in `features/<id>/`, import **only** from `@/sdk` (+ React Bits, `motion/react`, third-party libs), and register with **one line** in `features/index.ts`. ESLint `no-restricted-imports` enforces this.
+
+## 2. Substrate hoisting
+
+```text
+app/layout.tsx (server)
+└─ <JarvisRoot> (client)            mounted once — survives every route change
+   ├─ <Backdrop/>        L0  fixed
+   ├─ <SubstrateHost/>   L1  fixed, pointer-events:none, one <canvas> → worker OffscreenCanvas
+   ├─ {children}         L2  page content (route)
+   ├─ #jarvis-foreground L3  portal root (decor + chrome)
+   ├─ #jarvis-modal          portal root
+   └─ #jarvis-toast          portal root
+app/page.tsx  → <Landing/> + <SectionStack/>   (Lenis lives here, not in the root)
+```
+
+- One canvas, one context, created inside `useEffect`, disposed in cleanup (StrictMode-safe). Never `transferControlToOffscreen` twice on one element.
+- Off `/`: post `{ type: "route", active: false }` → engine freezes and hides. Never dispose on navigation.
+- Context loss is handled inside `SubstrateEngine` (debounced rebuild). UI must keep working when `window.__JARVIS_SUBSTRATE__.contextLost` is true.
+- No Three.js / react-three-fiber on the desk — casberry exports are ported as formulas onto the `ogl` swarm, not mounted as their React `<Canvas>`.
+- No other component may call `getContext("webgl"|"webgl2")` on `/`. React Bits WebGL bits (`Particles`, `LightRays`, `EvilEye`) are not used on the desk.
+
+## 3. The 4-tier layer system
+
+Use the Tailwind tokens only — **never a raw `z-index`**.
+
+| Token | z | Tier | Rules |
+|---|---|---|---|
+| `z-backdrop` | 0 | L0 | CSS/SVG only. Parallax `translateY(-0.3·scrollY)` via `useTransform`. |
+| `z-substrate` | 10 | L1 | Canvas only. Motion comes from uniforms, never CSS transforms. |
+| `z-content` | 20 | L2 | Sections (`100dvh` each) and cards. Scrolls 1×. |
+| `z-decor` | 30 | L3 | Decorative SVG/CSS, `pointer-events:none`, 1.2–1.4× speed, ≤0.35 opacity over cards, ≤4 per section, static on reduced motion. |
+| `z-chrome` | 40 | L3 | StatusCluster, SectionNav, TaskDock, CommandBaton. Fixed. |
+| `z-modal` | 50 | — | HITL, compose, prefs, Google connect (portal `#jarvis-modal`). |
+| `z-toast` | 60 | — | Toasts. |
+| `z-landing` | 70 | — | Landing overlay only. |
+
+Section content boxes subtract `--chrome-top`, `--chrome-bottom`, `--nav-w`, `--dock-w`, so cards never sit under chrome.
+
+## 4. Scroll rules
+
+- Document scroll, driven by Lenis from motion's frame loop (`frame.update`); snap = Lenis snap to section tops (never CSS `scroll-snap`).
+- Scroll position is read from `sectionStore` (`progress` in section units, `active` section) — never from `window.scrollY` or scroll/wheel listeners in features.
+- Any inner scroll area: `data-lenis-prevent` + `overscroll-contain`. Wheel-owning widgets (drawing viewer zoom) must also `data-lenis-prevent`.
+- Programmatic scroll only via the director: `useSection().go(id)` (user) or FSM `scroll` effects (auto). Never `window.scrollTo` / `element.scrollIntoView`.
+- Auto scroll is dropped when pinned, when the user interacted in the last 1200 ms, or when a modal is open. Reduced motion → instant jump.
+
+## 5. Orb pipeline (scroll + FSM → particle swarm)
+
+The orb is a casberry-style swarm: 20,000 instanced tetrahedra whose targets come from a per-section **formula** evaluated in the worker every frame; particles ease toward targets (this easing is also the morph). Bloom pass on top. Formulas and state values: `docs/overhaul/ORB_FORMULAS.md`.
+
+```text
+useScroll → useTransform(pos) → useMotionValueEvent → resolveOrb(sections, pos) = {from, to, blend}
+  → (≤1 post / frame, only if changed) → worker {type:"orb", from, to, blend}
+turnStore effect "orb-mode" → {type:"mode", mode}      voice.ts analyser → {type:"level", value}
+landing gates → {type:"gather", progress}
+Worker: controls = ease(section.states[mode]) → formula.body() × count (both formulas while blending)
+        → ease positions → upload instanced buffers → swarm pass → bloom → composite (uPlacement, uDim, uTint)
+```
+
+- Formulas live in `substrate/formulas/<id>.ts` via `defineOrbFormula` — the casberry `USER CODE` pasted **verbatim**, owner-exported `params` = idle. Real functions only; never `eval` / `new Function`. Every formula must stay allocation-free inside the loop and produce finite numbers (Vitest checks this).
+- A section's `orb` declares `formula`, `placement` (screen centre + height fraction), `dim`, and per-state control values. Tune numbers there, never in the engine.
+- **Morphs must be very smooth** (owner requirement, X5):
+  - the blend follows scroll continuously;
+  - director jumps morph origin → destination directly;
+  - an index-staggered wave with a small bulge;
+  - per-formula clocks that never restart; speed controls (`speedControls`) change the clock *rate* and never multiply total time;
+  - no particle moves more than 3 world units per frame (Vitest sweep).
+  
+  Never switch formulas while the blend is between 0 and 1.
+- States change **formula controls / brightness / tint only**. The **only** positional override is `hitl` while the modal is open (centre, height ≥ 0.6). Parked approvals do not move the orb.
+- Features influence the orb only through `useOrb().glance()` / `.pulse()`.
+
+## 6. Template — add a card (most common)
+
+```ts
+// features/toolwear/feature.ts
+import { defineFeature, defineCard } from "@/sdk";
+import { lazy } from "react";
+
+export default defineFeature({
+  id: "toolwear",
+  title: "Tool wear",
+  cards: [
+    defineCard({
+      id: "toolwear.recent",
+      slot: "monitor.rail",          // monitor.main | monitor.rail | casual.left | casual.right | engineering.side | engineering.deck-empty
+      order: 40,
+      size: "md",
+      component: lazy(() => import("./RecentInsertsCard")),
+    }),
+  ],
+});
+```
+
+```tsx
+// features/toolwear/RecentInsertsCard.tsx
+"use client";
+import { useFeatureQuery, api } from "@/sdk";
+
+export default function RecentInsertsCard() {
+  const q = useFeatureQuery(["toolwear", "recent"], () => api.get("/api/toolwear/recent"), {
+    topics: ["toolwear"],
+  });
+  if (!q.data) return null;             // FeatureBoundary shows the skeleton / failure tile
+  return <ul data-lenis-prevent className="max-h-full overflow-y-auto overscroll-contain">…</ul>;
+}
+```
+
+Then add `toolwear` to `features/index.ts`. Nothing else in `core/` changes.
+
+## 7. Template — add a full-screen section
+
+```ts
+defineSection({
+  id: "shopfloor",
+  order: 250,                           // between Casual (200) and Engineering (300); must be unique
+  label: "Shop floor",
+  icon: "factory",
+  workspace: undefined,                 // only the 3 core sections map to HudWorkspace
+  orb: {
+    formula: "chat-gpt",                // any id registered in substrate/formulas/index.ts
+    placement: { center: [0.9, 0.22], height: 0.2 },
+    dim: 0.4,
+    states: { thinking: { /* formula control overrides */ } },
+    generic: true,                      // formula has no named state controls → generic modifiers
+  },
+  theme: { bg: "oklch(11% 0.01 240)" /* … ThemeTokens */ },
+  decor: [{ kind: "ticks", edge: "right", speed: 1.3 }],
+  lazy: { mountWithin: 1, unmountBeyond: 2 },
+  slots: ["shopfloor.main"],
+  component: lazy(() => import("./ShopFloorSection")),
+});
+```
+
+The section gets nav entry, snap point, orb blend, backdrop tint, lazy mount and error boundary automatically. The component renders a layout that places its `<Slot id="shopfloor.main"/>`; it must fill `100dvh` minus chrome and never scroll the page.
+
+## 8. Template — add an approval kind
+
+Backend (`features/<id>/approvals.py`): `ApprovalKind(kind, summarize, execute)`. Frontend: `defineApprovalView({ kind, Card, Chip })`. The core envelope (claim-once, Idempotency-Key, `external_effects` bracket, copy discipline) is automatic and **not overridable**. Authorize/Reject happen only in the full modal, never from a chip.
+
+## 9. Template — voice command, Hermes tool, job (backend)
+
+```py
+FEATURE = Feature(
+    id="toolwear",
+    router=router,                                           # APIRouter(prefix="/api/toolwear")
+    intents=[Intent(id="toolwear.show", route="ui_command", section="monitor",
+                    examples=["show tool wear", "which inserts changed today", …])],
+    tools=[ToolSpec(name="log_insert", description=…, params_schema=…, fn=log_insert)],   # → jarvis_toolwear_log_insert
+    jobs=[Job(id="toolwear.rollup", every_s=900, fn=rollup)],
+    topics=["toolwear"],
+)
+```
+
+Tools with `external=True` may only queue a pending action. Jobs publish a topic so cards refetch.
+
+## 10. Hard don'ts (review blockers)
+
+- Editing `core/`, `substrate/`, `orchestratorFsm.ts` or `app/layout.tsx` to ship a feature.
+- A second WebGL context, a `requestAnimationFrame` loop, or a `scroll`/`wheel` listener in feature code.
+- Raw `z-index`, `position: fixed` outside L3 chrome, or content taller than its section without an inner scroll area.
+- Conditional hooks around lazy sections, `Date.now()`/`localStorage` reads during render (hydration mismatch).
+- Showing a number (price, rate, dimension, total) that no tool or master-data row produced.
+- Treating a parked approval as authorized.
+
+## 11. Merge checklist for any feature
+
+- [ ] Registered in `features/index.ts` (and `backend/app/features/__init__.py` if it has backend parts)
+- [ ] Only `@/sdk` imports from Jarvis code; `npm run lint` clean
+- [ ] `npm run typecheck`, `npm run test`, pytest green; `npm run api:types` re-run if routes changed
+- [ ] Reduced-motion path checked; inner scroll areas carry `data-lenis-prevent`
+- [ ] Failure tile verified (throw once in dev) and no layout shift
+- [ ] Headless load of `/` shows exactly one WebGL context (`--enable-unsafe-swiftshader`)

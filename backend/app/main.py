@@ -87,6 +87,12 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Jarvis Command Center", version="0.1.0", lifespan=lifespan)
 app.include_router(masterdata_router)
+from .drafts import router as drafts_router
+
+app.include_router(drafts_router)
+from app.core.features import events_router  # noqa: E402
+app.include_router(events_router)
+from . import features_weather  # noqa: F401,E402
 
 _LOCAL_CLIENT_HOSTS = frozenset({"127.0.0.1", "::1", "localhost", "testclient"})
 _MUTATING_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
@@ -595,7 +601,7 @@ async def api_chat(payload: ChatRequest, request: Request) -> dict:
         result = handle_ui_command(message, payload.session_id, classification)
     else:
         result = run_agent(message, payload.session_id, route=classification)
-        result = stamp_route(result, classification)
+        result = stamp_route(result, classification, message)
 
     data = result.model_dump() if hasattr(result, "model_dump") else dict(result)
     remember_hud(payload.session_id, data)
@@ -811,7 +817,9 @@ def api_hermes_run_start(payload: ChatRequest) -> dict:
     if not message:
         raise HTTPException(400, "message required")
     run = start_desk_run(message, payload.session_id)
-    return {"run_id": run.jarvis_id, "status": "started"}
+    from .section_hint import ui_hint
+
+    return {"run_id": run.jarvis_id, "status": "started", "ui": ui_hint(message)}
 
 
 @app.get("/api/hermes/runs/{run_id}/events")

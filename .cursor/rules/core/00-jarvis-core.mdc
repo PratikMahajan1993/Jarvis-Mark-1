@@ -20,7 +20,8 @@ alwaysApply: true
 - Memory/LanceDB: `<repo>/data/memory/`
 
 ## Architecture Invariants
-- **One shell:** `OrchestratorShell` (not `HudShell`)
+- **One page, one substrate:** `JarvisRoot` (root layout) owns the only WebGL context; `/` is a landing + vertical sections (Monitor → Casual → Engineering). Rules: `frontend/22-scroll-substrate.mdc`. Until overhaul Phase 3 merges, the running shell is `OrchestratorShell` (not `HudShell`)
+- **Features plug in, base stays put:** new work goes in `frontend/src/features/<id>/` + `backend/app/features/<id>/`, importing Jarvis code only via `@/sdk`
 - **Two state layers, never collapsed:**
   - `HudWorkspace`: `casual` | `monitor` | `engineering` (job of the screen)
   - `JarvisState` turn FSM: `IDLE` | `LISTENING` | `THINKING` | `SPEAKING` | `AWAITING_HITL` | `EXECUTING`
@@ -36,4 +37,5 @@ alwaysApply: true
 - `docs/SYSTEM_TRUTH.md` — single source of truth (current state + locked decisions)
 - `docs/ROADMAP.md` — next steps & priorities
 - `docs/CURRENT.md` — as-built snapshot
+- `docs/overhaul/EXPERIENCE_DECISIONS.md`, `docs/overhaul/PLATFORM_DECISIONS.md` — scroll-substrate overhaul contract
 - `AGENTS.md` — agent & skill map

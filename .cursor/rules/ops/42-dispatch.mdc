@@ -37,9 +37,9 @@ The user specifies `subagent_type` and `model` at dispatch time — no defaults,
 ## Capability Test Run (Observe → Delegate → Continue)
 1. Test one ID at a time from `work/CAPABILITY_TEST_MATRIX.md`
 2. Note pass/fail + latency
-3. If user requests a fix, dispatch to appropriate roster agent
-4. Continue testing while fix runs in background
-5. Re-test when worker reports back
+3. If the user requests a fix, the coordinator makes it directly — a roster agent only when the user asks for one
+4. Continue testing while a user-requested worker runs in background
+5. Re-test once the fix lands
 
 ## Skills for Dispatch
 - `jarvis-capability-test` — running matrix IDs A1…J*

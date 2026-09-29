@@ -37,51 +37,6 @@ export function autoWorkspaceFromFocus(opts: {
   return "monitor";
 }
 
-/** Short status questions stay on monitor when the user talks from that workspace. */
-export function isStatusUtterance(text: string): boolean {
-  const t = text.trim().toLowerCase().replace(/[?!.]+$/g, "");
-  if (!t) return false;
-
-  const exact = [
-    "status",
-    "what are they doing",
-    "what's running",
-    "whats running",
-    "is mail triaged",
-    "any updates",
-    "what is running",
-    "what's the status",
-    "whats the status",
-    "any news",
-    "what's happening",
-    "whats happening",
-  ];
-  if (exact.includes(t)) return true;
-
-  if (t.length > 80) return false;
-
-  const statusLead =
-    /^(what(?:'s| is| are)|how(?:'s| is| are)|is|are|any)\b/.test(t) &&
-    /\b(status|running|updates?|triaged|happening|doing|progress|idle|watch)\b/.test(t);
-  return statusLead;
-}
-
-const ENGINEERING_HINT =
-  /\b(drawing|drawings|rfq|quote|machin(?:e|ing)|strategy|cnc|nc program|tolerance|fixture|part|job shop|engineering|cam|g[- ]?code|solidworks|step file|dxf)\b/i;
-
-const CASUAL_HINT =
-  /\b(mail|email|inbox|gmail|reply|send|discuss|chat|calendar|meeting|note|remember|remind|hello|hi\b|thanks|thank you)\b/i;
-
-/** When talking from monitor, decide whether to jump workspace before send. */
-export function talkJumpWorkspace(text: string, current: HudWorkspace): HudWorkspace | null {
-  if (current !== "monitor") return null;
-  if (isStatusUtterance(text)) return null;
-  if (ENGINEERING_HINT.test(text)) return "engineering";
-  if (CASUAL_HINT.test(text)) return "casual";
-  // Ambiguous chat-like input defaults to casual desk.
-  return "casual";
-}
-
 export function loadStoredWorkspace(): HudWorkspace | null {
   if (typeof window === "undefined") return null;
   try {

@@ -55,23 +55,28 @@ Hermes shop turns use `POST /v1/runs` and the event stream (tool lines and text 
 
 ---
 
-## 2. HUD Architecture (Locked)
+## 2. HUD Architecture (Locked 2026-09-29 — Scroll Substrate)
 
-### 2.1 Single Pane, Three Lenses
+> **Status:** locked target, built in the overhaul Phase 3. Until it merges, `docs/CURRENT.md` describes the running single-pane HUD. Decisions of record: `docs/overhaul/EXPERIENCE_DECISIONS.md` (`X#`) and `docs/overhaul/PLATFORM_DECISIONS.md` (`P#`). Operating rule: `.cursor/rules/frontend/22-scroll-substrate.mdc`.
 
-**One `OrchestratorShell`** — no per-workspace desk trees, no presence crossfade.
+### 2.1 One Page, Vertical Sections, One Persistent Orb
 
-| Workspace (HudWorkspace) | Lens | Visual Presence |
-|--------------------------|------|-----------------|
-| `casual` | `converse` | Mint orb (`JarvisCore`) + Particles/LightRays |
-| `monitor` | `watch` | Evil Eye (WebGL, ~55% internal res, 30fps, pauses off-screen) |
-| `engineering` | `bench` | Drawing viewer (~55%) + quote/machining stack (~40%) |
+A landing overlay plays on every app open, then the owner lands on the saved (pinned) or ambient section of a single vertically scrolling page:
+
+| Order | Section | HudWorkspace | Orb formula (casberry-style swarm) |
+|-------|---------|--------------|------------|
+| 100 | Monitor | `monitor` | ASCI System — tall, 70% of viewport, above the baton |
+| 200 | Casual | `casual` | Cortex Dinamico — large, centred |
+| 300 | Engineering | `engineering` | CHAT GPT — right-edge side orb, dimmed but reactive |
 
 **Rules:**
-- Workspace (`casual|monitor|engineering`) is orthogonal to Turn FSM (`IDLE|LISTENING|THINKING|SPEAKING|AWAITING_HITL|EXECUTING`) — never collapse
-- All panels always mounted in `<Pane>`; visibility via depth 0–3 (`DEPTH_VARIANTS`), never conditional render
-- Lens changes: all voices start at t=0, settle ≤1.1s, interruptible
-- `OrchestratorShell` does not subscribe to `paneStore.lens` (zero shell commits per lens change)
+- Workspace (`casual|monitor|engineering`) is orthogonal to Turn FSM (`IDLE|LISTENING|THINKING|SPEAKING|AWAITING_HITL|EXECUTING`) — never collapse. The active section (>60% in view) sets the workspace when it declares one; feature sections may declare none.
+- **Substrate hoisted:** `JarvisRoot` in `app/layout.tsx` owns the single WebGL context (worker `OffscreenCanvas`) for the life of the tab; off `/` it is frozen and hidden, never destroyed.
+- **Four layers:** L0 backdrop (CSS, 0.3× parallax) · L1 substrate (fixed canvas) · L2 content (sections, 1×) · L3 foreground (decor 1.2–1.4×, then chrome: StatusCluster, SectionNav, TaskDock, CommandBaton). Modal / toast / landing tiers sit above. Tailwind z-tokens only.
+- **Scroll:** Lenis smooth scroll + mandatory snap; each section `100dvh`; inner scroll areas `data-lenis-prevent`. Scroll position → orb uniforms via `useScroll`/`useTransform`, blended between neighbouring presets, ≤1 worker post per frame.
+- **Lazy mount:** sections declare `lazy {mountWithin, unmountBeyond}` (Engineering `{1, 2}`, prefetched during landing). Replaces the old "all panels always mounted" rule.
+- **Evil Eye removed** entirely; `JarvisCore` (CSS rings, halo, 2D dust canvas) removed. The substrate orb is the only orb.
+- **Extensibility:** features are `features/<id>/` manifests (sections, cards, approvals) plus `backend/app/features/<id>/` (routes, tools, intents, approvals, jobs), registered by one line each and built only on `@/sdk`. See `PLATFORM_DECISIONS.md`.
 
 ### 2.2 Turn FSM (Server is Truth)
 
@@ -88,32 +93,45 @@ Hermes shop turns use `POST /v1/runs` and the event stream (tool lines and text 
 
 **Turn Ledger** (gated by `turn_ledger_enabled`, default **off**) — future work, not yet load-bearing.
 
-### 2.3 Workspace Switching (Hybrid Auto + Pin)
+**Client reducer (`orchestratorFsm.ts`) stays pure.** Scroll-substrate additions: `HITL_PARK` (AWAITING_HITL → IDLE for a parked approval), `HITL_RESUME` (→ AWAITING_HITL), `ROUTE_HINT` (no state change), `RECONCILE` honours parked ids, and pure `effectsFor(prev, next, event)` returns `orb-mode` / `scroll` / `autosave` effects that a store-level runner executes. The reducer never touches DOM or scroll.
+
+### 2.3 Section Switching & Context Jumps
 
 | Rule | Behavior |
 |------|----------|
-| **Unpinned + ambient/empty desk** | Auto-switch to **Monitor** |
-| **Pin on** | Locks auto-switch; explicit work (switcher, +New, RFQ, focusing job/drawing) still moves |
-| **Talk-jump from Monitor** | Status questions → stay Monitor; Mail/chat → Casual; Drawing/quote/strategy → Engineering |
-| **Reduced motion** | Instant snap, no staged delay |
+| **Manual scroll** | Always allowed; active section sets the workspace |
+| **Pin on** | Blocks automatic scrolls only |
+| **Ambient auto-jump to Monitor** | **Dropped** |
+| **From Monitor** | Server `ui.section` hint: drawing/quote/strategy → Engineering; mail/chat → Casual; status → stay |
+| **From Casual** | Server hint on `is_quote_start` or `vision_task` with a drawing → Engineering, stage opens on the drawing *(replaces the old "Casual never jumps" lock)* |
+| **From Engineering** | Explicit only ("back to chat", nav, `ui_command`) → Casual; draft autosaved first |
+| **HITL arrives** | No scroll; modal opens in place; orb moves to screen centre while the modal is open |
+| **Director guards** | Auto scroll dropped if pinned, user interacted <1200 ms ago, or a modal is open; latest request wins |
+| **Reduced motion** | Instant jumps, no parallax, springs snap |
+
+Hint contract: `ChatRequest.section` (current) → `ChatResponse.ui = { section, reason } | null`. The client keyword `talkJumpWorkspace` is retired.
 
 ### 2.4 Visual Specs (Locked)
 
-**Monitor (Evil Eye):**
-- `eyeColor="#FF6F37"`, `intensity={1.5}`, `pupilSize={0.6}`, `irisWidth={0.25}`, `glowIntensity={0.3}`, `scale={0.8}`, `noiseScale={1}`, `pupilFollow={1}`, `flameSpeed={1}`, `backgroundColor="#120F17"`
-- Internal ~55% resolution / 30fps; CSS upscales
-- Pauses when Monitor is not live workspace (tab hidden or other workspace)
-- **No Aero Shards**, **no revolving orbs** — still sun-agent orbs below eye only
+**Orb (substrate, all sections):** a 20,000-particle swarm (instanced tetrahedra + bloom, `ogl`, no Three.js). Each section runs an owner-chosen casberry formula in the worker (`substrate/formulas/`, verbatim; see `docs/overhaul/ORB_FORMULAS.md`); particles ease toward formula targets, which is also how shapes morph between sections. FSM states move formula controls only — never position — except HITL (centre, height ≥ 0.6 while the modal is open):
 
-**Casual:**
-- Mint accent `#7dffe0`
-- Left Open notes (max 3 expanded), weather chip (shrink-0), suggested tasks, CommandBaton, tiny orchestra dots
-- React Bits: `Particles`, `LightRays` on orb only (`ssr: false`)
+| State | Morph |
+|-------|-------|
+| idle | Owner-exported control values |
+| listening | Calmer (less chaos/distortion, slower pulse/flow) |
+| thinking / executing | Agitated (more chaos/distortion, faster pulse/flow) |
+| speaking | Chaos/distortion follows TTS amplitude |
+| hitl | Slow, amber, centred |
 
-**Engineering:**
-- Drawing hero (~55% `DrawingViewer` + pdf.js), quote/machining stack (~40%)
-- SpotlightCard / GlareHover accents
-- **No WebGL** (no Eye, no Casual orb, no Shards)
+**Landing:** particles start as a scattered cloud and gather into the target section's formula as preload gates pass, with one real-gate status line; min 1.4 s, cap 4.0 s; preloads Monitor → Casual → Engineering chunks behind it.
+
+**Command baton:** visible in every section; dims (0.35) while scrolling, restores 400 ms after.
+
+**Task queue:** HITL modal **Later** morphs it into a draft chip in the right-edge **TaskDock**; resume morphs back to the full Authorize/Reject modal (never authorize from a chip).
+
+**Engineering:** drawing stage + quote stack; saved-for-later tasks live in a stacked-card **deck** (hero when no task is active, collapsed pile beside the stage otherwise). Owner edits autosave on section leave and every 2 s.
+
+**Monitor / Casual cards:** Open notes (max 3 expanded), weather (`shrink-0`), suggested tasks, orchestra dots — as slot cards. **No Aero Shards.**
 
 ---
 
@@ -459,8 +477,12 @@ Fails closed on: unresolved modal state; motion outside travels; rapid below cle
 | `work/CAPABILITY_TEST_MATRIX.md` | Capability test IDs and log |
 | `backend/app/hermes/playbooks/quote/` | Shop-quote playbook source |
 | `backend/app/quote.py` | Quote implementation |
-| `frontend/src/lib/orchestratorFsm.ts` | Pure FSM reducer |
-| `frontend/src/components/orchestrator/OrchestratorShell.tsx` | Primary shell |
+| `frontend/src/lib/orchestratorFsm.ts` | Pure FSM reducer + `effectsFor` |
+| `frontend/src/components/orchestrator/OrchestratorShell.tsx` | Primary shell (dismantled into `core/` during overhaul Phase 3) |
+| `docs/overhaul/EXPERIENCE_DECISIONS.md` | Scroll-substrate UX decisions (`X#`) |
+| `docs/overhaul/PLATFORM_DECISIONS.md` | Feature platform / SDK / stores decisions (`P#`) |
+| `.cursor/rules/frontend/22-scroll-substrate.mdc` | Substrate hoisting, layer tiers, feature templates |
+| `frontend/src/substrate/` | Single WebGL `SubstrateEngine`, orb presets, protocol |
 
 ---
 
@@ -493,6 +515,13 @@ Fails closed on: unresolved modal state; motion outside travels; rapid below cle
 | 2026-09-23 | Single pane, no staged morph | UI_UX_POINTS §2026-09-23 |
 | 2026-09-29 | Desk speech is Gemini TTS, voice Charon. Quota exhaustion stays silent | `gemini_tts.py` |
 | 2026-09-29 | Shop intent: ONNX bi-encoder first, Gemini only under 0.65 | `core/router.py` |
+| 2026-09-29 | Scroll-substrate HUD: landing + vertical Monitor/Casual/Engineering, root-hoisted substrate, 4 layers, Lenis snap | `docs/overhaul/EXPERIENCE_DECISIONS.md` |
+| 2026-09-29 | Evil Eye removed; one orb; Engineering WebGL lock lifted (dimmed side orb) | X5 |
+| 2026-09-29 | Casual → Engineering jump on server hint (supersedes "Casual never jumps") | X4 |
+| 2026-09-29 | HITL park → TaskDock draft chip; Engineering saved-task deck | X8, X9 |
+| 2026-09-29 | Orb = casberry-style particle swarm; formulas per section (Casual Cortex Dinamico, Monitor ASCI System, Engineering CHAT GPT) run verbatim in the worker | X5, `docs/overhaul/ORB_FORMULAS.md` |
+| 2026-09-29 | Feature platform: manifests + `@/sdk`, TanStack Query, `/api/events`, OpenAPI types, scaffold, Vitest | `docs/overhaul/PLATFORM_DECISIONS.md` |
+| 2026-09-29 | Coordinator implements directly; no mandatory subagent hand-off | `.cursor/rules/ops/42-dispatch.mdc` |
 
 ---
 

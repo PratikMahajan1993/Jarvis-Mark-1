@@ -52,6 +52,10 @@ export type PendingAction = {
   tool_name?: string;
   irreversibility?: number;
   consequence?: string;
+  status?: string;
+  session_id?: string;
+  created_at?: string;
+  expires_at?: string;
 };
 
 export type ActivityEvent = {
@@ -166,6 +170,8 @@ export type ChatResponse = {
   target_agent?: string | null;
   route_intent?: string | null;
   ui_action?: Record<string, unknown> | null;
+  /** Server scroll hint (X4). */
+  ui?: { section: string; reason: string } | null;
   drawing_chat?: {
     open: boolean;
     notes?: string;

@@ -34,7 +34,7 @@ Fix (if any):
 Retest:
 ```
 
-6. On fail/flaky observation → skill **`jarvis-observation-dispatch`** (background worker; place it per that skill).
+6. On fail/flaky observation → the coordinator fixes it directly. Use skill **`jarvis-observation-dispatch`** only when the user asks for a background worker.
 7. Do not skip HITL cases or mark pass if Authorize was bypassed.
 8. Latency targets: casual ≤~5s warm; simple tools ≤~15s; HUD idle &lt;~2s.
 

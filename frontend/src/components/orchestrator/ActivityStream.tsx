@@ -3,7 +3,14 @@
 import { useEffect, useRef } from "react";
 import type { ActivityItem } from "@/lib/orchestrator";
 
-export function ActivityStream({ items }: { items: ActivityItem[] }) {
+export function ActivityStream({
+  items,
+  className = "absolute left-4 top-[3.35rem] z-[2]",
+}: {
+  items: ActivityItem[];
+  /** Position classes; the default floats the stream over the page. */
+  className?: string;
+}) {
   const detailsRef = useRef<HTMLDetailsElement>(null);
   const latest = items[0];
   const hasItems = items.length > 0;
@@ -30,7 +37,7 @@ export function ActivityStream({ items }: { items: ActivityItem[] }) {
   return (
     <details
       ref={detailsRef}
-      className="orch-activity absolute left-4 top-[3.35rem] z-[2]"
+      className={["orch-activity", className].join(" ")}
     >
       <summary
         className={[
