@@ -3,6 +3,7 @@
 import { motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { getSubstrateState, onSubstrateOut, postSubstrate } from "@/core/root/substrateBridge";
+import { prefetchEngineering } from "@/core/sections/registry";
 import { useDesk } from "@/core/stores/deskStore";
 import { useSubstrateState } from "@/core/root/substrateBridge";
 
@@ -37,7 +38,7 @@ export function Landing({ onDone }: { onDone: () => void }) {
     start.current = performance.now();
     postSubstrate({ type: "gather", progress: 0 });
     void document.fonts.ready.then(() => pass("fonts"));
-    void Promise.all([import("@/components/DrawingViewer"), import("pdfjs-dist")])
+    void Promise.all([prefetchEngineering(), import("@/components/DrawingViewer"), import("pdfjs-dist")])
       .catch(() => undefined)
       .then(() => pass("engineering"));
     return onSubstrateOut((m) => {
@@ -52,12 +53,14 @@ export function Landing({ onDone }: { onDone: () => void }) {
     if (booted) pass("desk");
   }, [booted]);
   useEffect(() => {
-    // Monitor and Casual mount eagerly with the stack; they exist once the stack has reported progress.
-    const t = window.setTimeout(() => {
-      pass("monitor");
-      pass("casual");
+    // Monitor and Casual mount eagerly with the stack; each passes once its content is in the DOM.
+    const seen = (id: string) =>
+      document.querySelector(`[data-section="${id}"] [data-section-content]`) !== null;
+    const poll = window.setInterval(() => {
+      if (seen("monitor")) pass("monitor");
+      if (seen("casual")) pass("casual");
     }, 50);
-    return () => window.clearTimeout(t);
+    return () => window.clearInterval(poll);
   }, []);
 
   const count = passed.size;

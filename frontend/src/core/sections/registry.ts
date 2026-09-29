@@ -9,6 +9,8 @@ import { CASUAL_THEME, ENGINEERING_THEME, MONITOR_THEME } from "./themes";
 
 const loadEngineering = () => import("./engineering/EngineeringSection");
 
+export const prefetchEngineering = () => loadEngineering();
+
 const monitor = defineSection({
   id: "monitor",
   order: 100,
