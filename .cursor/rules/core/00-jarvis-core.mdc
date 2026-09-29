@@ -20,7 +20,7 @@ alwaysApply: true
 - Memory/LanceDB: `<repo>/data/memory/`
 
 ## Architecture Invariants
-- **One page, one substrate:** `JarvisRoot` (root layout) owns the only WebGL context; `/` is a landing + vertical sections (Monitor → Casual → Engineering). Rules: `frontend/22-scroll-substrate.mdc`. Until overhaul Phase 3 merges, the running shell is `OrchestratorShell` (not `HudShell`)
+- **One page, one substrate:** `JarvisRoot` (root layout) owns the only WebGL context; `/` is `Desk` — a landing overlay, then vertical sections (Monitor → Casual → Engineering). Rules: `frontend/22-scroll-substrate.mdc`. `OrchestratorShell` and `HudShell` are not the desk
 - **Features plug in, base stays put:** new work goes in `frontend/src/features/<id>/` + `backend/app/features/<id>/`, importing Jarvis code only via `@/sdk`
 - **Two state layers, never collapsed:**
   - `HudWorkspace`: `casual` | `monitor` | `engineering` (job of the screen)

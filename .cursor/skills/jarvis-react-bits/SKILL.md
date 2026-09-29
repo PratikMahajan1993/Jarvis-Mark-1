@@ -1,10 +1,9 @@
 ---
 name: jarvis-react-bits
 description: >
-  Implement or fix React Bits accents on the Jarvis Orchestrator HUD. Use when
-  adding SpotlightCard, GlareHover, GradientText, BlurText, ClickSpark,
-  ElectricBorder, Particles, LightRays, Magnet, CardSwap; when fixing spotlight
-  scroll, weather shrink, or suggested-task card expand/collapse.
+  Implement or fix React Bits accents on the Jarvis scroll desk. Use when
+  adding SpotlightCard, GlareHover, GradientText, or ElectricBorder; when
+  fixing spotlight scroll, weather shrink, or suggested-task card expand/collapse.
 paths: frontend/**/*.{tsx,ts,css}
 ---
 
@@ -40,8 +39,9 @@ paths: frontend/**/*.{tsx,ts,css}
 
 ## WebGL
 
-- `Particles` / `LightRays` only behind the orb in `JarvisCore`, loaded with `dynamic(..., { ssr: false })`.
-- **Headless Chrome needs one extra flag.** Without it, `Particles.tsx` throws `unable to create webgl context` and the HUD shows Next's error overlay instead of the desk — this happens on cloud VMs with no GPU just as easily as anywhere else. Fix: launch with `--enable-unsafe-swiftshader` (e.g. `google-chrome --headless=new --enable-unsafe-swiftshader --window-size=1440,900 --screenshot=out.png http://127.0.0.1:3000`, or pass it in `args` when launching via `puppeteer-core`/`playwright` with `executablePath` pointed at the system Chrome). Confirmed working on a cloud VM with no GPU — this is a one-line launch-flag fix, not evidence the HUD needs the desk machine.
+- The desk orb is the substrate swarm in `frontend/src/substrate/` (`JarvisRoot`, one context). Do not mount `Particles`, `LightRays`, `AeroShards`, or a second `getContext("webgl")`.
+- `ClickSpark`, `BlurText`, `CardSwap`, `Particles`, `LightRays`, and `AeroShards` are vendored and not mounted on the desk. `EvilEye` and `JarvisCore` are gone.
+- **Headless Chrome needs one extra flag** for the substrate. Without `--enable-unsafe-swiftshader`, a GPU-less VM fails to create the WebGL context and the HUD shows Next's error overlay. Example: `google-chrome --headless=new --enable-unsafe-swiftshader --window-size=1440,900 --screenshot=out.png http://127.0.0.1:3000`. That flag is a launch fix, not evidence the HUD needs the desk machine.
 
 ## Checklist before done
 

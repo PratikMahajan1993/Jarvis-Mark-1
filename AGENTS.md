@@ -8,10 +8,10 @@ Persistent guidance for Cursor agents working in this repo during capability tes
 |-----|------|
 | `docs/SYSTEM_TRUTH.md` | **Single source of truth** — current state, locked decisions, architecture, all rules |
 | `docs/ROADMAP.md` | **Next steps & priorities** — phased execution plan |
-| `docs/CURRENT.md` | **As-built** — what works on the desk today |
+| `docs/CURRENT.md` | **As-built** — what works today, including the open delta vs the X# / P# contracts |
 | `docs/overhaul/EXPERIENCE_DECISIONS.md` | Scroll-substrate HUD decisions (`X#`) — landing, sections, orb, layers, queue, deck |
-| `docs/overhaul/PLATFORM_DECISIONS.md` | Feature platform decisions (`P#`) — folders, manifests, SDK, stores, backend wiring, Phase 3 order |
-| `work/CAPABILITY_TEST_MATRIX.md` | Capability test IDs and log |
+| `docs/overhaul/PLATFORM_DECISIONS.md` | Feature platform decisions (`P#`) — folders, manifests, SDK, stores, backend wiring |
+| `work/CAPABILITY_TEST_MATRIX.md` | Capability test IDs (sections A–O and S) |
 
 ## Rules
 
@@ -29,9 +29,9 @@ One page, not three lenses. A landing overlay preloads the desk, then the owner 
 - **Layers:** L0 backdrop · L1 substrate · L2 sections/cards · L3 decor + chrome (StatusCluster, SectionNav, TaskDock, CommandBaton); modal/toast/landing tiers above. Tailwind z-tokens only.
 - **Orb:** one persistent casberry-style particle swarm; each section runs an owner-chosen formula (`frontend/src/substrate/formulas/`, see `docs/overhaul/ORB_FORMULAS.md`) and scroll morphs between them; FSM states move formula controls only (HITL also centres it). Evil Eye is gone.
 - **State:** `orchestratorFsm.ts` is a pure reducer + `effectsFor`; stores under `frontend/src/core/stores/` run effects; `core/scroll/director.ts` owns every programmatic scroll.
-- **Adding things:** a feature is `frontend/src/features/<id>/feature.ts` (+ `backend/app/features/<id>/`) registered with one line, importing Jarvis code only via `@/sdk`. Start with `npm run new:feature <id>`. Templates: `.cursor/rules/frontend/22-scroll-substrate.mdc` §6–9. **Never edit `core/`, `substrate/`, the FSM or the root layout to ship a feature.**
+- **Adding things:** a feature is `frontend/src/features/<id>/feature.ts` (+ `backend/app/features/<id>/`) registered with one line, importing Jarvis code only via `@/sdk`. Start with `npm run new:feature <id>` (it registers both indexes). Weather’s backend module is `backend/app/features_weather.py`. Templates: `.cursor/rules/frontend/22-scroll-substrate.mdc`. **Never edit `core/`, `substrate/`, the FSM, or the root layout to ship a feature.**
 
-Until overhaul Phase 3 merges, the running HUD is the single-pane `OrchestratorShell` described in `docs/CURRENT.md`.
+This scroll desk is the running HUD. `OrchestratorShell` and `HudShell` are gone. What is still open versus the contracts is only in `docs/CURRENT.md`. `work/ARCHITECTURE_POINTS.md`, `work/UI_UX_POINTS.md`, and `work/APP_FEATURES.md` are decision logs, not status.
 
 ## Skills (Auto-Routed by Description)
 
@@ -40,7 +40,7 @@ Until overhaul Phase 3 merges, the running HUD is the single-pane `OrchestratorS
 | `jarvis-architecture` | Any structural / stack / workflow change |
 | `jarvis-quote-playbook` | Quote/RFQ workflow, shop-quote skill, `quote_verify`, Engineering desk |
 | `jarvis-react-bits` | Adding or fixing React Bits surfaces |
-| `jarvis-capability-test` | Running matrix IDs A1…J* |
+| `jarvis-capability-test` | Running matrix IDs A1…O* and S1… |
 | `jarvis-observation-dispatch` | User reports a live observation mid-test |
 
 ## Specialized Subagents (`.cursor/agents/`)

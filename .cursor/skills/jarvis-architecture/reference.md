@@ -38,11 +38,11 @@ Kinds in `SNAPSHOT_KINDS` (briefing, mail_search, mail_read, calendar_list) use 
 
 - Ambient session = everyday desk (default workspace **monitor** when unpinned)
 - **Workspaces:** `casual` | `monitor` | `engineering` — orthogonal to turn FSM (`orchestratorFsm.ts`)
-- **Talk-jump:** `talkJumpWorkspace(text, current)` — returns `null` unless `current === "monitor"`; engineering hints jump to Engineering; same quote/drawing words on Casual do **not** jump
+- **Talk-jump:** server `ui` hint from `backend/app/section_hint.py`. `applyServerHint` in `frontend/src/core/desk/controller.ts` routes to that section. Quote start and drawing words go to Engineering from any section, including Casual. Engineering ignores a hint unless `reason` is `explicit`. Pin, an open modal, or user activity in the last 1.2 s drops or defers the scroll (`core/scroll/director.ts`). `talkJumpWorkspace` is gone.
 - Discussions / jobs = named conversations in Open notes
 - Suggested RFQ “engineering” opens/resumes a job workflow note
-- Weather is **outside** the scrollable tasks list (`WeatherCard` + `shrink-0`)
-- **HITL restore:** `OrchestratorShell.loadSessionSurface` fetches `pending_actions` and opens `HitlModal` for the first row (any workspace)
+- Weather is **outside** the scrollable tasks list (`features/weather` `WeatherCard` + `shrink-0` on the Monitor rail)
+- **HITL restore:** `loadSessionSurface` in `core/desk/controller.ts` fetches `pending_actions` and opens `HitlModal` for the first row
 
 ## Quote playbook (shop-quote)
 

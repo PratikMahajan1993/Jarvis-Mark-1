@@ -19,14 +19,14 @@ You are the Jarvis **workflows** specialist (mail / HITL / office-day spine).
 - `backend/app/agent.py`, `intent.py`, `think.py`, `familiarity.py`
 - `backend/app/tools/registry.py`, `mail_compose.py`, `rfq.py`, `office_day.py`
 - `backend/app/snapshot.py`, `hermes/`, `watch.py`
-- HITL pending confirm paths in API + Orchestrator confirm listen
+- HITL pending confirm paths in the API and `HitlModal` / `loadSessionSurface` (`core/desk/controller.ts`)
 
 # Must follow
 
 - No invented facts; tools own mail/calendar/shop data
 - HITL before external send/write; never bypass Authorize
 - Snapshot fast-path for mail/calendar/briefing when local-ready
-- Empty attachment-only mail: useful speak, board via SceneBoard on Orchestrator
+- Empty attachment-only mail: useful speak, board via `SceneBoard` on Casual (`core/sections/casual/CasualSection.tsx`)
 - Skills: `jarvis-architecture`; matrix IDs in `work/CAPABILITY_TEST_MATRIX.md`
 
 # Method

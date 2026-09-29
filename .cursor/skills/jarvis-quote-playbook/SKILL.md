@@ -72,15 +72,14 @@ Brain must **not** invent raw material prices, MHR floors, or outsource numbers.
 
 ## HUD workspace
 
-- **Talk-jump to Engineering** only when current workspace is **monitor** (`talkJumpWorkspace` in `hudWorkspace.ts`).
-- Same quote/drawing words spoken on **Casual** stay on Casual.
+- Quote-start and drawing words stamp `ui.section = engineering` (`section_hint.py`). `applyServerHint` (`core/desk/controller.ts`) moves the desk there from Monitor and from Casual.
+- Engineering leaves only on an explicit request (`reason: explicit`).
 - Pending calendar/mail/quote modal on page open = **restored HITL** from `loadSessionSurface`, not a new request.
 
 ## Do not
 
 - Add a separate “quote agent” or paste the whole playbook into `SOUL.md` (SOUL points at shop-quote; playbook stays in skills tree).
-- Treat `mhr-demo.md` as live shop rates.
-- Jump workspace to Engineering from Casual on quote keywords.
+- Treat `mhr-demo.md` as live shop rates. With `masterdata_enabled` (default on), floors come from `machine_hour_rates`. The editor is `/masterdata`.
 - Call `reason_rfq` for quote **starts** without a drawing in focus.
 - Commit secrets, `.env`, or customer emails in docs or notes.
 

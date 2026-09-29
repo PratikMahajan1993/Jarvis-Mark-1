@@ -1,7 +1,7 @@
 # Jarvis — Roadmap (Next Steps & Priorities)
 
 **Generated:** 2026-09-25  
-**Updated:** 2026-09-29  
+**Updated:** 2026-09-30  
 **Status:** Active execution plan. Single source of truth for what to build next.  
 **Reference:** `docs/SYSTEM_TRUTH.md` for locked architecture and rules.
 
@@ -13,14 +13,14 @@
 
 | ID | Task | Owner | Acceptance | Status |
 |----|------|-------|------------|--------|
-| F0.1 | Verify HUD single-pane architecture | `jarvis-uiux` | One `OrchestratorShell`; three lenses; no conditional panel mounts; depth-only visibility | 🔄 |
+| F0.1 | Verify scroll-desk HUD | `jarvis-uiux` | `JarvisRoot` + `Desk`; Monitor → Casual → Engineering; one WebGL context; workspace from the active section | Shell is in the tree; full pass is F0.8 |
 | F0.2 | Verify Turn FSM + Workspace orthogonality | `jarvis-uiux` | FSM never stores workspace; workspace never collapses into turn state | 🔄 |
 | F0.3 | Verify HITL claim-once + external effects bracket | `jarvis-workflows` | `pending_actions` flow correct; `request_hash` inserted before outbound; boot reconciliation works | 🔄 |
 | F0.4 | Verify quote playbook gates (BLOCKER/WARN, stage-dependent) | `jarvis-workflows` | `quote_verify` blocks send on any BLOCKER; delivery WARN at draft/BLOCKER at send; PDF sha256 bound | 🔄 |
 | F0.5 | Verify drawing vision two gates (consent + quota) | `jarvis-workflows` | Gate 1: default deny, customer terms only; Gate 2: 5/cycle, owner-only spend, claim-before-dispatch | 🔄 |
 | F0.6 | Verify 100% local memory (Honcho stripped) | `jarvis-workflows` | No cloud memory calls; SQLite + LanceDB only; three planes never collapsed | 🔄 |
 | F0.7 | Verify MHR floors + RM freshness blockers | `jarvis-workflows` | Missing/expired rate = BLOCKER; RM basis >30 days = BLOCKER at send; demo table attested only | 🔄 |
-| F0.8 | Run full capability test matrix (A–O, skip retired) | Coordinator | All desk/cloud/offline tests pass; latency targets met | ⏳ |
+| F0.8 | Run full capability test matrix (A–O and S, skip retired) | Coordinator | All desk/cloud/offline tests pass; latency targets met | ⏳ |
 
 **Exit Criteria (Foundation Done):**
 1. Casual Hermes warm latency ≤5s
@@ -107,7 +107,7 @@
 | O5.4 | End-of-day report | `jarvis-workflows` | Useful daily summary | P2 |
 | O5.5 | Remote: Telegram/email when away | `jarvis-workflows` | Basic command relay | P3 |
 | O5.6 | Overnight attach download / night-shift ingest as script-only Hermes cron | `jarvis-workflows` | `no_agent=True`; not LLM poll | P2 |
-| O5.7 | Orchestrator HUD drag-and-drop drawings | `jarvis-uiux` | Walk-up/hard-copy/WhatsApp files land as inbox files | P1 |
+| O5.7 | Desk drag-and-drop drawings | `jarvis-uiux` | Walk-up/hard-copy/WhatsApp files land as inbox files on the Engineering deck | P1 |
 
 ---
 
@@ -145,7 +145,7 @@ Desk speech is Gemini TTS, voice Charon (`gemini_tts.py`). Lite, then 3.8 Flash,
 
 | ID | Task | Owner | Acceptance | Priority |
 |----|------|-------|------------|----------|
-| C8.1 | `/canvas` route remains separate (not fourth lens) | `jarvis-uiux` | Board CRUD, file upload, artifact display work | P3 |
+| C8.1 | `/canvas` route remains separate (not a fourth desk section) | `jarvis-uiux` | Board CRUD, file upload, artifact display work | P3 |
 | C8.2 | SceneBoard / Engineering stack displays tool artifacts | `jarvis-uiux` | Artifact widgets render correctly | P2 |
 
 ---
@@ -169,20 +169,20 @@ Desk speech is Gemini TTS, voice Charon (`gemini_tts.py`). Lite, then 3.8 Flash,
 |----------|-------|--------------|
 | P0 | `jarvis-workflows` | Quote, HITL, mail, calendar, memory, vision gates, master data |
 | P0 | `jarvis-builder` | Migrations, restarts, live verification, SQLite config |
-| P1 | `jarvis-uiux` | HUD panes, lenses, bench, React Bits, morph, canvas |
+| P1 | `jarvis-uiux` | Sections, cards, scroll desk, React Bits, morph, canvas |
 | P1 | `jarvis-voice` | Gemini TTS, Charon, silence on quota |
 | P2 | Coordinator | Capability test dispatch, observation routing |
 
 ---
 
-## Current Blockers (2026-09-25)
+## Current Blockers
 
 | Blocker | Impact | Resolution |
 |---------|--------|------------|
-| Hermes gateway timeout (30s) on quote starts | Fallback triggers, delays quote | Investigate Hermes health; consider longer timeout or better warmup |
-| `live_service` marker not registered | CI/offline tests may hit live services | Add marker to `conftest.py` |
-| Turn ledger off by default | FSM reconciliation paths untested | Enable in test env; verify reconcile logic |
-| Master data UI deferred | Rate attestation manual | Build minimal attestation UI or script |
+| Hermes gateway timeout (30s) on quote starts | Fallback line fires and the quote waits | Recorded 2026-09-25. Not re-measured in the 2026-09-30 docs pass. Check Hermes health before raising the timeout |
+| Capability matrix not run end-to-end on the scroll desk | F0.8 still open | Run `work/CAPABILITY_TEST_MATRIX.md` (include section S) |
+
+Resolved since 2026-09-25: `live_service` is registered (`backend/conftest.py`, `pytest.ini`). Master Data UI is `/masterdata` and `masterdata_enabled` defaults on. Turn ledger stays off on purpose (Phase 7).
 
 ---
 
@@ -203,9 +203,10 @@ Desk speech is Gemini TTS, voice Charon (`gemini_tts.py`). Lite, then 3.8 Flash,
 | Date | Change | Reason |
 |------|--------|--------|
 | 2026-09-25 | Roadmap created from consolidated SYSTEM_TRUTH | Single source of truth established; all prior docs superseded |
+| 2026-09-30 | F0.1 acceptance rewritten for the scroll desk. `live_service` and Master Data UI removed from blockers | Those items are in the tree; the matrix run is still open |
 
 ---
 
-**Next Review:** After Phase 0 verification complete (target: 2026-09-28).  
-**Coordination:** Use `jarvis-observation-dispatch` skill when reporting live observations during testing.  
-**Capability Tests:** Run per `work/CAPABILITY_TEST_MATRIX.md` order (I3 → E1/P1 → P7-P9 → P10-P12 → P13/E2/E16/E17 → P14 → P2/P3 → P4/P5/P6 → P15/E11/B2-B3 → E8-E10/E14-E15 → A1-A3/A8-A10/A14 → K1-K3/K6 → C3-C5/C8 → D1-D2 → E3-E7/A7 → F1/F5 → G2-G6/L1-L2 → H1-H4 → N1-N2 → O* after G6).
+**Next review:** After an F0.8 capability-matrix pass on the scroll desk.  
+**Coordination:** The coordinator fixes observations directly. Use `jarvis-observation-dispatch` only when the user asks for a background worker.  
+**Capability tests:** `work/CAPABILITY_TEST_MATRIX.md` (sections A–O and S). Suggested order is in that file.

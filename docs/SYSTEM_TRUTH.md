@@ -1,7 +1,7 @@
 # Jarvis — System Truth (Single Source of Truth)
 
 **Generated:** 2026-09-25  
-**Updated:** 2026-09-29  
+**Updated:** 2026-09-30  
 **Status:** Consolidated from all living notes, architecture manifests, capability matrices, and as-built docs. This document replaces all prior work/ and docs/ files.
 
 ---
@@ -15,7 +15,7 @@ Jarvis is a **24/7 AI office assistant** for a precision machining company. It r
 **Three-layer architecture:**
 | Layer | Role | Technology |
 |-------|------|------------|
-| **Orchestrator (Jarvis)** | Conversation face, HUD/voice, HITL gates, connector ownership, task routing | Next.js 15 (frontend/), FastAPI (backend/app/) |
+| **Jarvis (desk)** | Conversation face, HUD/voice, HITL gates, connector ownership, task routing | Next.js 15 (`frontend/`), FastAPI (`backend/app/`) |
 | **Primary Brain (Hermes)** | Intent understanding, planning, tool choice, draft content, research | Local gateway on :8642 |
 | **Overflow/Specialist (Gemini)** | Vision/drawing analysis, heavy research, explicit delegation, fallback | API (cloud) |
 
@@ -57,7 +57,7 @@ Hermes shop turns use `POST /v1/runs` and the event stream (tool lines and text 
 
 ## 2. HUD Architecture (Locked 2026-09-29 — Scroll Substrate)
 
-> **Status:** locked target, built in the overhaul Phase 3. Until it merges, `docs/CURRENT.md` describes the running single-pane HUD. Decisions of record: `docs/overhaul/EXPERIENCE_DECISIONS.md` (`X#`) and `docs/overhaul/PLATFORM_DECISIONS.md` (`P#`). Operating rule: `.cursor/rules/frontend/22-scroll-substrate.mdc`.
+> **Status:** this is the running desk. `app/layout.tsx` mounts `JarvisRoot`; `/` mounts `Desk`. `OrchestratorShell` and `HudShell` are gone. Decisions of record: `docs/overhaul/EXPERIENCE_DECISIONS.md` (`X#`) and `docs/overhaul/PLATFORM_DECISIONS.md` (`P#`). Where the code still differs from those contracts, `docs/CURRENT.md` (Contract Delta) wins as the as-built note. Operating rule: `.cursor/rules/frontend/22-scroll-substrate.mdc`.
 
 ### 2.1 One Page, Vertical Sections, One Persistent Orb
 
@@ -102,9 +102,9 @@ A landing overlay plays on every app open, then the owner lands on the saved (pi
 | **Manual scroll** | Always allowed; active section sets the workspace |
 | **Pin on** | Blocks automatic scrolls only |
 | **Ambient auto-jump to Monitor** | **Dropped** |
-| **From Monitor** | Server `ui.section` hint: drawing/quote/strategy → Engineering; mail/chat → Casual; status → stay |
-| **From Casual** | Server hint on `is_quote_start` or `vision_task` with a drawing → Engineering, stage opens on the drawing *(replaces the old "Casual never jumps" lock)* |
-| **From Engineering** | Explicit only ("back to chat", nav, `ui_command`) → Casual; draft autosaved first |
+| **Server hint** | Text-only (`section_hint.py`), same from every section. Quote start → Engineering (`quote`). Drawing, RFQ, machining, CNC, or strategy words → Engineering (`drawing`). Mail, chat, or a greeting → Casual. A short status question returns no hint |
+| **While Engineering is showing** | `applyServerHint` ignores the hint unless `reason` is `explicit` ("back to chat", "leave engineering", "close the bench"). Section nav still leaves and autosaves first |
+| **Client** | `talkJumpWorkspace` is retired. The hint does not by itself open the drawing stage |
 | **HITL arrives** | No scroll; modal opens in place; orb moves to screen centre while the modal is open |
 | **Director guards** | Auto scroll dropped if pinned, user interacted <1200 ms ago, or a modal is open; latest request wins |
 | **Reduced motion** | Instant jumps, no parallax, springs snap |
@@ -403,12 +403,11 @@ Fails closed on: unresolved modal state; motion outside travels; rapid below cle
 
 ---
 
-## 10. Rate Data (Locked 2026-09-22)
+## 10. Rate Data (Locked 2026-09-22, UI shipped)
 
-- `source_kind='demo'` table = production source while Master Data UI deferred
-- Owner fills with real shop rates
+- `masterdata_enabled` defaults **on**. The editor is `/masterdata`. While the flag is on, markdown `mhr-demo.md` and `client-names.md` are not the live tables.
 - **Sendability hinges on attestation, not storage**
-- Rate quotable only once `attested_by` set + value ≠ shipped seed
+- A `source_kind='demo'` row is stored and is quotable only once `attested_by` is set and the value differs from the shipped seed
 - Missing machine, missing rate, unlisted machine → **blocks send** (not skip)
 
 ---
@@ -428,8 +427,9 @@ Fails closed on: unresolved modal state; motion outside travels; rapid below cle
 | B | HITL & safety | desk/cloud/offline |
 | C | Mail | desk/offline |
 | D | Calendar & briefing | desk/cloud |
-| E | Orchestrator HUD & FSM | cloud |
-| P | HUD workspaces, morph & skins | cloud (P16/P17 retired) |
+| E | Scroll desk HUD & FSM | cloud |
+| P | HUD sections, morph & skins | cloud (P16/P17 retired) |
+| S | Landing, snap, dock, deck, feature card | cloud |
 | F | Shop / sheets / CNC / docs | desk/offline |
 | G | RFQ → quote → send | desk/offline |
 | H | Memory & RAG | desk/offline |
@@ -441,8 +441,8 @@ Fails closed on: unresolved modal state; motion outside travels; rapid below cle
 | N | Connectors & preferences | desk/offline |
 | O | Stretch (later) | — |
 
-**Test method:** One use case at a time → pass/fail + latency → dispatch fix → continue  
-**Prerequisite:** `OrchestratorShell` at :3000, two state layers never collapsed  
+**Test method:** One use case at a time → pass/fail + latency → fix → continue. The ID list is `work/CAPABILITY_TEST_MATRIX.md` (this table is only the index).  
+**Prerequisite:** `JarvisRoot` + `Desk` at :3000. Workspace comes from the active section. Turn FSM stays a separate layer.  
 **Run log:** Auto-appended by API to `work/LIVE_TEST.md` + JSONL (distinct from human verdict log)
 
 ---
@@ -465,24 +465,26 @@ Fails closed on: unresolved modal state; motion outside travels; rapid below cle
 
 | File | Role |
 |------|------|
-| `docs/CURRENT.md` | As-built snapshot (what works on desk today) |
+| `docs/CURRENT.md` | As-built snapshot and the only open-gap list |
 | `docs/SYSTEM_TRUTH.md` | **This file** — single source of truth |
 | `docs/ROADMAP.md` | Next steps & priorities |
 | `AGENTS.md` | Agent & skill map |
 | `.cursor/rules/core/00-jarvis-core.mdc` | Always-on core rules |
 | `.cursor/rules/backend/*.mdc` | Backend module rules |
-| `.cursor/rules/domain/*.mdc` | Domain workflow rules (quote, gcode, vision, master data, knowledge) |
-| `.cursor/rules/frontend/*.mdc` | HUD shell, React Bits, UI/UX |
-| `.cursor/rules/ops/*.mdc` | Tests and dispatch |
+| `.cursor/rules/domain/30-quote-playbook.mdc` | Quote workflow rule. G-code, vision, master data, and knowledge rules live in this document, not in extra `.mdc` files |
+| `.cursor/rules/frontend/22-scroll-substrate.mdc` | Substrate hoisting, layer tiers, feature templates. React Bits guidance is the `jarvis-react-bits` skill |
+| `.cursor/rules/ops/42-dispatch.mdc` | Tests and dispatch |
 | `work/CAPABILITY_TEST_MATRIX.md` | Capability test IDs and log |
 | `backend/app/hermes/playbooks/quote/` | Shop-quote playbook source |
 | `backend/app/quote.py` | Quote implementation |
+| `backend/app/section_hint.py` | Server `ui.section` hints |
 | `frontend/src/lib/orchestratorFsm.ts` | Pure FSM reducer + `effectsFor` |
-| `frontend/src/components/orchestrator/OrchestratorShell.tsx` | Primary shell (dismantled into `core/` during overhaul Phase 3) |
+| `frontend/src/core/root/JarvisRoot.tsx` | Only WebGL owner for the tab |
+| `frontend/src/core/desk/Desk.tsx` | Landing, sections, chrome |
+| `frontend/src/core/desk/controller.ts` | `applyServerHint`, `loadSessionSurface` |
 | `docs/overhaul/EXPERIENCE_DECISIONS.md` | Scroll-substrate UX decisions (`X#`) |
 | `docs/overhaul/PLATFORM_DECISIONS.md` | Feature platform / SDK / stores decisions (`P#`) |
-| `.cursor/rules/frontend/22-scroll-substrate.mdc` | Substrate hoisting, layer tiers, feature templates |
-| `frontend/src/substrate/` | Single WebGL `SubstrateEngine`, orb presets, protocol |
+| `frontend/src/substrate/` | Single WebGL swarm, formulas, protocol |
 
 ---
 
@@ -492,7 +494,7 @@ Fails closed on: unresolved modal state; motion outside travels; rapid below cle
 |------|----------|-----------|
 | 2026-09-14 | Thin Jarvis shell; Hermes primary brain; Gemini overflow | Vision Workbook §1 |
 | 2026-09-14 | HITL per external action; auto-allow local prep | Vision Workbook §8 |
-| 2026-09-14 | Dual-write memory (Honcho cloud + local) | Vision Workbook §2 |
+| 2026-09-14 | Dual-write memory (Honcho cloud + local) — **superseded** by §6 (Honcho stripped, local only) | Vision Workbook §2 |
 | 2026-09-14 | Hermes-first intelligence; tiny deny-list only | Vision Workbook §7 |
 | 2026-09-14 | Soft Hermes-invented teams; parallel jobs | Vision Workbook §6 |
 | 2026-09-14 | Latency targets; 30s soft Gemini fallback | Vision Workbook §3 |
@@ -503,8 +505,8 @@ Fails closed on: unresolved modal state; motion outside travels; rapid below cle
 | 2026-09-14 | Local-first, single-user, controllable retention | Vision Workbook §13 |
 | 2026-09-14 | Foundation metrics: latency + HITL=0 + office-day loop | Vision Workbook §14 |
 | 2026-09-16 | Three HUD workspaces (Casual/Monitor/Engineering) | ARCHITECTURE_POINTS §2026-09-16 |
-| 2026-09-16 | Staged morph; Aero Shards off Monitor | ARCHITECTURE_POINTS §2026-09-16 |
-| 2026-09-17 | Evil Eye GPU budget (reduced res + 30fps) | ARCHITECTURE_POINTS §2026-09-17 |
+| 2026-09-16 | Staged lens morph; Aero Shards off Monitor — **superseded** by the scroll desk (2026-09-29). Aero Shards stay unmounted | ARCHITECTURE_POINTS §2026-09-16 |
+| 2026-09-17 | Evil Eye GPU budget — **superseded** 2026-09-29 (Evil Eye removed; one substrate orb) | ARCHITECTURE_POINTS §2026-09-17 |
 | 2026-09-17 | Hermes playbook loop (quote first) | ARCHITECTURE_POINTS §2026-09-17 |
 | 2026-09-17 | Quote start many ways; no extra intent AI | ARCHITECTURE_POINTS §2026-09-17 |
 | 2026-09-21 | Knowledge planes: drawing remembered, not reprocessed | ARCHITECTURE_POINTS §2026-09-21 |
@@ -512,7 +514,7 @@ Fails closed on: unresolved modal state; motion outside travels; rapid below cle
 | 2026-09-22 | Casual chat = Gemini-direct | ARCHITECTURE_POINTS §2026-09-22 |
 | 2026-09-22 | One Hermes chat per quote; wipe transcript store | ARCHITECTURE_POINTS §2026-09-24 |
 | 2026-09-23 | Overhaul workers local (not cloud) | ARCHITECTURE_POINTS §2026-09-23 |
-| 2026-09-23 | Single pane, no staged morph | UI_UX_POINTS §2026-09-23 |
+| 2026-09-23 | Single-pane lenses, no staged morph — **superseded** 2026-09-29 by vertical sections. The desk is one page, not three lens panes | UI_UX_POINTS §2026-09-23 |
 | 2026-09-29 | Desk speech is Gemini TTS, voice Charon. Quota exhaustion stays silent | `gemini_tts.py` |
 | 2026-09-29 | Shop intent: ONNX bi-encoder first, Gemini only under 0.65 | `core/router.py` |
 | 2026-09-29 | Scroll-substrate HUD: landing + vertical Monitor/Casual/Engineering, root-hoisted substrate, 4 layers, Lenis snap | `docs/overhaul/EXPERIENCE_DECISIONS.md` |
@@ -522,8 +524,13 @@ Fails closed on: unresolved modal state; motion outside travels; rapid below cle
 | 2026-09-29 | Orb = casberry-style particle swarm; formulas per section (Casual Cortex Dinamico, Monitor ASCI System, Engineering CHAT GPT) run verbatim in the worker | X5, `docs/overhaul/ORB_FORMULAS.md` |
 | 2026-09-29 | Feature platform: manifests + `@/sdk`, TanStack Query, `/api/events`, OpenAPI types, scaffold, Vitest | `docs/overhaul/PLATFORM_DECISIONS.md` |
 | 2026-09-29 | Coordinator implements directly; no mandatory subagent hand-off | `.cursor/rules/ops/42-dispatch.mdc` |
+| 2026-09-30 | Scroll desk is the running HUD. `OrchestratorShell` is removed. Casual quote/drawing hints go to Engineering | `docs/CURRENT.md`, X4 |
+| 2026-09-30 | Master Data UI is `/masterdata`; `masterdata_enabled` defaults on | `backend/app/config.py` |
+| 2026-09-30 | Snap type `"lock"` vs contract “mandatory” stays an owner decision | `docs/CURRENT.md` Contract Delta |
+
+Rows that name Vision Workbook or `work/*` are the decision’s origin. The text in this file is the rule. `work/ARCHITECTURE_POINTS.md`, `work/UI_UX_POINTS.md`, and `work/APP_FEATURES.md` are decision logs, not status.
 
 ---
 
 **End of System Truth.**  
-All prior work/ documentation, OPUS_ARCHITECTURE_MANIFEST.md, VISION_WORKBOOK.md, FOUNDATION_BUILD_PLAN.md, ARCHITECTURE_POINTS.md, UI_UX_POINTS.md, APP_FEATURES.md, SONNET_UI_VISION.md, CAPABILITY_TEST_RUN_*, QUOTE_RUN.md, and architecture-review/ folder are superseded by this document and `docs/ROADMAP.md`. One-shot plans that used to sit in `docs/` are in `archive/2026-09-29-doc-cleanup/`.
+As-built status is `docs/CURRENT.md`. Next work is `docs/ROADMAP.md`. The point-in-time review of merge `7742e79` is `archive/2026-09-30-scroll-review/SCROLL_OVERHAUL_REVIEW.md`. Older plans are in `archive/2026-09-29-doc-cleanup/` and `archive/2026-09-14-pre-replan/`.

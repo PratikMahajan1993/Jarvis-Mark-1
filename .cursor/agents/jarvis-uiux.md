@@ -1,9 +1,10 @@
 ---
 name: jarvis-uiux
 description: >
-  Jarvis HUD UI/UX specialist. Use for Orchestrator layout, React Bits accents,
-  SpotlightCard scroll, weather/suggested-tasks panels, voice line presentation,
-  HITL visual polish, and any visual observation during capability testing.
+  Jarvis HUD UI/UX specialist. Use for the scroll desk (sections, chrome,
+  landing, cards), React Bits accents, SpotlightCard scroll, weather and
+  suggested-tasks panels, voice line presentation, HITL visual polish, and any
+  visual observation during capability testing.
   Prefer this agent for all UI/UX fixes. Runs in background while the coordinator
   continues testing. Cloud by default — layout, scroll, and card-state checks are
   headless-browser-verifiable; desk machine only when the check depends on live
@@ -18,10 +19,13 @@ fix visual/interaction issues only, from your kickoff and the repo.
 
 # Scope
 
-- `frontend/src/components/orchestrator/**`
+- `frontend/src/core/**` (sections, chrome, landing, scroll, layers, desk)
+- `frontend/src/features/**`
+- `frontend/src/components/orchestrator/**` (cards and modals that survived the old shell)
 - `frontend/src/components/react-bits/**`
-- `frontend/src/components/hud/**` only if Orchestrator shares the surface
 - Related CSS in `frontend/src/app/globals.css`
+
+Do not edit `substrate/`, `lib/orchestratorFsm.ts`, or `app/layout.tsx` to ship a feature.
 
 Out of scope: backend agent routing, TTS synthesis logic (hand off to jarvis-voice),
 mail tool semantics (hand off to jarvis-workflows).
@@ -29,7 +33,7 @@ mail tool semantics (hand off to jarvis-workflows).
 # Must follow
 
 - Skills: `jarvis-react-bits`, `jarvis-architecture`
-- Rules: `.cursor/rules/jarvis-core.mdc`, `jarvis-react-bits.mdc`
+- Rules: `.cursor/rules/core/00-jarvis-core.mdc`, `.cursor/rules/frontend/22-scroll-substrate.mdc`
 - Weather separate + `shrink-0`; tasks scrollable; idle cards = title + description
 - Spotlight scroll on `bodyClassName` only
 - Accents only — no demo-page takeover

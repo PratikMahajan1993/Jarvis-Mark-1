@@ -134,7 +134,7 @@ Job(id, every_s=None, cron=None, fn=..., run_on_start=False)
   - `taskQueueStore`: pending approvals, parked ids, drafts.
   - `sectionStore`: active section, scroll position, workspace, pin.
   
-  `OrchestratorShell.tsx` (1,871 lines) is dismantled into these stores and the three core sections.
+  `OrchestratorShell.tsx` was dismantled into these stores and the three core sections. The file is gone. The running page is `JarvisRoot` + `Desk`.
 - **`orchestratorFsm.ts` stays a pure function.** Additions:
   - `HITL_PARK { actionId }`: `AWAITING_HITL` (not resolving, same id) → `IDLE`.
   - `HITL_RESUME { action }`: `IDLE` or `LISTENING` → `AWAITING_HITL`.
@@ -277,3 +277,11 @@ It is idempotent and refuses an id that already exists.
 10. **Wrap-up:** extend the perf gate; update `docs/CURRENT.md` to the as-built state; add capability matrix IDs for the scroll HUD.
 
 **Main risk:** step 3 touches voice, HITL and session restore at once. Mitigations: backend mirror tests stay green; Vitest covers the reducer and effects; a headless walk (landing → each section → HITL park/resume) runs after steps 3, 4 and 7.
+
+## As-built delta (2026-09-30)
+
+P13 has landed on the working tree. `docs/CURRENT.md` lists what is still open. Notes so this contract is not read as "not built yet":
+
+- OpenAPI types are committed at `frontend/src/lib/api/schema.gen.ts`. `GET /api/features` and `GET /api/events` exist. SDK hooks are the exports in `frontend/src/sdk/index.ts`. `npm run new:feature` registers both indexes.
+- Weather's backend module is `backend/app/features_weather.py`, imported by `backend/app/features/__init__.py`. New features from the scaffold go in `backend/app/features/<id>/`.
+- `backend/app/core/scheduler.py` is not started from API lifespan. Jobs stay off until a feature registers one and startup calls `start`.

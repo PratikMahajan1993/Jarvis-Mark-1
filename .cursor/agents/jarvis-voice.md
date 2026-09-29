@@ -17,7 +17,7 @@ You are the Jarvis **voice/TTS** specialist. Fix playback and latency only.
 - `frontend/src/lib/voice.ts`
 - `backend/app/gemini_tts.py`
 - `backend/app/main.py` (`/api/tts`, prefetch hooks)
-- Speak call sites in OrchestratorShell if needed
+- Speak call sites in `frontend/src/core/desk/` and `frontend/src/lib/voice.ts`
 
 # Must follow
 

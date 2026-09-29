@@ -11,7 +11,7 @@ Underquoting is the failure the owner has actually suffered — a price correcte
 ## Provenance (No Exceptions)
 - Every money-bearing line carries `rate_source_id` → a `supplier_rm_quotes`, `machine_hour_rates`, `outsource_quotes`, or `owner_input` row. No source, no line.
 - An estimate is labelled: `is_estimate = 1` plus a basis naming historical transactions or market trend. An unlabelled estimate is a bug.
-- Sendability follows **attestation, not storage.** `source_kind='demo'` is a supported production source while the Master Data UI is deferred, but a rate row is quotable only when `attested_by` is set and its value differs from the shipped seed. An unattested row, or one still holding the shipped seed number, is a BLOCKER.
+- Sendability follows **attestation, not storage.** Rates are edited at `/masterdata` (`masterdata_enabled` defaults on). Markdown `mhr-demo.md` is not the live table while that flag is on. A `source_kind='demo'` row is quotable only when `attested_by` is set and its value differs from the shipped seed. An unattested row, or one still holding the shipped seed number, is a BLOCKER.
 - The model never derives a price from prose, memory, or "similar jobs".
 
 ## Manufacturing Physics the Code Must Respect

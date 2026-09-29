@@ -2,7 +2,7 @@
 
 **Locked:** 2026-09-29 (owner interview, rounds 1–2)
 **Scope:** what the owner sees and feels. Code structure lives in [`PLATFORM_DECISIONS.md`](PLATFORM_DECISIONS.md). Operating rule: [`.cursor/rules/frontend/22-scroll-substrate.mdc`](../../.cursor/rules/frontend/22-scroll-substrate.mdc).
-**Until Phase 3 merges,** `docs/CURRENT.md` still describes the running single-pane HUD.
+The scroll desk is running. Contract text below stays the target. Where the code differs, see the as-built delta at the end of this file and `docs/CURRENT.md`.
 
 Each decision has an ID (`X#`). Phase 3 commits and tests cite these IDs.
 
@@ -209,4 +209,12 @@ Each decision has an ID (`X#`). Phase 3 commits and tests cite these IDs.
 
 Bloom and auto-rotate are kept exactly as in the owner's exports; the owner raised no objection. Speed controls act as clock rates (see `ORB_FORMULAS.md`), so state changes never scramble the swarm.
 
-**Phase 3 is waiting for the owner's explicit "go".**
+## As-built delta (2026-09-30)
+
+The decisions above are still the contract. `docs/CURRENT.md` is the only open-gap list. Do not "fix" these in a drive-by:
+
+- **X1 landing** is client-rendered. `app/page.tsx` loads `Desk` with `ssr: false`, so there is no CSS-only first paint before JavaScript. Hermes is named on the status line and does not gate exit. Chrome fade is staggered 80 ms (`Desk.tsx`).
+- **X2 snap** in code is Lenis type `"lock"` (`core/scroll/engine.ts`: one gesture moves one section). This section still says "mandatory". Leave the type until the owner changes this sentence.
+- **X9 `deltaX`:** arrow keys cycle the deck. Horizontal trackpad `deltaX` is not wired.
+
+In the tree, and not gaps: empty-deck drop target, pdf.js thumbnails in IndexedDB, card-to-stage `layoutId`, HITL-to-chip `layoutId`.

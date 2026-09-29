@@ -1,11 +1,12 @@
 # Scroll-substrate overhaul — review findings
 
+**Archived 2026-09-30.** Point-in-time review of merge `7742e79` only. Later the same day, several bugs in this note were fixed and more of the platform landed. Do not use this file as the current HUD. As-built status is `docs/CURRENT.md`.
+
 **Date:** 2026-09-30  
 **Commit reviewed and merged:** `7742e79` on `overhaul` (PR #24, head was `cursor/scroll-substrate-overhaul-401c`)  
-**Use:** source for the implementation plan. Living notes (`work/ARCHITECTURE_POINTS.md`, `work/UI_UX_POINTS.md`, `work/APP_FEATURES.md`) point here.  
 **Contracts:** `docs/overhaul/PLATFORM_DECISIONS.md` (P1–P13), `docs/overhaul/EXPERIENCE_DECISIONS.md` (X1–X13).
 
-Read the code, not the docs. Line numbers are from `7742e79`.
+Read the code, not this review. Line numbers are from `7742e79`.
 
 ---
 

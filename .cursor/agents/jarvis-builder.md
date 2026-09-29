@@ -25,7 +25,7 @@ if assigned — but prefer the coordinator routing those to specialists next tim
 - API: FastAPI `backend/` → `http://127.0.0.1:8000`
 - Hermes gateway `:8642`, Gemini TTS (Charon via `/api/tts`)
 - SQLite: `<repo>/data/jarvis.db`
-- Follow `.cursor/rules/jarvis-core.mdc` and skill `jarvis-architecture`
+- Follow `.cursor/rules/core/00-jarvis-core.mdc` and skill `jarvis-architecture`
 
 # Product constraints
 

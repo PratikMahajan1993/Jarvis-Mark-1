@@ -16,7 +16,7 @@ description: >
 
 ## Stack
 
-- **HUD:** Next.js App Router, `OrchestratorShell.tsx` + strict FSM in `frontend/src/lib/orchestratorFsm.ts`
+- **HUD:** Next.js App Router. `app/layout.tsx` → `JarvisRoot`; `/` → `Desk` (`frontend/src/core/desk/Desk.tsx`). Turn FSM is the pure reducer in `frontend/src/lib/orchestratorFsm.ts`
 - **API:** FastAPI `backend/app/main.py` → agent/tools/conversations
 - **Brain:** Hermes gateway `http://127.0.0.1:8642` preferred; Gemini/Ollama fallback
 - **TTS:** Gemini TTS, male voice Charon. `gemini-3.8-flash-lite-tts`, then `gemini-3.8-flash-tts`, then `gemini-2.5-flash-preview-tts` only when both are out of calls. Browser plays WAV from `/api/tts`. Quota exhaustion stays silent.
@@ -30,7 +30,7 @@ description: >
 | Semantic router | `core/router.py` ONNX first, then `semantic_router.py` Gemini + keywords; UI commands via `handle_ui_command` |
 | Intent / mail fast path | `intent.py`, `snapshot.py` — local mail/calendar/briefing skip Hermes when snapshot-ready |
 | Quote playbook | `quote.py`, `hermes/playbooks/quote/`, `hermes/mcp_server.py`, `intent.is_quote_start`, Hermes timeout fallback in `agent.py` — see skill `jarvis-quote-playbook` |
-| HUD workspaces | `frontend/.../hudWorkspace.ts` — talk-jump to Engineering **only from monitor** |
+| HUD sections | `section_hint.py` stamps `ui.section`; `applyServerHint` in `core/desk/controller.ts` scrolls. Quote/drawing words go to Engineering from Monitor and from Casual. Engineering leaves only on `explicit` |
 | Conversations desk | `conversations.py`, `db.py` (`MAX_EXPANDED = 3`) |
 | Speak / prefetch | `gemini_tts.py`, `main.py` `/api/tts`, `frontend/src/lib/voice.ts` |
 | Suggested tasks / weather | `office_day.py`, `SuggestedTasksPanel.tsx`, `WeatherCard.tsx` |
@@ -42,7 +42,7 @@ description: >
 - Speak through Voicebox or `speechSynthesis`. Desk speech is Gemini TTS only.
 - Put board scroll on SpotlightCard outer wrapper
 - Raise concurrent open notes above 3 without an explicit product decision
-- Replace Orchestrator with HudShell as the primary desk
+- Restore `OrchestratorShell` or `HudShell` as the desk, or open a second WebGL context
 - Invent mail/calendar/shop numbers in the brain
 
 ## Verify
