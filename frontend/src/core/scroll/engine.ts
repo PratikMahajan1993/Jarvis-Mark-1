@@ -22,6 +22,7 @@ import {
   type Jump,
   type OrbBlend,
 } from "./progress";
+import { markUserActivity, setPointerHeld } from "./director";
 import { scrollProgress, scrollY, sectionHeight } from "./values";
 
 const JUMP_BASE_S = 0.9;
@@ -212,9 +213,11 @@ export function startScrollEngine(
 
   const onPointerDown = () => {
     pointerDown = true;
+    setPointerHeld(true);
   };
   const onPointerUp = () => {
     pointerDown = false;
+    setPointerHeld(false);
     settle();
   };
 
@@ -236,6 +239,9 @@ export function startScrollEngine(
   const tick = ({ timestamp }: { timestamp: number }) => lenis.raf(timestamp);
   frame.update(tick, true);
 
+  const onUserInput = () => markUserActivity();
+  window.addEventListener("wheel", onUserInput, { passive: true });
+  window.addEventListener("touchmove", onUserInput, { passive: true });
   window.addEventListener("keydown", onKey);
   window.addEventListener("pointerdown", onPointerDown, { passive: true });
   window.addEventListener("pointerup", onPointerUp, { passive: true });
@@ -253,6 +259,8 @@ export function startScrollEngine(
     offRequest();
     window.clearTimeout(settleTimer);
     window.clearTimeout(resizeTimer);
+    window.removeEventListener("wheel", onUserInput);
+    window.removeEventListener("touchmove", onUserInput);
     window.removeEventListener("keydown", onKey);
     window.removeEventListener("pointerdown", onPointerDown);
     window.removeEventListener("pointerup", onPointerUp);

@@ -9,6 +9,7 @@ import {
   type HudWorkspace,
 } from "@/components/orchestrator/hudWorkspace";
 import { liveLog } from "@/lib/liveLog";
+import { autoContext, decideAuto } from "@/core/scroll/director";
 import { createStore } from "./createStore";
 
 export type ScrollSource = "auto" | "user";
@@ -45,6 +46,7 @@ export const sectionStore = createStore<SectionState>({
 });
 
 let requestSeq = 0;
+let pendingAuto = 0;
 
 export function getSection(): SectionState {
   return sectionStore.get();
@@ -87,8 +89,20 @@ export function requestSection(
   opts: { source: ScrollSource; reason: string; immediate?: boolean },
 ): boolean {
   const s = sectionStore.get();
-  if (opts.source === "auto" && s.pinned) return false;
   if (opts.source === "auto" && s.active === section && !opts.immediate) return false;
+  if (opts.source === "auto" && !opts.immediate) {
+    const decision = decideAuto(autoContext(s.pinned));
+    if (!decision.run) {
+      window.clearTimeout(pendingAuto);
+      if (!decision.drop && decision.retryInMs != null) {
+        pendingAuto = window.setTimeout(() => requestSection(section, opts), decision.retryInMs);
+      }
+      return false;
+    }
+  } else if (opts.source === "auto" && s.pinned) {
+    return false;
+  }
+  window.clearTimeout(pendingAuto);
   requestSeq += 1;
   sectionStore.set({
     request: { id: requestSeq, section, source: opts.source, reason: opts.reason, immediate: opts.immediate },

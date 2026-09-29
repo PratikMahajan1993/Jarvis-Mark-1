@@ -311,7 +311,10 @@ def agent_id_from_code(code: str) -> str:
     return mapping.get((code or "").strip().upper(), "research")
 
 
-def stamp_route(result: Any, classification: IntentClassification) -> Any:
+from .section_hint import ui_hint
+
+
+def stamp_route(result: Any, classification: IntentClassification, message: str = "") -> Any:
     """Attach router fields + highlight the target orchestra node on a ChatResponse."""
     from .agents import agent_status_payload
     from .schemas import AgentStatus, ChatResponse
@@ -337,6 +340,7 @@ def stamp_route(result: Any, classification: IntentClassification) -> Any:
             "target_agent": classification.target_agent,
             "route_intent": classification.intent,
             "agents": agents,
+            "ui": ui_hint(message, classification.intent),
         }
     )
 

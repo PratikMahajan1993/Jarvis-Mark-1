@@ -81,6 +81,7 @@ class AgentStatus(BaseModel):
 class ChatRequest(BaseModel):
     message: str
     session_id: str = "default"
+    section: str | None = None
 
 
 class QuoteFindDrawingRequest(BaseModel):
@@ -204,6 +205,7 @@ class ChatResponse(BaseModel):
     route_intent: str | None = None
     ui_action: dict[str, Any] | None = None
     drawing_chat: DrawingChatView | None = None
+    ui: dict[str, Any] | None = None
 
 
 class ConversationCreate(BaseModel):

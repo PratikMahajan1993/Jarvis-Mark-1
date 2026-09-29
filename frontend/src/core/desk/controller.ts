@@ -10,7 +10,6 @@ import type { SuggestedTask } from "@/components/orchestrator/SuggestedTasksPane
 import {
   initialWorkspaceFromBootstrap,
   isHudWorkspace,
-  talkJumpWorkspace,
   workspaceFromCategory,
   type HudWorkspace,
 } from "@/components/orchestrator/hudWorkspace";
@@ -47,6 +46,7 @@ import {
   sceneHasBoardContent,
   setDesk,
 } from "@/core/stores/deskStore";
+import { setModalProbe } from "@/core/scroll/director";
 import { getSection, hydrateWorkspace, requestSection, setWorkspace } from "@/core/stores/sectionStore";
 import { firstUnparked, getParkedIds, hydrateParked, markParked, unmarkParked } from "@/core/stores/taskQueueStore";
 import { dispatchTurn, getTurn, onTurnEffect, setTurnLogSession } from "@/core/stores/turnStore";
@@ -108,6 +108,14 @@ export function routeTo(workspace: HudWorkspace, reason: string) {
   const from = getSection().active;
   liveLog("workspace", { from, to: workspace, pinned: getSection().pinned, reason }, { sessionId: session() });
   dispatchTurn({ type: "ROUTE_HINT", section: workspace, reason, from });
+}
+
+/** Server `ui` hint (X4). Engineering only yields to an explicit request. */
+export function applyServerHint(ui: { section: string; reason: string } | null | undefined) {
+  if (!ui || !isHudWorkspace(ui.section)) return;
+  const from = getSection().active;
+  if (from === "engineering" && ui.reason !== "explicit") return;
+  routeTo(ui.section, `server-${ui.reason}`);
 }
 
 /** A user click on the section nav or switcher. Always runs. */
@@ -352,6 +360,7 @@ export function applyResponse(
   opts?: { fromConfirm?: boolean; approved?: boolean; alreadySpoken?: boolean },
 ) {
   void applyUiAction(result.ui_action);
+  applyServerHint(result.ui);
   const view = result.drawing_chat;
   if (view && typeof view === "object") {
     if (view.open === false) setDesk({ drawingChat: null });
@@ -603,15 +612,13 @@ export async function send(message: string) {
   }
 
   const workspace = getSection().workspace;
-  const jump = talkJumpWorkspace(text, workspace);
   liveLog(
     "send",
-    { text: text.length > 500 ? `${text.slice(0, 500)}…` : text, workspace, talk_jump: jump ?? null },
+    { text: text.length > 500 ? `${text.slice(0, 500)}…` : text, workspace },
     { sessionId: session() },
   );
 
   if (!dispatchTurn({ type: "SEND", text })) return;
-  if (jump) routeTo(jump, "talk-jump");
 
   setDesk({ compose: "", error: "", runStatus: "" });
   stopListening();
@@ -624,9 +631,10 @@ export async function send(message: string) {
   ctl.sentenceBuf = "";
   ctl.unspoken = "";
   try {
-    const started = await api.startHermesRun(text, session());
+    const started = await api.startHermesRun(text, session(), getSection().active);
     if (abort.signal.aborted) return;
     ctl.liveRun = started.run_id;
+    applyServerHint(started.ui);
     const stream = await api.hermesRunEvents(started.run_id, abort.signal);
     if (!stream.ok || !stream.body) throw new Error(`Run stream failed (${stream.status})`);
     await readHermesEventStream(stream, (event: HermesRunEvent) => {
@@ -932,6 +940,10 @@ function normalizeTasks(raw: unknown[]): SuggestedTask[] {
 
 /** Register effect runners and load the desk. Returns cleanup (StrictMode-safe). */
 export function initDesk(): () => void {
+  setModalProbe(() => {
+    const d = getDesk();
+    return getTurn().mode === "AWAITING_HITL" || d.prefsOpen || d.googleConnectOpen;
+  });
   const gen = ++ctl.bootGen;
   const offMode = onTurnEffect("orb-mode", (e) => postSubstrate({ type: "mode", mode: e.mode }));
   const offScroll = onTurnEffect("scroll", (e) => {

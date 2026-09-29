@@ -595,7 +595,7 @@ async def api_chat(payload: ChatRequest, request: Request) -> dict:
         result = handle_ui_command(message, payload.session_id, classification)
     else:
         result = run_agent(message, payload.session_id, route=classification)
-        result = stamp_route(result, classification)
+        result = stamp_route(result, classification, message)
 
     data = result.model_dump() if hasattr(result, "model_dump") else dict(result)
     remember_hud(payload.session_id, data)
@@ -811,7 +811,9 @@ def api_hermes_run_start(payload: ChatRequest) -> dict:
     if not message:
         raise HTTPException(400, "message required")
     run = start_desk_run(message, payload.session_id)
-    return {"run_id": run.jarvis_id, "status": "started"}
+    from .section_hint import ui_hint
+
+    return {"run_id": run.jarvis_id, "status": "started", "ui": ui_hint(message)}
 
 
 @app.get("/api/hermes/runs/{run_id}/events")

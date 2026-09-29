@@ -70,7 +70,7 @@ def dispatch_desk_turn(message: str, session_id: str) -> dict[str, Any]:
         result = handle_ui_command(message, session_id, classification)
     else:
         result = run_agent(message, session_id, route=classification)
-        result = stamp_route(result, classification)
+        result = stamp_route(result, classification, message)
     data = result.model_dump() if hasattr(result, "model_dump") else dict(result)
     remember_hud(session_id, data)
     try:

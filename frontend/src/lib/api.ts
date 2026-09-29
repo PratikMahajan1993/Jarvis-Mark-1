@@ -217,16 +217,16 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ session_id: sessionId, part_hint: partHint }),
     }),
-  chat: (message: string, sessionId = "default", idempotencyKey?: string) =>
+  chat: (message: string, sessionId = "default", idempotencyKey?: string, section?: string) =>
     json<ChatResponse | { turn_id: string; state: string }>("/api/chat", {
       method: "POST",
-      body: JSON.stringify({ message, session_id: sessionId }),
+      body: JSON.stringify({ message, session_id: sessionId, section }),
       headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined,
     }),
-  startHermesRun: (message: string, sessionId = "default") =>
-    json<{ run_id: string; status: string }>("/api/hermes/runs", {
+  startHermesRun: (message: string, sessionId = "default", section?: string) =>
+    json<{ run_id: string; status: string; ui?: { section: string; reason: string } | null }>("/api/hermes/runs", {
       method: "POST",
-      body: JSON.stringify({ message, session_id: sessionId }),
+      body: JSON.stringify({ message, session_id: sessionId, section }),
     }),
   hermesRunEvents: (runId: string, signal?: AbortSignal) =>
     fetch(`${apiBase()}/api/hermes/runs/${encodeURIComponent(runId)}/events`, {

@@ -168,6 +168,8 @@ export type ChatResponse = {
   target_agent?: string | null;
   route_intent?: string | null;
   ui_action?: Record<string, unknown> | null;
+  /** Server scroll hint (X4). */
+  ui?: { section: string; reason: string } | null;
   drawing_chat?: {
     open: boolean;
     notes?: string;
