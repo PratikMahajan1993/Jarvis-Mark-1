@@ -11,7 +11,7 @@ Each decision has an ID (`X#`). Phase 3 commits and tests cite these IDs.
 ## X1 — Landing
 
 - Shown on **every full document load**. The markup is server-rendered with CSS-only first frames, so it paints before JavaScript runs.
-- **Visual:** the substrate orb gathers from diffuse particles (preset `landing`, spread 1.0 → 0.35 as gates pass). Under it, one mono status line names the real gate in progress: *Waking substrate · Loading desk · Checking Hermes · Ready*. A hairline progress bar shows gates passed out of the total. No logo splash, no percentages.
+- **Visual:** the 20,000 particles start as a scattered cloud (a random ±50-unit cube, which is casberry's own start state) and gather into the **target section's formula** as gates pass. The gathering pull strengthens with gate progress. Under the orb, one mono status line names the real gate in progress: *Waking substrate · Loading desk · Checking Hermes · Ready*. A hairline progress bar shows gates passed out of the total. No logo splash, no percentages.
 - **Gates** (run in parallel):
 
 | Gate | Passes when |
@@ -27,7 +27,7 @@ Each decision has an ID (`X#`). Phase 3 commits and tests cite these IDs.
 - **Timing:** minimum 1.4 s, so the animation reads. Exits as soon as every gate has passed after the minimum. Hard cap 4.0 s: whatever is late shows a skeleton. A same-tab refresh (`sessionStorage["jarvis.landed"]`) uses a 0.6 s minimum.
 - **Exit:**
   1. The page jumps instantly (no animation) to the target section.
-  2. The landing fades and blurs out over 600 ms while the orb springs from `landing` to the target section's preset.
+  2. The landing fades and blurs out over 600 ms while the swarm finishes settling into its shape and moves to the section's placement.
   3. The chrome fades in, staggered 80 ms apart.
 - **Target section:** if pinned, the saved workspace. Otherwise the ambient rule: a restored conversation's category decides the section; with no conversation, Monitor.
 - **Reduced motion:** static orb and a 200 ms fade. Same gates.
@@ -69,37 +69,48 @@ Each decision has an ID (`X#`). Phase 3 commits and tests cite these IDs.
   - the Evil Eye: its shader path, noise texture, `STOCK_EYE`, `EvilEye.tsx`, and the Monitor eye specs;
   - `JarvisCore`: its CSS halo, core and nucleus, its rotating rings and ticks, and its 2D-canvas dust loop (owner chose option a, 2026-09-29).
   
-  React Bits `Particles` and `LightRays` are already unused on the desk. They stay vendored only.
-- **Presets** are tunable data in `substrate/presets.ts`:
+  React Bits `Particles` and `LightRays` are already unused on the desk. They stay vendored only. The current glow shader (`presence.frag.ts`) and light-ray pass (`rays.ts`) are replaced by the swarm.
+- **Model: a casberry-style particle swarm** (owner chose option c, 2026-09-29).
+  - **Particles:** 20,000, drawn as instanced tetrahedra (size 0.25) in flat colour.
+  - **Motion:** every frame, a per-section **formula** (casberry-compatible JavaScript) runs in the substrate worker. It gives each particle a target position and colour, and each particle eases toward its target (0.1 per frame at 60 fps, made frame-rate independent). That easing is also how shapes **morph** into each other.
+  - **Camera and look:** camera at z = 100 with a 60° field of view, slow auto-rotate about the vertical axis, and a lightweight bloom (strength 1.8, radius 0.4, threshold 0) at reduced resolution.
+  - **No Three.js:** it runs on the existing `ogl` renderer, in the same single context.
+- **Formulas per section.** They are stored verbatim in `substrate/formulas/`, with details and code in [`ORB_FORMULAS.md`](ORB_FORMULAS.md):
 
-| Preset | Centre (x, y from top-left) | Scale | Accent | Dim | Spread | Swirl |
-|---|---|---|---|---|---|---|
-| `landing` | 0.50, 0.46 | 0.55 | `#7dffe0` | 0.50 | 1.0 → 0.35 | 0.6 |
-| `monitor` | 0.50, 0.42 | 0.62 | `#FF6F37` | 0.55 | 0.45 | 0.4 |
-| `casual` | 0.50, 0.40 | 0.72 | `#7dffe0` | 0.30 | 0.35 | 0.5 |
-| `engineering` | 0.93, 0.18 | 0.16 | `#7dffe0` | 0.35 | 0.25 | 0.5 |
+| Section | Formula | Placement | Dim | State controls |
+|---|---|---|---|---|
+| Casual | Cortex Dinamico (idle = owner export) | Large, centred; outer shell about 78% of content height | 1.0 | Synaptic Chaos, Pulse Speed (Neuroactivity for HITL amber) |
+| Monitor | ASCI System (default formula) | Tall: 70% of viewport height, bottom edge above the command baton | 1.0 | Flow Speed, Organic Distortion |
+| Engineering | CHAT GPT (default formula) | Side orb at the right edge, upper third | 0.35 | Generic modifiers |
 
-- **Between sections,** the target is a smoothstep blend of the two neighbouring presets by scroll position. Springs smooth the result.
-- **State modifiers change shape and colour only. They never move the orb, except HITL.**
+- **Colour** comes from the formula. Section UI accents (the Casual mint, for example) stay in the DOM theme.
+- **Between sections,** the worker evaluates **both** neighbouring formulas and blends their targets by scroll position (smoothstep). Placement blends the same way. At rest, only one formula runs.
+- **States move formula controls only, never the orb's position, except HITL.** Controls ease between state values (springs). The per-section values are in `ORB_FORMULAS.md`. The pattern:
 
-| State | Effect |
+| State | Pattern |
 |---|---|
-| idle | Breath: 7 s period, ±6% brightness |
-| listening | Spread ×0.8, brightness ×1.25, swirl ×0.8 |
-| thinking / executing | Swirl ×2.2, ring pulse at 1.2 Hz |
-| speaking | Brightness ×(1 + 0.6·level), spread ×(1 + 0.15·level). `level` comes from an `AnalyserNode` on the TTS WAV, about 30 Hz. |
-| hitl | Tint `#FFB020` mixed at 0.65, pulse at 0.5 Hz. Centre moves to (0.5, 0.5) and scale to max(current, 0.6) **while the modal is open.** A parked approval does not move the orb. |
+| idle | Owner's exported values |
+| listening | Calmer: less chaos or distortion, slower pulse or flow |
+| thinking / executing | Agitated: more chaos or distortion, faster pulse or flow |
+| speaking | Chaos or distortion follows `level` (an `AnalyserNode` on the TTS WAV, about 30 Hz) |
+| hitl | Slow and amber (through the formula's own colour control when it has one, otherwise a tint toward `#FFB020`). The swarm moves to screen centre, at scale ≥ 0.6 of viewport height, **while the modal is open.** A parked approval does not move it. |
 
-- In Engineering the orb is dimmed, but the modifiers apply at full strength, so it stays reactive.
-- **Other routes:** the orb is frozen and hidden (opacity 0). The WebGL context stays alive.
-- **Reduced motion:** springs snap to their targets, there is no breath or pulse, and one frame is drawn per change.
+- **Formulas without named controls** (currently CHAT GPT) use generic modifiers: time-scale (thinking ×2), brightness (listening ×1.25; speaking 1 + 0.6·level), and the HITL tint.
+- In Engineering the swarm is dimmed, but state changes apply at full strength, so it stays reactive.
+- **Performance budget:** formula evaluation ≤ 6 ms of worker time per frame (it doubles while blending two sections). When over budget, the degrade order is:
+  1. bloom resolution;
+  2. simulation at 30 Hz with rendering still interpolated at 60.
+  
+  The particle count stays 20,000 because the shapes depend on it.
+- **Other routes:** the swarm is frozen and hidden (opacity 0). The WebGL context stays alive.
+- **Reduced motion:** no auto-rotate and no pulse animation. Particles snap to their targets, and one frame is drawn per change.
 
 ## X6 — Four layers
 
 | Tier | Contents | Motion |
 |---|---|---|
 | **L0 Backdrop** (fixed) | Section tint blend, Engineering grid, vignette, grain | `translateY(−0.3 × scrollY)` |
-| **L1 Substrate** (fixed) | The WebGL canvas | Only the uniforms move |
+| **L1 Substrate** (fixed) | The WebGL canvas (particle swarm) | Only the swarm moves, never the canvas |
 | **L2 Content** | Sections and their cards | 1× |
 | **L3 Foreground** | **Decor**, then **chrome** above it: StatusCluster (top), SectionNav (left), TaskDock (right), CommandBaton (bottom) | Decor 1.2–1.4×. Chrome is fixed. |
 | Modal tier | HITL, compose, prefs, Google connect | — |
@@ -179,4 +190,8 @@ Each decision has an ID (`X#`). Phase 3 commits and tests cite these IDs.
 2. **X4:** Engineering → Casual happens only on an explicit request, never on every casual utterance.
 3. ~~**X5:** `JarvisCore` leaves the desk.~~ **Confirmed 2026-09-29** (option a).
 4. **X8:** parked approvals are tracked client-side, so no database migration is needed.
-5. **X5, particle model:** whether the orb becomes a particle swarm with a shape formula per section and per state, in the style of particles.casberry.in. See the owner thread from 2026-09-29.
+5. ~~**X5, particle model.**~~ **Confirmed 2026-09-29:** option c, casberry-style formulas in the worker.
+6. **X5, formulas:** the owner pastes the **ASCI System** and **CHAT GPT** exports, in the same export format as Cortex Dinamico.
+7. **X5, Cortex idle:** "default formula for idle" means the owner's exported `PARAMS` (radii 37.2 / 18.8, chaos 0, pulse 3.4), not the slider defaults (30 / 15, chaos 0.5, pulse 1.0).
+8. **X5, colour:** formula colours win on the canvas. For example, Cortex is blue-violet, not Casual mint.
+9. **X5, bloom and auto-rotate:** both kept, as in the owner's export.

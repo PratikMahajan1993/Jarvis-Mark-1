@@ -63,11 +63,11 @@ Hermes shop turns use `POST /v1/runs` and the event stream (tool lines and text 
 
 A landing overlay plays on every app open, then the owner lands on the saved (pinned) or ambient section of a single vertically scrolling page:
 
-| Order | Section | HudWorkspace | Orb preset |
+| Order | Section | HudWorkspace | Orb formula (casberry-style swarm) |
 |-------|---------|--------------|------------|
-| 100 | Monitor | `monitor` | Centre, ember `#FF6F37` |
-| 200 | Casual | `casual` | Centre, mint `#7dffe0`, soft |
-| 300 | Engineering | `engineering` | Right-edge side orb, mint, dimmed but reactive |
+| 100 | Monitor | `monitor` | ASCI System — tall, 70% of viewport, above the baton |
+| 200 | Casual | `casual` | Cortex Dinamico — large, centred |
+| 300 | Engineering | `engineering` | CHAT GPT — right-edge side orb, dimmed but reactive |
 
 **Rules:**
 - Workspace (`casual|monitor|engineering`) is orthogonal to Turn FSM (`IDLE|LISTENING|THINKING|SPEAKING|AWAITING_HITL|EXECUTING`) — never collapse. The active section (>60% in view) sets the workspace when it declares one; feature sections may declare none.
@@ -113,17 +113,17 @@ Hint contract: `ChatRequest.section` (current) → `ChatResponse.ui = { section,
 
 ### 2.4 Visual Specs (Locked)
 
-**Orb (substrate, all sections):** presets are data in `substrate/presets.ts` (centre, scale, accent, dim, spread, swirl). FSM states morph shape/brightness/tint only — never position — except HITL (centre + scale ≥ 0.6 while the modal is open):
+**Orb (substrate, all sections):** a 20,000-particle swarm (instanced tetrahedra + bloom, `ogl`, no Three.js). Each section runs an owner-chosen casberry formula in the worker (`substrate/formulas/`, verbatim; see `docs/overhaul/ORB_FORMULAS.md`); particles ease toward formula targets, which is also how shapes morph between sections. FSM states move formula controls only — never position — except HITL (centre, height ≥ 0.6 while the modal is open):
 
 | State | Morph |
 |-------|-------|
-| idle | 7 s breath ±6% |
-| listening | Tighter (spread ×0.8), brighter ×1.25 |
-| thinking / executing | Swirl ×2.2, ring pulse 1.2 Hz |
-| speaking | Brightness and spread follow TTS amplitude |
-| hitl | Amber `#FFB020` tint, 0.5 Hz pulse, centred |
+| idle | Owner-exported control values |
+| listening | Calmer (less chaos/distortion, slower pulse/flow) |
+| thinking / executing | Agitated (more chaos/distortion, faster pulse/flow) |
+| speaking | Chaos/distortion follows TTS amplitude |
+| hitl | Slow, amber, centred |
 
-**Landing:** subtle orb gathering from diffuse particles + one real-gate status line; min 1.4 s, cap 4.0 s; preloads Monitor → Casual → Engineering chunks behind it.
+**Landing:** particles start as a scattered cloud and gather into the target section's formula as preload gates pass, with one real-gate status line; min 1.4 s, cap 4.0 s; preloads Monitor → Casual → Engineering chunks behind it.
 
 **Command baton:** visible in every section; dims (0.35) while scrolling, restores 400 ms after.
 
@@ -519,6 +519,7 @@ Fails closed on: unresolved modal state; motion outside travels; rapid below cle
 | 2026-09-29 | Evil Eye removed; one orb; Engineering WebGL lock lifted (dimmed side orb) | X5 |
 | 2026-09-29 | Casual → Engineering jump on server hint (supersedes "Casual never jumps") | X4 |
 | 2026-09-29 | HITL park → TaskDock draft chip; Engineering saved-task deck | X8, X9 |
+| 2026-09-29 | Orb = casberry-style particle swarm; formulas per section (Casual Cortex Dinamico, Monitor ASCI System, Engineering CHAT GPT) run verbatim in the worker | X5, `docs/overhaul/ORB_FORMULAS.md` |
 | 2026-09-29 | Feature platform: manifests + `@/sdk`, TanStack Query, `/api/events`, OpenAPI types, scaffold, Vitest | `docs/overhaul/PLATFORM_DECISIONS.md` |
 | 2026-09-29 | Coordinator implements directly; no mandatory subagent hand-off | `.cursor/rules/ops/42-dispatch.mdc` |
 

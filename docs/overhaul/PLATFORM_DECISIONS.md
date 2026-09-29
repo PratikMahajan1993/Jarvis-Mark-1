@@ -2,7 +2,7 @@
 
 **Locked:** 2026-09-29 (owner interview, rounds 1–2; question 16 answered in full)
 **Goal:** after Phase 3, adding a card, a voice command, an approval, a Hermes tool, a full-screen section or a background job is **at most a day's work**. It never requires touching scrolling, the canvas, the layout shell or the turn state machine.
-**Companions:** [`EXPERIENCE_DECISIONS.md`](EXPERIENCE_DECISIONS.md) (the `X#` IDs) and [`.cursor/rules/frontend/22-scroll-substrate.mdc`](../../.cursor/rules/frontend/22-scroll-substrate.mdc).
+**Companions:** [`EXPERIENCE_DECISIONS.md`](EXPERIENCE_DECISIONS.md) (the `X#` IDs), [`ORB_FORMULAS.md`](ORB_FORMULAS.md), and [`.cursor/rules/frontend/22-scroll-substrate.mdc`](../../.cursor/rules/frontend/22-scroll-substrate.mdc).
 
 **Owner priority, most frequent first:** cards in existing sections › voice commands › new approvals › new Hermes tools › new full-screen sections › background jobs. The SDK is built in that order.
 
@@ -24,7 +24,7 @@ frontend/src/
     landing/              Landing, gates
     queue/                TaskDock, DraftChip
     boundary/             FeatureBoundary
-  substrate/              engine (Evil Eye removed), presets.ts, protocol v2
+  substrate/              engine (swarm + bloom; Evil Eye, glow and rays removed), formulas/, protocol v2
   sdk/                    THE ONLY import surface for features
   features/index.ts       explicit list of registered features
   features/<id>/          feature.ts plus the feature's components
@@ -66,7 +66,7 @@ backend/tests/features/test_<id>.py
 defineFeature({ id, title, flag?: { default: boolean },
   sections?: SectionDef[], cards?: CardDef[], approvals?: ApprovalView[] })
 
-defineSection({ id, order, label, icon, workspace?, orb: OrbPreset, theme: ThemeTokens,
+defineSection({ id, order, label, icon, workspace?, orb: SectionOrb /* formula + placement + state controls, see P6 */, theme: ThemeTokens,
   decor?: DecorPiece[], lazy?: { mountWithin: number; unmountBeyond: number },
   baton?: boolean /* default true */, slots: SlotId[], component })
 
@@ -155,17 +155,42 @@ Job(id, every_s=None, cron=None, fn=..., run_on_start=False)
   - Before leaving Engineering, the director emits `autosave` and waits up to 300 ms.
 - **One animation loop on the main thread:** motion's frame loop drives Lenis (`frame.update`), the throttled orb posts, and parallax. Feature code has no separate `requestAnimationFrame` loops.
 
-## P6 — Substrate protocol v2
+## P6 — Substrate v2 (particle swarm)
 
+- **Engine:** `SubstrateEngine` stays the only owner of the `ogl` renderer (worker `OffscreenCanvas`; the inline shim is capped at 30 fps).
+  - **Passes:** swarm, drawn as instanced tetrahedra with per-instance position and colour, then bloom (downsample → blur → additive composite).
+  - **Deleted:** `presence.frag.ts` (eye and glow), `rays.ts`, the old `particles.ts` pass, the noise texture, and `STOCK_EYE`.
+- **Formula runner (in the worker):**
+  - Holds `positions` and `colors` as `Float32Array` buffers of `count × 3`, with no allocation per frame.
+  - Each frame it calls `formula.body(i, count, target, color, time, addControl, setInfo, annotate, THREE)` for every particle, then eases `positions` toward the targets with `k = 1 − 0.9^(dt·60)` and uploads both buffers.
+  - While blending two sections it evaluates both formulas and mixes targets and colours by `blend`.
+  - `target` and `color` are tiny reusable objects exposing `set`, `setHSL` and `setRGB`. `THREE` is a minimal stub (`Vector3` for `annotate` only). `setInfo` and `annotate` are no-ops.
+- **Formula files** (`substrate/formulas/<id>.ts`):
+
+  ```ts
+  export default defineOrbFormula({
+    id: "cortex-dinamico",
+    name: "Cortex Dinamico",
+    params: { radiusOuter: 37.2, radiusInner: 18.8, neuroActivity: 0, chaosFactor: 0, pulseSpeed: 3.4 }, // owner export = idle
+    body(i, count, target, color, time, addControl, setInfo, annotate, THREE) {
+      // USER CODE START — pasted verbatim from the casberry export
+      // USER CODE END
+    },
+  });
+  ```
+
+  These are real, type-checked functions. **No `eval` or `new Function`.** Adding a shape means pasting a new file and registering it in `substrate/formulas/index.ts`.
+- **Section orb declaration** (in `defineSection`): `orb: { formula, placement: { center: [x, y], height }, dim, states: Partial<Record<PresenceMode, ControlValues>>, generic?: boolean }`.
 - **Messages in:**
-  - `init`, `resize`, `pointer`, `glance`, `visibility`, `reducedMotion`, `quality`: kept.
-  - `orb { target: OrbTarget }`: **replaces `lens`**.
+  - `init`, `resize`, `pointer`, `visibility`, `reducedMotion`, `quality`: kept.
+  - `orb { from: OrbSpec, to: OrbSpec, blend }`: **replaces `lens`**. `OrbSpec` = formula id, resolved control values, placement, dim.
   - `mode { mode }`: now read by the engine. `executing` is mapped to `thinking` on the main thread.
   - `level { value: 0..1 }`: speaking amplitude.
   - `route { active }`: freeze and hide off `/`.
-- **Messages out:** `ready`, `settled` (no lens field), `stats`, `contextLost`.
-- **Uniforms:** `uTime`, `uResolution`, `uMouse`, `uOrb`, `uCenter`, `uScale` (renamed from `uPresenceScale`), `uAccent`, `uDim`, `uSpread`, `uSwirl`, `uTint`, `uLevel`, `uState` (vec4: brightness, pulse, tint mix, ring pulse). **Removed:** `uEye`, `uNoiseTexture`, and every eye property.
-- **Scroll → uniforms:** `useScroll()` and `useTransform()` produce a scroll position in section units. `useMotionValueEvent` calls `blendPresets()`, which is pure and tested. The result is posted **at most once per frame**, and only when it changes by more than epsilon.
+  - `gather { progress: 0..1 }`: landing pull strength.
+- **Messages out:** `ready`, `settled` (no lens field), `stats` (adds `simMs`), `contextLost`.
+- **Uniforms (swarm and composite):** `uView` / `uProjection` (camera at z = 100, 60° field of view, auto-rotate), `uPlacement` (screen centre and height fit), `uDim`, `uTint`, `uTintMix`, `uBrightness`, `uBloomStrength`, `uBloomRadius`. **Removed:** `uEye`, `uOrb`, `uNoiseTexture`, and every eye and glow property.
+- **Scroll → orb:** `useScroll()` and `useTransform()` produce a scroll position in section units. `useMotionValueEvent` resolves `{ from, to, blend }` from the section registry; this is pure and tested. The result is posted **at most once per frame**, and only when it changes by more than epsilon. State control values ease inside the engine.
 - **Hosting:** mounted once in `JarvisRoot`, which the App Router never unmounts across navigation. StrictMode-safe: the canvas is created in the effect and disposed in cleanup. The `window.__JARVIS_SUBSTRATE__` debug handle stays.
 
 ## P7 — Data layer
@@ -217,7 +242,7 @@ It is idempotent and refuses an id that already exists.
 
 ## P11 — Tests and gates
 
-- **Frontend (Vitest, `npm run test`):** registry validation, preset blending, state machine transitions plus `effectsFor`, director rules, and draft debounce. jsdom only where needed.
+- **Frontend (Vitest, `npm run test`):** registry validation, orb spec blending, every formula producing finite values for all particles across 10 sampled times, state machine transitions plus `effectsFor`, director rules, and draft debounce. jsdom only where needed.
 - **Backend (pytest, offline):** loader collisions, the approval envelope for feature kinds, the `/api/events` stream, the scheduler's single-flight, and `ChatResponse.ui` hints.
 - **Gates:** `npm run lint`, `npm run typecheck`, `npm run test`, pytest, and `npm run perf` on the desk.
 
@@ -235,7 +260,7 @@ It is idempotent and refuses an id that already exists.
 ## P13 — Phase 3 order (one commit or more per step)
 
 1. **Tooling:** `lenis`, `@tanstack/react-query`, `openapi-typescript` (dev), `vitest` (dev); ESLint import boundaries; layer z-tokens in Tailwind.
-2. **Substrate v2:** remove the eye; add presets, state modifiers, protocol v2 and `level`; hoist into `JarvisRoot`.
+2. **Substrate v2:** remove the eye, glow and rays; add the particle swarm, formula runner, bloom, the three owner formulas, state controls, protocol v2, `level` and `gather`; hoist into `JarvisRoot`.
 3. **Stores:** extract them; add the state machine events and `effectsFor`; add the effect runner (with tests).
 4. **Sections:** scroll engine, section registry and `SectionStack`; port the three core sections; SectionNav, L0/L3 layers, baton dimming.
 5. **Landing** and its gates.

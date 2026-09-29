@@ -27,7 +27,7 @@ One page, not three lenses. A landing overlay preloads the desk, then the owner 
 
 - **Hoisting:** `app/layout.tsx` → `JarvisRoot` owns the only WebGL context (`frontend/src/substrate/`, worker `OffscreenCanvas`) for the tab's lifetime. It never remounts on route change.
 - **Layers:** L0 backdrop · L1 substrate · L2 sections/cards · L3 decor + chrome (StatusCluster, SectionNav, TaskDock, CommandBaton); modal/toast/landing tiers above. Tailwind z-tokens only.
-- **Orb:** one persistent orb; section presets blend with scroll; FSM states morph shape only (HITL also centres it). Evil Eye is gone.
+- **Orb:** one persistent casberry-style particle swarm; each section runs an owner-chosen formula (`frontend/src/substrate/formulas/`, see `docs/overhaul/ORB_FORMULAS.md`) and scroll morphs between them; FSM states move formula controls only (HITL also centres it). Evil Eye is gone.
 - **State:** `orchestratorFsm.ts` is a pure reducer + `effectsFor`; stores under `frontend/src/core/stores/` run effects; `core/scroll/director.ts` owns every programmatic scroll.
 - **Adding things:** a feature is `frontend/src/features/<id>/feature.ts` (+ `backend/app/features/<id>/`) registered with one line, importing Jarvis code only via `@/sdk`. Start with `npm run new:feature <id>`. Templates: `.cursor/rules/frontend/22-scroll-substrate.mdc` §6–9. **Never edit `core/`, `substrate/`, the FSM or the root layout to ship a feature.**
 
