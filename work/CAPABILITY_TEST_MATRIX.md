@@ -13,7 +13,7 @@
 ### Tags
 | Tag | Meaning |
 |-----|---------|
-| **desk** | Needs Hermes, Voicebox, real Google OAuth, GPU Ollama, or physical mic/speaker |
+| **desk** | Needs Hermes, real Google OAuth, GPU Ollama, Gemini speech playback, or physical mic/speaker |
 | **cloud** | HUD layout/scroll/cards verifiable headless; or logic covered by `backend/tests` |
 | **offline** | Runnable with `pytest -m "not live_service"` (partial coverage — still re-test live) |
 | **retired** | Case kept for history; skip this pass (one-line why in the row) |
@@ -28,7 +28,7 @@ While you test in the HUD, tell the coordinator your observations (ID + what you
 Every kickoff to a worker must be self-contained: goal, repro, files in scope, acceptance check.
 
 ### Where a Fix Can Run
-Cloud workers lack Hermes (`:8642`), Voicebox (`:17493`), real Google OAuth, GPU-representative Ollama, and physical mic/speaker — checks needing those stay **desk**. Cloud *can* build/serve the HUD and drive headless Chrome (`--enable-unsafe-swiftshader` for orb/eye WebGL). Section **E** (HUD/FSM) and **P** (workspaces/morph/skins) are mostly **cloud** except live Voicebox timing and talk-jump that needs a brain. Section **K** (voice) is mostly **desk**. Semantic router logic is **cloud** + **offline**; live orchestra highlight is **desk**.
+Cloud workers lack Hermes (`:8642`), live Gemini speech, real Google OAuth, GPU-representative Ollama, and physical mic/speaker — checks needing those stay **desk**. Cloud *can* build/serve the HUD and drive headless Chrome (`--enable-unsafe-swiftshader` for orb/eye WebGL). Section **E** (HUD/FSM) and **P** (workspaces/morph/skins) are mostly **cloud** except talk-jump that needs a brain. Section **K** (voice) is mostly **desk**. Semantic router logic is **cloud** + **offline**; live orchestra highlight is **desk**.
 
 ---
 
@@ -196,9 +196,9 @@ Engineering workspace is the visual home; tools/HITL unchanged.
 |----|------------|-------------|--------|------|
 | I1 | `/api/metrics` latency | Several chat turns | p50/p95 visible | desk · offline |
 | I2 | Mission audit steps | After a tool turn | prompt/tool/result logged in `/api/missions` | desk · offline |
-| I3 | Health Hermes transport | `GET /api/health` | gateway vs cli; voicebox block; HUD `:3000` up | desk · cloud |
+| I3 | Health Hermes transport | `GET /api/health` | gateway vs cli; `tts` names Charon; HUD `:3000` up | desk · cloud |
 | I4 | Turn log | After chat/confirm | `work/LIVE_TEST.md` + `/api/turns/recent` updated | desk · offline |
-| I5 | Voicebox status | `GET /api/voicebox/status` | Mark profile; cache count | desk |
+| I5 | Speech health | `GET /api/health` `tts` block | provider gemini, voice Charon, lite model first | desk |
 | I6 | Offline CI suite | `python -m pytest -m "not live_service"` | 197+ pass; no live services | cloud · offline |
 | I7 | Frontend CI checks | `npm run typecheck` + `npm run lint` | Clean (warnings OK) | cloud · offline |
 | I8 | Data path resolution | API started from repo root | Uses `<repo>/data` not CWD-relative ghost paths | desk · offline |
@@ -222,8 +222,8 @@ Engineering workspace is the visual home; tools/HITL unchanged.
 | ID | Capability | How to Test | Target | Tags |
 |----|------------|-------------|--------|------|
 | K1 | Single speak (no double) | Any speak line | One audio stream; no 15s replay | desk |
-| K2 | Voicebox cutover | Voicebox warm | Browser TTS ≤~1.4s then Mark voice | desk |
-| K3 | Late clip discarded | Slow Voicebox response | Late blob not played after bridge owns line | desk |
+| K2 | Charon speaks the line | Send a short casual line | One Gemini WAV; HUD text matches what is spoken | desk |
+| K3 | Quota stays silent | Speech models exhausted | Reply stays on screen; no other voice | desk |
 | K4 | TTS prefetch | Send chat | `/api/tts` warms cache; faster replay | desk |
 | K5 | Preferences voice toggle | Disable voice in prefs | No TTS; HUD still updates text | desk · cloud |
 | K6 | HITL confirm mic | After speak ends with pending | Confirm listen opens; yes/no works | desk |
@@ -276,7 +276,7 @@ Prefer **Engineering** workspace for these (P14). Tools unchanged.
 
 ## Suggested Test Order (Current Pass)
 
-1. **I3** — HUD `:3000`, API `:8000/api/health`, Hermes `:8642`, Voicebox `:17493`  
+1. **I3** — HUD `:3000`, API `:8000/api/health`, Hermes `:8642`, `tts` names Charon  
 2. **E1, P1** — bootstrap + three workspaces in one shell  
 3. **P7, P8, P9** — lens morph (presence → theme → chrome; reduced-motion)  
 4. **P10, P11, P12** — Monitor eye, chrome, still suns  

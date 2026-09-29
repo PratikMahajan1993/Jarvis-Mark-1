@@ -7,7 +7,7 @@
 | HUD | http://127.0.0.1:3000 |
 | API | http://127.0.0.1:8000 |
 | Hermes gateway | http://127.0.0.1:8642 |
-| Voicebox | http://127.0.0.1:17493 |
+| Speech | Gemini TTS, Charon, `POST /api/tts` |
 
 Bind API with `--host 127.0.0.1` when possible. A second process on `0.0.0.0:8000` causes confusing dual listeners.
 
@@ -15,18 +15,17 @@ Bind API with `--host 127.0.0.1` when possible. A second process on `0.0.0.0:800
 
 File: `frontend/src/lib/voice.ts`
 
-1. `speak(text)` starts `/api/tts` fetch and a 160ms browser-TTS bridge.
-2. If Voicebox blob arrives before ~1.4s after bridge start → cancel browser, play Mark.
-3. If later → **do not play** Voicebox; browser already owns the line (cache still warms).
-4. Never play inside fetch before the late-cutover check (causes ~15s double speak).
+1. `speakText(text)` fetches `POST /api/tts` and plays that WAV in the browser.
+2. The API calls Gemini TTS (Charon). There is no browser `speechSynthesis` path and no Voicebox.
+3. If speech fails or every TTS model is out of calls, the desk stays silent and the text stays on screen.
 
-Backend: `prefetch_tts` on chat/confirm; disk cache under `<repo>/data/tts_cache/`.
+Backend: `gemini_tts.py`; `prefetch_tts` on chat/confirm; disk cache under `<repo>/data/tts_cache/`.
 
 ## Semantic router
 
 File: `backend/app/semantic_router.py`
 
-1. `/api/chat` classifies each utterance (`ui_command`, `casual_chat`, `vision_task`, `tool_ops`).
+1. `/api/chat` classifies each utterance (`ui_command`, `casual_chat`, `vision_task`, `tool_ops`). A warm ONNX encoder in `core/router.py` runs first; Gemini and keywords run when the score is under 0.65.
 2. UI commands resolve locally via `handle_ui_command` → `ChatResponse.ui_action` (hide/show dock, minimize/expand notes).
 3. Other intents stamp `target_agent` + orchestra highlight on `ChatResponse.agents`.
 4. `tool_ops` prefers Hermes in `agent.py`; falls back to local snapshot / legacy on error.

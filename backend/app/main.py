@@ -208,6 +208,18 @@ def startup() -> None:
         except Exception:
             pass
     # Speech is Gemini TTS on the first spoken line. Do not warm Voicebox here.
+    import logging
+    import threading
+
+    def _warm_aurelio() -> None:
+        try:
+            from .core.router import warm
+
+            warm()
+        except Exception as exc:
+            logging.getLogger("jarvis.router").warning("aurelio warm failed: %s", exc)
+
+    threading.Thread(target=_warm_aurelio, name="jarvis-aurelio-warm", daemon=True).start()
     try:
         from .hermes.bridge import warm_hermes
 

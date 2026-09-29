@@ -1,6 +1,7 @@
 # Jarvis — Roadmap (Next Steps & Priorities)
 
 **Generated:** 2026-09-25  
+**Updated:** 2026-09-29  
 **Status:** Active execution plan. Single source of truth for what to build next.  
 **Reference:** `docs/SYSTEM_TRUTH.md` for locked architecture and rules.
 
@@ -112,11 +113,13 @@
 
 ## Phase 6: Voice & TTS Reliability (Ongoing)
 
+Desk speech is Gemini TTS, voice Charon (`gemini_tts.py`). Lite, then 3.8 Flash, then 2.5 Flash only when both are out of calls. If every speech model is exhausted, the reply stays on screen and Jarvis stays silent. No browser `speechSynthesis`. No Voicebox.
+
 | ID | Task | Owner | Acceptance | Priority |
 |----|------|-------|------------|----------|
-| V6.1 | Single speak (no double-play) | `jarvis-voice` | One audio stream; no 15s replay | P0 |
-| V6.2 | Voicebox cutover ≤1.4s | `jarvis-voice` | Browser TTS → Mark voice seamless | P0 |
-| V6.3 | Late clip discarded after bridge owns line | `jarvis-voice` | No late blob played | P0 |
+| V6.1 | Single speak (no double-play) | `jarvis-voice` | One WAV from `/api/tts`; no second clip | P0 |
+| V6.2 | Charon on the lite model | `jarvis-voice` | Spoken line matches the HUD text | P0 |
+| V6.3 | Quota exhaustion stays silent | `jarvis-voice` | Text remains; no other voice | P0 |
 | V6.4 | TTS prefetch on chat out | `jarvis-voice` | `/api/tts` warms cache | P1 |
 | V6.5 | Preferences voice toggle | `jarvis-uiux` | Disable voice → no TTS; HUD still updates text | P1 |
 | V6.6 | HITL confirm mic opens after speak ends | `jarvis-voice` | Yes/No works | P1 |
@@ -167,7 +170,7 @@
 | P0 | `jarvis-workflows` | Quote, HITL, mail, calendar, memory, vision gates, master data |
 | P0 | `jarvis-builder` | Migrations, restarts, live verification, SQLite config |
 | P1 | `jarvis-uiux` | HUD panes, lenses, bench, React Bits, morph, canvas |
-| P1 | `jarvis-voice` | Voicebox, TTS, speak bridge, double-play |
+| P1 | `jarvis-voice` | Gemini TTS, Charon, silence on quota |
 | P2 | Coordinator | Capability test dispatch, observation routing |
 
 ---

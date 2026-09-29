@@ -12,7 +12,7 @@ As-built snapshot: [docs/CURRENT.md](docs/CURRENT.md). Cursor agents, skills, an
 
 - Python 3.11+, Node 20+, [Ollama](https://ollama.com) for fallback chat
 - **Hermes** gateway on `:8642` (primary brain)
-- **Voicebox** on `:17493` for Mark TTS (`POST /generate`)
+- **Gemini TTS** (voice Charon) via `POST /api/tts`. No local Voicebox process
 - Chrome for mic / wake word (browser SpeechRecognition)
 
 ## Setup
@@ -45,7 +45,7 @@ Without OAuth, mail and calendar stay on the local demo store.
 
 ## Run
 
-Start **Hermes gateway** and **Voicebox** on the desk, then two terminals for Jarvis.
+Start the **Hermes gateway** on the desk, then two terminals for Jarvis. Speech uses the Gemini key. Do not start Voicebox.
 
 ```powershell
 # API  (prefer 127.0.0.1 to avoid duplicate listeners)
@@ -61,7 +61,7 @@ npm run dev
 
 Open [http://127.0.0.1:3000](http://127.0.0.1:3000). Click the orb, hold Space, type, or say **Jarvis** / **Hey Jarvis**.
 
-Quick health: Hermes `http://127.0.0.1:8642`, Voicebox `http://127.0.0.1:17493`, API `GET /api/health`.
+Quick health: Hermes `http://127.0.0.1:8642`, API `GET /api/health`. Speech is the `tts` block on that health payload (Charon).
 
 ### Use from another machine
 

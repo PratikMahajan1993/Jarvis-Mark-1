@@ -191,6 +191,9 @@ async def classify_intent(message: str) -> IntentClassification:
     quote_route = _quote_start_route(text)
     if quote_route is not None:
         return quote_route
+    aurelio = _from_aurelio(text)
+    if aurelio is not None:
+        return aurelio
     if not settings.gemini_api_key:
         return _fallback(text)
 
@@ -236,6 +239,37 @@ class RouterResult:
     kind: str
     target_agent: str
     confidence: float
+
+
+def _from_aurelio(text: str) -> IntentClassification | None:
+    """Fast ONNX route. None means fall through to Gemini or the keyword fallback."""
+    try:
+        from .core.router import ROUTE_MIN_SCORE, band_for_score, classify_fast, intent_for_route
+    except Exception as exc:
+        logger.warning("aurelio import failed: %s", exc)
+        return None
+    hit = classify_fast(text)
+    if hit is None:
+        return None
+    route, score = hit
+    band = band_for_score(score)
+    if score < ROUTE_MIN_SCORE:
+        logger.info("aurelio route=%s score=%.3f band=%s", route, score, band)
+        return None
+    kind, agent = intent_for_route(route)
+    logger.info(
+        "aurelio route=%s score=%.3f band=%s kind=%s agent=%s",
+        route,
+        score,
+        band,
+        kind,
+        agent,
+    )
+    return IntentClassification(
+        intent=kind,  # type: ignore[arg-type]
+        target_agent=agent,  # type: ignore[arg-type]
+        confidence=min(1.0, max(0.0, float(score))),
+    )
 
 
 def classify(message: str) -> RouterResult:

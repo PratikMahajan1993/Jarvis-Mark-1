@@ -27,7 +27,7 @@ description: >
 | Concern | Module |
 | ------- | ------ |
 | Chat / tools | `backend/app/agent.py`, `tools/registry.py` |
-| Semantic router | `semantic_router.py` — Gemini flash intent + `target_agent`; UI commands via `handle_ui_command` |
+| Semantic router | `core/router.py` ONNX first, then `semantic_router.py` Gemini + keywords; UI commands via `handle_ui_command` |
 | Intent / mail fast path | `intent.py`, `snapshot.py` — local mail/calendar/briefing skip Hermes when snapshot-ready |
 | Quote playbook | `quote.py`, `hermes/playbooks/quote/`, `hermes/mcp_server.py`, `intent.is_quote_start`, Hermes timeout fallback in `agent.py` — see skill `jarvis-quote-playbook` |
 | HUD workspaces | `frontend/.../hudWorkspace.ts` — talk-jump to Engineering **only from monitor** |

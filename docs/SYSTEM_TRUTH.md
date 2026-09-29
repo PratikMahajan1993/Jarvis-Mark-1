@@ -1,6 +1,7 @@
 # Jarvis — System Truth (Single Source of Truth)
 
 **Generated:** 2026-09-25  
+**Updated:** 2026-09-29  
 **Status:** Consolidated from all living notes, architecture manifests, capability matrices, and as-built docs. This document replaces all prior work/ and docs/ files.
 
 ---
@@ -45,6 +46,8 @@ Jarvis is a **24/7 AI office assistant** for a precision machining company. It r
 | **Shop work** | Mail, calendar, quotes, drawings, RFQ | Hermes (gateway) |
 | **Vision** | Drawing analysis (until local vision exists) | Gemini |
 | **Fallback** | Hermes timeout (>30s) or unavailable | Ollama (local) → Gemini |
+
+Shop intent is classified first by a local ONNX bi-encoder (`backend/app/core/router.py`, FastEmbed `BAAI/bge-small-en-v1.5`). A score of at least 0.65 maps onto the four desk intents (`casual_chat`, `tool_ops`, `vision_task`, `ui_command`). Below that, or if the model is missing, Gemini and the keyword fallback in `semantic_router.py` run. Quote-start, “what is an RFQ,” and obvious greetings still win before the encoder. `semantic-router` the library is not installed: it requires Python older than 3.14.
 
 Casual gateway calls cap at 12s; tool-ops and quotes stay at 30s; an open Hermes circuit skips the gateway.
 
@@ -431,12 +434,12 @@ Fails closed on: unresolved modal state; motion outside travels; rapid below cle
 | Agent | Owns | Needs Desk Machine? |
 |-------|------|---------------------|
 | `jarvis-uiux` | Layout, React Bits, weather/tasks panels, visual polish | No (cloud-verifiable rendering/layout/scroll/card-state) |
-| `jarvis-voice` | Voicebox, `/api/tts`, speak bridge, double-play, latency | Yes — Voicebox on :17493 |
+| `jarvis-voice` | Gemini TTS, `/api/tts`, Charon playback, silence on quota | Yes — needs the Gemini speech key and a speaker |
 | `jarvis-workflows` | Mail, HITL, RFQ/quote, calendar, Hermes/snapshot tools | Yes for live mail/Hermes; no for logic + `backend/tests` |
 | `jarvis-builder` | General agreed implementation / restarts / verify | Only for restarts and live verification |
 
 **UI/UX Rule:** Always reuse `jarvis-uiux` for visual work — do not invent ad-hoc UI agents  
-**Placement Policy:** Cloud workers can build/serve HUD and drive headless Chrome (`--enable-unsafe-swiftshader` for WebGL); what they cannot reach: Hermes, Voicebox, real Google OAuth, GPU-representative Ollama, physical mic/speaker
+**Placement Policy:** Cloud workers can build/serve HUD and drive headless Chrome (`--enable-unsafe-swiftshader` for WebGL); what they cannot reach: Hermes, the Gemini speech key’s live audio, real Google OAuth, GPU-representative Ollama, physical mic/speaker
 
 ---
 
@@ -448,11 +451,11 @@ Fails closed on: unresolved modal state; motion outside travels; rapid below cle
 | `docs/SYSTEM_TRUTH.md` | **This file** — single source of truth |
 | `docs/ROADMAP.md` | Next steps & priorities |
 | `AGENTS.md` | Agent & skill map |
-| `.cursor/rules/00-jarvis-core.mdc` | Always-on core rules |
+| `.cursor/rules/core/00-jarvis-core.mdc` | Always-on core rules |
 | `.cursor/rules/backend/*.mdc` | Backend module rules |
 | `.cursor/rules/domain/*.mdc` | Domain workflow rules (quote, gcode, vision, master data, knowledge) |
 | `.cursor/rules/frontend/*.mdc` | HUD shell, React Bits, UI/UX |
-| `.cursor/rules/ops/*.mdc` | Tests, living notes, dispatch |
+| `.cursor/rules/ops/*.mdc` | Tests and dispatch |
 | `work/CAPABILITY_TEST_MATRIX.md` | Capability test IDs and log |
 | `backend/app/hermes/playbooks/quote/` | Shop-quote playbook source |
 | `backend/app/quote.py` | Quote implementation |
@@ -488,8 +491,10 @@ Fails closed on: unresolved modal state; motion outside travels; rapid below cle
 | 2026-09-22 | One Hermes chat per quote; wipe transcript store | ARCHITECTURE_POINTS §2026-09-24 |
 | 2026-09-23 | Overhaul workers local (not cloud) | ARCHITECTURE_POINTS §2026-09-23 |
 | 2026-09-23 | Single pane, no staged morph | UI_UX_POINTS §2026-09-23 |
+| 2026-09-29 | Desk speech is Gemini TTS, voice Charon. Quota exhaustion stays silent | `gemini_tts.py` |
+| 2026-09-29 | Shop intent: ONNX bi-encoder first, Gemini only under 0.65 | `core/router.py` |
 
 ---
 
 **End of System Truth.**  
-All prior work/ documentation, OPUS_ARCHITECTURE_MANIFEST.md, VISION_WORKBOOK.md, FOUNDATION_BUILD_PLAN.md, ARCHITECTURE_POINTS.md, UI_UX_POINTS.md, APP_FEATURES.md, SONNET_UI_VISION.md, CAPABILITY_TEST_RUN_*, QUOTE_RUN.md, and architecture-review/ folder are superseded by this document and `docs/ROADMAP.md`.
+All prior work/ documentation, OPUS_ARCHITECTURE_MANIFEST.md, VISION_WORKBOOK.md, FOUNDATION_BUILD_PLAN.md, ARCHITECTURE_POINTS.md, UI_UX_POINTS.md, APP_FEATURES.md, SONNET_UI_VISION.md, CAPABILITY_TEST_RUN_*, QUOTE_RUN.md, and architecture-review/ folder are superseded by this document and `docs/ROADMAP.md`. One-shot plans that used to sit in `docs/` are in `archive/2026-09-29-doc-cleanup/`.

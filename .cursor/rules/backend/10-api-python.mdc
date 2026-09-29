@@ -23,7 +23,7 @@ alwaysApply: false
 - **Config:** Read paths, keys, ports from `settings` (`app.config`); anchor relative dirs via repo root, not process CWD.
 - **Lazy imports:** Import heavy connectors and model clients inside the function that needs them; avoid new top-level import cycles.
 - **No new JSON state files** for durable data — SQLite tables or documented exports only.
-- **External I/O:** Every HTTP/RPC call to Hermes, Gemini, Ollama, Voicebox, or Google APIs must use an explicit timeout; no unbounded `wait`.
+- **External I/O:** Every HTTP/RPC call to Hermes, Gemini, Ollama, Gemini TTS, or Google APIs must use an explicit timeout; no unbounded `wait`.
 - **Extend, don't fork:** New features hook existing modules; no parallel stack under `backend/`.
 
 ## Skills

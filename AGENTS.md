@@ -17,7 +17,7 @@ Persistent guidance for Cursor agents working in this repo during capability tes
 |------|------|
 | `.cursor/rules/core/00-jarvis-core.mdc` | Stack, HITL, ports, HUD shape, playbooks |
 | `.cursor/rules/ops/42-dispatch.mdc` | Test-run: observe → dispatch → continue |
-| `.cursor/rules/ops/41-living-notes.mdc` | When to update `docs/SYSTEM_TRUTH.md` or `docs/ROADMAP.md` |
+| `.cursor/rules/ops/40-tests.mdc` | Offline-first tests, `live_service` marker |
 
 ## Skills (Auto-Routed by Description)
 
@@ -41,14 +41,14 @@ The user specifies the `subagent_type` and `model` at dispatch time — no defau
 
 | Agent | Owns | Needs Desk Machine? |
 |-------|------|---------------------|
-| `jarvis-uiux` | Layout, React Bits, weather/tasks panels, visual polish | No for rendering/layout/scroll/card-state — cloud worker can build/serve HUD and verify headlessly. Yes only when check depends on live Voicebox or Hermes content. |
-| `jarvis-voice` | Voicebox, `/api/tts`, speak bridge, double-play, latency | Yes — Voicebox lives on `:17493` |
+| `jarvis-uiux` | Layout, React Bits, weather/tasks panels, visual polish | No for rendering/layout/scroll/card-state — cloud worker can build/serve HUD and verify headlessly. Yes only when check depends on live Hermes content. |
+| `jarvis-voice` | Gemini TTS, `/api/tts`, Charon playback, silence on quota | Yes — needs the Gemini speech key and a speaker |
 | `jarvis-workflows` | Mail, HITL, RFQ/quote, calendar, Hermes/snapshot tools | Yes for live mail/Hermes; no for logic + `backend/tests` |
-| `jarvis-builder` | General agreed implementation / restarts / verify | Only for restarts and live verification against Hermes/Voicebox/Gmail |
+| `jarvis-builder` | General agreed implementation / restarts / verify | Only for restarts and live verification against Hermes/Gmail |
 
 **UI/UX Rule:** Always reuse `jarvis-uiux` for visual work — do not invent ad-hoc UI agents.
 
-**Placement Policy:** Cloud workers run on isolated VMs with browser: HUD builds/serves in cloud, headless Chrome can load/screenshot/script. Cloud **can** verify HUD rendering, layout, scroll, card states. Cloud **cannot** reach: Hermes (`:8642`), Voicebox (`:17493`), real Google OAuth, GPU-representative Ollama, physical mic/speaker.
+**Placement Policy:** Cloud workers run on isolated VMs with browser: HUD builds/serves in cloud, headless Chrome can load/screenshot/script. Cloud **can** verify HUD rendering, layout, scroll, card states. Cloud **cannot** reach: Hermes (`:8642`), live Gemini speech playback, real Google OAuth, GPU-representative Ollama, physical mic/speaker.
 
 **Kickoff Rule:** Worker gets repo, `AGENTS.md`, `.cursor/rules/` — nothing from coordinator chat. Every kickoff carries goal, files in scope, acceptance check, "do not expand scope". Isolated branch worker commits/pushes; shared desk worker does not commit unless told.
 
@@ -74,7 +74,6 @@ frontend/
   22-frontend-uiux.mdc        # Single pane, lenses, substrate, depth, motion
 ops/
   40-tests.mdc                # live_service marker, offline-first, regressions
-  41-living-notes.mdc         # Update SYSTEM_TRUTH/ROADMAP on new intent
   42-dispatch.mdc             # Roster, placement, kickoff, test protocol
 ```
 
@@ -91,5 +90,5 @@ HUD       http://127.0.0.1:3000
 API       http://127.0.0.1:8000/api/health
 Turns     http://127.0.0.1:8000/api/turns/recent
 Hermes    http://127.0.0.1:8642
-Voicebox  http://127.0.0.1:17493
+Speech    Gemini TTS, Charon, via `POST /api/tts`
 ```

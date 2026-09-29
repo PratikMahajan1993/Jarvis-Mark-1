@@ -9,8 +9,8 @@ alwaysApply: true
 - HUD: Next.js `frontend/` on **:3000**
 - API: FastAPI `backend/app/` on **127.0.0.1:8000**
 - Hermes Gateway: **:8642** (shop work brain)
-- Voicebox TTS: **:17493** — `POST /generate` only (never `/speak`)
-- Gemini: Casual chat + vision + overflow
+- Speech: Gemini TTS, voice Charon, `POST /api/tts` (no Voicebox, no browser speech)
+- Gemini: Casual chat + vision + speech + overflow
 - Ollama: Last resort fallback
 
 ## Data Paths

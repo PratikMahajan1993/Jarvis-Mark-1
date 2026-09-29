@@ -18,3 +18,7 @@ google-auth-httplib2>=0.2.0
 mcp>=1.0.0,<2
 lancedb>=0.21.0
 google-genai>=1.0.0
+# ONNX bi-encoder for the shop intent router (BAAI/bge-small-en-v1.5).
+# semantic-router 0.1.x requires Python <3.14; this desk is 3.14, so the
+# Aurelio-style route table lives in app/core/router.py on FastEmbed instead.
+fastembed>=0.8.0

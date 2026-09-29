@@ -23,7 +23,7 @@ if assigned — but prefer the coordinator routing those to specialists next tim
 
 - HUD: Next.js `frontend/` → `http://127.0.0.1:3000`
 - API: FastAPI `backend/` → `http://127.0.0.1:8000`
-- Hermes gateway `:8642`, Voicebox `:17493` (`/generate` only)
+- Hermes gateway `:8642`, Gemini TTS (Charon via `/api/tts`)
 - SQLite: `<repo>/data/jarvis.db`
 - Follow `.cursor/rules/jarvis-core.mdc` and skill `jarvis-architecture`
 
@@ -46,7 +46,7 @@ if assigned — but prefer the coordinator routing those to specialists next tim
   listener. A cloud worker can and should start the API/HUD itself to verify
   (`bash .cursor/install.sh`, then the two `.cursor/environment.json` terminal
   commands) — both boot and build/serve cleanly with no desk-machine access. Only
-  Hermes (`:8642`), Voicebox (`:17493`), or real Google OAuth being unreachable
+  Hermes (`:8642`), live Gemini speech, or real Google OAuth being unreachable
   means that specific check needs the desk machine — report GAPS for those, not
   for the API/HUD itself.
 

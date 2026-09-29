@@ -34,8 +34,8 @@ which default resolution is in place.
 `live_service` is the umbrella marker for tests that need a separately
 running service, so `-m "not live_service"` remains the fully isolated
 offline suite. The nine tests in `test_stability_e2e.py` are additionally
-marked `api_service`: they require only the Jarvis API on `:8000`, not Hermes,
-Voicebox, or Google OAuth, and are cloud-testable. The two
+marked `api_service`: they require only the Jarvis API on `:8000`, not Hermes
+or Google OAuth, and are cloud-testable. The two
 `test_hermes_e2e.py` tests require Hermes.
 
 When no relevant service is running, these modules' runtime `skipif` checks

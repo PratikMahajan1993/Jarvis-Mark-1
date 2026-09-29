@@ -1,5 +1,7 @@
 # Jarvis Mark-1 — Feature Suggestions (Creative Expansion)
 
+These are uncommitted ideas. They are not the roadmap and not system truth. Desk speech is Gemini TTS, voice Charon, not Voicebox.
+
 **Generated:** 2026-09-26  
 **Scope:** 15+ new capabilities Jarvis could provide to the precision machining office.  
 **Constraint:** Must respect existing invariants (HITL gates, tool-owned data, local-first, no hallucinated numbers).
@@ -245,12 +247,12 @@ CREATE TABLE part_energy_log (
 
 **Implementation:**
 - `settings.hud_language` + `settings.voice_language` (ISO 639-1)
-- Voicebox profile per language (Kokoro supports hi, mr, ta)
+- Gemini TTS voice per language (Charon is the English desk voice today)
 - Tool schemas translated via JSON schema `title`/`description` localization
 - HITL modals: "अधिकृत करें / अस्वीकार करें"
 - Briefing: "शुभ प्रभात, सर। ३ अपठित मेल। शॉप OEE ८७ प्रतिशत।"
 
-**Why it fits:** Voicebox supports Indic languages via Kokoro. No cloud translation — local TTS. HUD text from `orchestrator` strings can be i18n'd. Inclusive design for Indian shop floor.
+**Why it fits:** A second Gemini TTS voice can cover another language. HUD text from `orchestrator` strings can be i18n'd. Inclusive design for Indian shop floor.
 
 ---
 
@@ -381,7 +383,7 @@ Jarvis: [Pulls: routing_operations, machine_capabilities, tooling_instances]
 - "Any urgent mail?" → `search_emails unread_only=true limit=5`
 - "Approve quote send Q-4421" → `POST /api/confirm` (with idempotency key)
 - "Remind me to call MetalCorp at 3pm" → `create_calendar_event` (HITL)
-- "Brief me" → `build_briefing` (speak via Voicebox → voice note reply)
+- "Brief me" → `build_briefing` (speak via Gemini TTS → voice note reply)
 
 **Architecture:**
 ```
@@ -390,10 +392,10 @@ Telegram Bot API → Webhook → FastAPI /api/webhook/telegram
                     ├─ Verify user (pre-shared secret + chat_id allowlist)
                     ├─ Map command → internal tool
                     ├─ If HITL needed → queue pending_action + reply "Authorize in HUD"
-                    └─ Reply via bot.sendMessage / sendVoice (Voicebox WAV)
+                    └─ Reply via bot.sendMessage / sendVoice (Gemini TTS WAV)
 ```
 
-**Why it fits:** Reuses all existing tools. HITL still in HUD (security). Voicebox WAV → Telegram voice note. No new brain — just thin adapter.
+**Why it fits:** Reuses all existing tools. HITL still in HUD (security). Gemini TTS WAV → Telegram voice note. No new brain — just thin adapter.
 
 ---
 
@@ -539,7 +541,7 @@ Engineering Desk → Quote Stack → [Sandbox] tab
 | Tooling Lifecycle | ⭐⭐⭐ | Medium (toolwatch) | Medium | Migration 0029 |
 | FAI Helper | ⭐⭐⭐⭐ | High (knowledge cards) | Low | confirm_drawing_fact |
 | Energy/Carbon Tracker | ⭐⭐⭐ | Low (new schema) | Medium | Migration 0030 |
-| Multi-Language | ⭐⭐⭐ | High (Voicebox ready) | Medium | i18n strings |
+| Multi-Language | ⭐⭐⭐ | Medium (Charon is English-only today) | Medium | i18n strings |
 | Predictive Maintenance | ⭐⭐⭐ | Medium (shop_events) | Low | Nightly ingest |
 | Customer Portal | ⭐⭐⭐ | Medium (artifacts + JWT) | Medium | FastAPI route |
 | Compliance Pack | ⭐⭐⭐⭐ | High (template engine) | High | Jinja2 + data |

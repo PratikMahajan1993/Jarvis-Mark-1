@@ -1,6 +1,6 @@
 # Jarvis — What Works Today (As-Built Snapshot)
 
-**Updated:** 2026-09-25  
+**Updated:** 2026-09-29  
 **Reference:** `docs/SYSTEM_TRUTH.md` (single source of truth), `docs/ROADMAP.md` (next steps)
 
 ## Product Shape
@@ -59,7 +59,7 @@ Hermes thread map: `data/hermes_sessions.json` (separate from playbook files). P
 - Right rail: `WeatherCard` (`shrink-0`) + scrollable `SuggestedTasksPanel`.
 - React Bits accents; mail board via SceneBoard inside SpotlightCard (`bodyClassName` scroll).
 - Local-fast path for mail/calendar/briefing snapshot kinds.
-- Hermes warm gateway bridge; TTS prefetch + Voicebox cutover.
+- Hermes warm gateway bridge. Speech is Gemini TTS (Charon); prefetch warms `data/tts_cache/`.
 - Turn log: auto-appended to `work/LIVE_TEST.md` + JSONL + `GET /api/turns/recent`.
 - Local memory upsert/search/forget; quote path through verify + HITL send.
 
@@ -72,6 +72,6 @@ Hermes thread map: `data/hermes_sessions.json` (separate from playbook files). P
 
 ## Runtime Notes
 
-- Start Hermes gateway and Voicebox desktop app for Mark TTS.
+- Start Hermes gateway. Speech uses the Gemini key already in `.env` (Charon). Voicebox is not part of the desk.
 - Prefer API on `127.0.0.1:8000`. Frontend `:3000`.
 - Data: `<repo>/data/`; exports: `<repo>/exports/`. Install: `docs/INSTALL.md`. Agents: `AGENTS.md`.

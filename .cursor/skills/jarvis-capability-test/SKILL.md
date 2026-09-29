@@ -19,7 +19,7 @@ It is not delegated to an isolated worker — the pass bar is live HUD behaviour
 
 ## Method
 
-1. Confirm servers: HUD `:3000`, API `127.0.0.1:8000`, Hermes/Voicebox if the case needs them.
+1. Confirm servers: HUD `:3000`, API `127.0.0.1:8000`, Hermes if the case needs it. Speech is Gemini TTS, not a local process.
 2. Pick **one** ID (suggested order in the matrix).
 3. Run the “How to test” steps yourself or guide the user.
 4. After each case, read **`work/LAST_TURNS.md`** (or `GET /api/turns/recent`) for the last ≤20 exchanges before judging speak/board/pending.

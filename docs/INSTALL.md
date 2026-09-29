@@ -8,13 +8,13 @@ Guide for a **fresh machine** or **migrating from another PC**. For what works t
 
 | Tier | You run | You get |
 | ---- | ------- | ------- |
-| **Minimum** | Python venv + API `:8000`, Next.js HUD `:3000`, `.env` | Demo mail/calendar, local memory/RAG, HITL, browser TTS fallback |
-| **Brain desk** | Minimum + **Gemini API key** *or* **Ollama** | Chat, tools, semantic router, compose fill |
-| **Full owner desk** | Brain + **Hermes** `:8642` + **Voicebox** `:17493` + **Google OAuth** + **Chrome** | Live mail/calendar, Mark voice, Hermes-first chat, office-day RFQ cards, mic/HITL |
+| **Minimum** | Python venv + API `:8000`, Next.js HUD `:3000`, `.env` | Demo mail/calendar, local memory/RAG, HITL. Speech stays silent without a Gemini key |
+| **Brain desk** | Minimum + **Gemini API key** *or* **Ollama** | Chat, tools, semantic router, compose fill, Charon speech when the Gemini key is set |
+| **Full owner desk** | Brain + **Hermes** `:8642` + **Google OAuth** + **Chrome** | Live mail/calendar, Hermes-first chat, office-day RFQ cards, mic/HITL |
 
-**Degraded modes:** Hermes down → Gemini/Ollama fallback. Voicebox down → browser TTS. No Google token → demo mailbox/calendar (seeded on startup).
+**Degraded modes:** Hermes down → Gemini/Ollama fallback. Speech quota exhausted on every TTS model → the line stays on screen and Jarvis stays silent. No Google token → demo mailbox/calendar (seeded on startup).
 
-Capability matrix tags: **offline/cloud** = minimum OK; **desk** = needs Hermes, Voicebox, Google, GPU Ollama, or physical mic.
+Capability matrix tags: **offline/cloud** = minimum OK; **desk** = needs Hermes, Google, GPU Ollama, or physical mic.
 
 ---
 
@@ -28,7 +28,7 @@ Capability matrix tags: **offline/cloud** = minimum OK; **desk** = needs Hermes,
 | Chrome | recent | mic / wake word |
 | Ollama | optional | if no `GEMINI_API_KEY` — [ollama.com](https://ollama.com) |
 | Hermes CLI | optional | full desk — install separately; not in `requirements.txt` |
-| Voicebox | optional | full desk — [voicebox.sh](https://voicebox.sh/) desktop app |
+| Gemini API key | speech + casual chat | same `GEMINI_API_KEY` as chat. Voice is Charon |
 
 **Primary platform:** Windows (PowerShell commands below). macOS/Linux: use `source .venv/bin/activate` and `.venv/bin/uvicorn`; Hermes config path differs from Windows `%LOCALAPPDATA%\hermes\.env`.
 
@@ -92,12 +92,14 @@ In `.env`:
 4. Jarvis `.env`: `HERMES_ENABLED=true`, `HERMES_GATEWAY_URL=http://127.0.0.1:8642`, `HERMES_PREFER_GATEWAY=true`.
 5. On API startup, Jarvis registers MCP (`backend/app/hermes/mcp_server.py`) in the background. Verify: `hermes mcp list`.
 
-### 4c. Voicebox (`:17493`)
+### 4c. Speech (Gemini TTS)
 
-1. Install and run Voicebox desktop app.
-2. Ensure profile **Mark** exists (`GET http://127.0.0.1:17493/profiles`).
-3. Jarvis `.env`: `VOICEBOX_ENABLED=true`, `VOICEBOX_URL=http://127.0.0.1:17493`, `VOICEBOX_PROFILE=Mark`.
-4. Jarvis calls **`POST /generate`** only (never `/speak`). TTS cache: `data/tts_cache/`.
+No local speech process. Jarvis calls Gemini with voice **Charon** and the browser plays the WAV from `POST /api/tts`.
+
+1. `GEMINI_API_KEY` in `.env` (the same key as casual chat).
+2. Models, in order: `gemini-3.8-flash-lite-tts`, then `gemini-3.8-flash-tts`, then `gemini-2.5-flash-preview-tts` only when both newer models are out of calls.
+3. If every speech model is exhausted, the HUD still shows the reply and Jarvis stays silent.
+4. TTS cache: `data/tts_cache/`.
 
 ### 4d. Google OAuth (live mail / calendar / Drive / sheets)
 
@@ -153,7 +155,7 @@ Avoid duplicate listeners on `:8000` (`0.0.0.0` + `127.0.0.1` together causes co
 | 3000 | Next.js HUD | Optional |
 | 8000 | FastAPI | Optional |
 | 8642 | Hermes gateway | No — localhost only |
-| 17493 | Voicebox | No — localhost only |
+| — | Speech | Gemini TTS (no local port) |
 | 11434 | Ollama | No — localhost only |
 
 ---
@@ -174,12 +176,12 @@ npm run lint
 
 ```powershell
 curl http://127.0.0.1:8642/health
-curl http://127.0.0.1:17493/profiles
+curl http://127.0.0.1:8000/api/health
 curl http://127.0.0.1:8000/api/google/status
 hermes mcp list
 ```
 
-**Expected:** `/api/health` → `"ok": true` when brain (Gemini/Ollama/Hermes) is ready. Voicebox and Google may be `false` on minimum install without breaking core chat.
+**Expected:** `/api/health` → `"ok": true` when brain (Gemini/Ollama/Hermes) is ready. The `tts` block names Charon. Google may be disconnected on a minimum install without breaking core chat.
 
 **Smoke HUD:** http://127.0.0.1:3000 → “Brief me.”
 
@@ -191,7 +193,7 @@ hermes mcp list
 | ------- | ----- |
 | Duplicate `:8000` | `netstat -ano \| findstr :8000` — kill extra uvicorn |
 | Hermes timeouts | Gateway running? `HERMES_API_KEY` matches Hermes `.env`? |
-| No Mark voice | Voicebox app running? Profile **Mark** exists? |
+| No speech | `GEMINI_API_KEY` set? `tts` on `/api/health` shows Charon? Quota exhaustion stays silent on purpose |
 | Gmail not connected | `data/google_token.json` missing or expired → Connect Gmail |
 | HUD calls wrong API | `frontend/.env.local` `NEXT_PUBLIC_API_URL` |
 | Mail is demo only | Google OAuth not connected — expected on fresh install |

@@ -1,5 +1,5 @@
 ---
-description: Restart the Jarvis HUD, API, Hermes gateway, Voicebox, and Ollama
+description: Restart the Jarvis HUD, API, Hermes gateway, and Ollama
 ---
 
 Restart the Jarvis desk. Do not edit product code.
