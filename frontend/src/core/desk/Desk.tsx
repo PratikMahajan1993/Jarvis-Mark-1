@@ -7,6 +7,7 @@ import { PerfOverlay } from "@/components/PerfOverlay";
 import { BatonDock } from "@/core/chrome/BatonDock";
 import { Modals } from "@/core/chrome/Modals";
 import { SectionNav } from "@/core/chrome/SectionNav";
+import { TaskDock } from "@/core/chrome/TaskDock";
 import { StatusCluster } from "@/core/chrome/StatusCluster";
 import { ThemeSync } from "@/core/chrome/ThemeSync";
 import { Backdrop } from "@/core/layers/Backdrop";
@@ -38,6 +39,7 @@ export function Desk() {
       >
         <StatusCluster />
         <SectionNav sections={SECTIONS} onNavigate={goToSection} />
+        <TaskDock />
         <BatonDock sections={SECTIONS} />
       </div>
       <Modals />

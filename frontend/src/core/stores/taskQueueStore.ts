@@ -78,3 +78,14 @@ export function firstUnparked(items: PendingAction[]): PendingAction | null {
 export function useTaskQueue<T>(selector: (s: TaskQueueState) => T): T {
   return taskQueueStore.use(selector);
 }
+
+export function upsertPending(action: PendingAction) {
+  const items = taskQueueStore.get().items;
+  taskQueueStore.set({ items: items.some((a) => a.id === action.id) ? items : [...items, action] });
+}
+
+export function removePending(id: string) {
+  const { items } = taskQueueStore.get();
+  taskQueueStore.set({ items: items.filter((a) => a.id !== id) });
+  unmarkParked(id);
+}

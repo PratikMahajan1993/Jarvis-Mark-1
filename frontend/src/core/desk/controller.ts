@@ -48,7 +48,7 @@ import {
 } from "@/core/stores/deskStore";
 import { setModalProbe } from "@/core/scroll/director";
 import { getSection, hydrateWorkspace, requestSection, setWorkspace } from "@/core/stores/sectionStore";
-import { firstUnparked, getParkedIds, hydrateParked, markParked, unmarkParked } from "@/core/stores/taskQueueStore";
+import { firstUnparked, getParkedIds, hydrateParked, markParked, removePending, setPendingItems, unmarkParked, upsertPending } from "@/core/stores/taskQueueStore";
 import { dispatchTurn, getTurn, onTurnEffect, setTurnLogSession } from "@/core/stores/turnStore";
 import { runAutosave } from "./autosave";
 
@@ -199,6 +199,7 @@ async function loadSessionSurface(sessionId: string, opts?: { announce?: boolean
     api.session(sessionId).catch(() => null),
   ]);
   if (generation !== ctl.sessionSurfaceGen) return;
+  setPendingItems(waiting.items || []);
   const first = firstUnparked(waiting.items || []);
   // Restoring a session never auto-opens the confirm mic — it is a snapshot, not a fresh reply.
   dispatchTurn(first ? { type: "AWAIT_HITL", action: first } : { type: "RESET" });
@@ -348,6 +349,7 @@ async function applyUiAction(uiAction: Record<string, unknown> | null | undefine
 /* ── Replies and HITL ────────────────────────────────────────────────── */
 
 function presentHitl(action: PendingAction) {
+  upsertPending(action);
   const settled = dispatchTurn({ type: "AWAIT_HITL", action });
   if (settled) {
     logHitlShown(action);
@@ -505,6 +507,7 @@ export async function decide(id: string, approved: boolean, fields?: { to: strin
   stopListening();
   silence();
   const next = dispatchTurn(approved ? { type: "DECIDE_APPROVE", actionId: id } : { type: "DECIDE_REJECT", actionId: id });
+  if (next) removePending(id);
   if (!next) return;
   unmarkParked(id);
   liveLog(
@@ -555,6 +558,7 @@ export async function decide(id: string, approved: boolean, fields?: { to: strin
     // Restore pending from the server so the HUD never strands without Authorize.
     try {
       const waiting = await api.pending(session());
+      setPendingItems(waiting.items || []);
       const restored = firstUnparked(waiting.items || []);
       dispatchTurn(restored ? { type: "AWAIT_HITL", action: restored } : { type: "RESET" });
     } catch {

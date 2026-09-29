@@ -36,6 +36,7 @@ export function Modals() {
         listening={confirmListening}
         busy={busy}
         onDecide={(id, approved) => void desk.decide(id, approved)}
+        onLater={() => void desk.parkHitl()}
       />
 
       <ConnectGoogleModal
