@@ -177,12 +177,9 @@ def _hermes_skills_home() -> Path:
 
 
 def ensure_playbooks_installed() -> bool:
-    """Copy repo quote playbook into Hermes skills dir (idempotent). No CLI required."""
-    source = Path(__file__).resolve().parent / "playbooks" / "quote"
-    if not source.is_dir() or not (source / "SKILL.md").is_file():
-        return False
-    dest = _hermes_skills_home() / "skills" / "shop" / "quote"
-    dest.mkdir(parents=True, exist_ok=True)
+    """Copy repo shop playbooks into Hermes skills dir (idempotent). No CLI required."""
+    playbooks = Path(__file__).resolve().parent / "playbooks"
+    installed_any = False
 
     def _copy_tree(src: Path, dst: Path) -> None:
         dst.mkdir(parents=True, exist_ok=True)
@@ -193,13 +190,22 @@ def ensure_playbooks_installed() -> bool:
             else:
                 shutil.copy2(item, target)
 
-    for name in ("SKILL.md", "notes.md"):
-        shutil.copy2(source / name, dest / name)
-    for sub in ("files", "examples"):
-        sub_src = source / sub
-        if sub_src.is_dir():
-            _copy_tree(sub_src, dest / sub)
-    return True
+    for skill_name, folder in (("quote", "quote"), ("masterdata", "masterdata")):
+        source = playbooks / folder
+        if not source.is_dir() or not (source / "SKILL.md").is_file():
+            continue
+        dest = _hermes_skills_home() / "skills" / "shop" / skill_name
+        dest.mkdir(parents=True, exist_ok=True)
+        for name in ("SKILL.md", "notes.md"):
+            src_file = source / name
+            if src_file.is_file():
+                shutil.copy2(src_file, dest / name)
+        for sub in ("files", "examples"):
+            sub_src = source / sub
+            if sub_src.is_dir():
+                _copy_tree(sub_src, dest / sub)
+        installed_any = True
+    return installed_any
 
 
 def ensure_jarvis_mcp_registered() -> bool:

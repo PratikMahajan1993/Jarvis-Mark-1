@@ -377,8 +377,26 @@ def jarvis_mhr_list_rates() -> str:
 
 
 @mcp.tool()
-def jarvis_mhr_attest_rate(machine_type: str, attested_by: str, floor_inr: str = "", rate_id: str = "") -> str:
-    """Attest a machine-hour rate. The value must differ from the shipped demo seed."""
+def jarvis_mhr_attest_rate(
+    machine_type: str,
+    attested_by: str,
+    floor_inr: str = "",
+    rate_id: str = "",
+    telegram_user_id: str = "",
+) -> str:
+    """Attest a machine-hour rate. Owner Telegram ids only (TELEGRAM_OWNER_USER_IDS)."""
+    from app.config import settings
+
+    owners = [part.strip() for part in (settings.telegram_owner_user_ids or "").split(",") if part.strip()]
+    caller = str(telegram_user_id or "").strip()
+    if not owners or caller not in owners:
+        return _dump(
+            {
+                "ok": False,
+                "error": "Rate attest refused: Telegram user is not an owner (or TELEGRAM_OWNER_USER_IDS is empty).",
+                "need": "owner",
+            }
+        )
     return _dump(
         execute_tool(
             "mhr_attest_rate",
@@ -386,6 +404,67 @@ def jarvis_mhr_attest_rate(machine_type: str, attested_by: str, floor_inr: str =
             _session(),
         )
     )
+
+
+@mcp.tool()
+def jarvis_masterdata_create_customer(name: str, nda: str = "no") -> str:
+    """Create a customer (name + NDA yes/no). Duplicate name returns the existing row."""
+    from app import db
+    from app.masterdata.writes import CreateError, DuplicateError, create_customer
+
+    try:
+        with db.connect() as conn:
+            return _dump(create_customer(conn, {"name": name, "nda": nda}))
+    except DuplicateError as exc:
+        return _dump({"ok": False, "duplicate": True, "message": str(exc), "existing": exc.existing})
+    except CreateError as exc:
+        return _dump({"ok": False, "need": "fields", "message": str(exc)})
+
+
+@mcp.tool()
+def jarvis_masterdata_create_supplier(name: str) -> str:
+    """Create a supplier by name only. Duplicate name returns the existing row."""
+    from app import db
+    from app.masterdata.writes import CreateError, DuplicateError, create_supplier
+
+    try:
+        with db.connect() as conn:
+            return _dump(create_supplier(conn, {"name": name}))
+    except DuplicateError as exc:
+        return _dump({"ok": False, "duplicate": True, "message": str(exc), "existing": exc.existing})
+    except CreateError as exc:
+        return _dump({"ok": False, "need": "fields", "message": str(exc)})
+
+
+@mcp.tool()
+def jarvis_masterdata_create_product(
+    name: str,
+    product_number: str,
+    customer: str,
+    uom: str,
+    monitor_stock: str,
+    material_id: str = "",
+) -> str:
+    """Create a product. Customer must already exist. Duplicate product number returns the existing row."""
+    from app import db
+    from app.masterdata.writes import CreateError, DuplicateError, create_product
+
+    fields = {
+        "name": name,
+        "product_number": product_number,
+        "customer": customer,
+        "uom": uom,
+        "monitor_stock": monitor_stock,
+    }
+    if material_id.strip():
+        fields["material_id"] = material_id.strip()
+    try:
+        with db.connect() as conn:
+            return _dump(create_product(conn, fields))
+    except DuplicateError as exc:
+        return _dump({"ok": False, "duplicate": True, "message": str(exc), "existing": exc.existing})
+    except CreateError as exc:
+        return _dump({"ok": False, "need": "fields", "message": str(exc)})
 
 
 @mcp.tool()

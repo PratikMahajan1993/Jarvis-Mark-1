@@ -33,6 +33,7 @@ from .lifecycle import (
     supersede_machine,
     supersede_material,
     supersede_outsource_vendor,
+    supersede_product,
     supersede_rate,
     supersede_supplier,
 )
@@ -43,6 +44,10 @@ from .lookup import (
     supplier_rm_quote_as_of,
 )
 from .seed_master_data import seed_master_data
+from .writes import CreateError, DuplicateError, create_customer as write_customer
+from .writes import create_product as write_product
+from .writes import create_supplier as write_supplier
+from ..core.features import publish
 
 router = APIRouter(prefix="/api/masterdata", tags=["masterdata"])
 
@@ -82,6 +87,21 @@ def _require(fields: dict[str, Any], *keys: str) -> None:
         raise HTTPException(status_code=400, detail=f"Missing {', '.join(missing)}")
 
 
+def _raise_write(exc: Exception) -> None:
+    if isinstance(exc, DuplicateError):
+        raise HTTPException(
+            status_code=409,
+            detail={"message": str(exc), "duplicate": True, "existing": exc.existing},
+        ) from exc
+    if isinstance(exc, CreateError):
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+def _notify(kind: str, name: str, row_id: str) -> None:
+    publish("masterdata.changed", {"kind": kind, "name": name, "id": row_id})
+
+
 @router.get("/options")
 def masterdata_options() -> dict[str, Any]:
     """Machines, materials, and customers for quote dropdowns. Active rows only."""
@@ -114,6 +134,15 @@ def masterdata_options() -> dict[str, Any]:
                 ORDER BY name COLLATE NOCASE
                 """,
             ),
+            "products": _rows(
+                conn,
+                """
+                SELECT id, product_number, name, customer_id, uom, monitor_stock
+                FROM products
+                WHERE effective_to IS NULL AND COALESCE(status, '') != 'superseded'
+                ORDER BY product_number COLLATE NOCASE
+                """,
+            ),
         }
 
 
@@ -143,47 +172,12 @@ def list_customers() -> dict[str, Any]:
 @router.post("/customers")
 def create_customer(body: EntityBody) -> dict[str, Any]:
     fields = body.fields
-    _require(fields, "name")
-    scope = (fields.get("default_scope") or "ask").strip()
-    if scope not in {"labour", "with_material", "ask"}:
-        raise HTTPException(status_code=400, detail="default_scope must be labour, with_material, or ask")
-    cid = _new_id("cust")
-    with db.connect() as conn:
-        try:
-            conn.execute(
-                """
-                INSERT INTO customers (id, name, gstin, currency, status, effective_from)
-                VALUES (?, ?, ?, ?, 'active', ?)
-                """,
-                (
-                    cid,
-                    fields["name"].strip(),
-                    fields.get("gstin") or None,
-                    (fields.get("currency") or "INR").strip() or "INR",
-                    _today(),
-                ),
-            )
-            conn.execute(
-                """
-                INSERT INTO customer_terms (
-                  customer_id, default_scope, payment_terms_days, nda, allow_cloud_vision, quote_validity_days
-                ) VALUES (?, ?, ?, ?, ?, 30)
-                """,
-                (
-                    cid,
-                    scope,
-                    fields.get("payment_terms_days"),
-                    int(fields.get("nda") or 0),
-                    int(fields.get("allow_cloud_vision") or 0),
-                ),
-            )
-            conn.execute(
-                "INSERT OR IGNORE INTO customer_aliases (customer_id, alias, source) VALUES (?, ?, 'manual')",
-                (cid, fields["name"].strip()),
-            )
-        except Exception as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return {"ok": True, "id": cid}
+    try:
+        with db.connect() as conn:
+            return write_customer(conn, fields)
+    except (DuplicateError, CreateError) as exc:
+        _raise_write(exc)
+        raise  # pragma: no cover
 
 
 @router.patch("/customers/{row_id}")
@@ -281,8 +275,10 @@ def list_materials() -> dict[str, Any]:
 @router.post("/materials")
 def create_material(body: EntityBody) -> dict[str, Any]:
     fields = body.fields
-    _require(fields, "grade", "family", "form")
+    _require(fields, "grade", "form")
     mid = _new_id("mat")
+    grade = fields["grade"].strip()
+    family = (fields.get("family") or "").strip() or grade
     with db.connect() as conn:
         try:
             conn.execute(
@@ -294,8 +290,8 @@ def create_material(body: EntityBody) -> dict[str, Any]:
                 """,
                 (
                     mid,
-                    fields["grade"].strip(),
-                    fields["family"].strip(),
+                    grade,
+                    family,
                     fields.get("standard"),
                     fields.get("density_kg_m3"),
                     fields.get("machinability_index"),
@@ -319,6 +315,7 @@ def create_material(body: EntityBody) -> dict[str, Any]:
                 """,
                 (mid, equiv, fields.get("equivalent_standard"), confirmed),
             )
+        _notify("material", grade, mid)
     return {"ok": True, "id": mid}
 
 
@@ -341,21 +338,12 @@ def list_suppliers() -> dict[str, Any]:
 
 @router.post("/suppliers")
 def create_supplier(body: EntityBody) -> dict[str, Any]:
-    fields = body.fields
-    _require(fields, "name")
-    sid = _new_id("sup")
-    with db.connect() as conn:
-        try:
-            conn.execute(
-                """
-                INSERT INTO suppliers (id, name, contact, lead_days, effective_from)
-                VALUES (?, ?, ?, ?, ?)
-                """,
-                (sid, fields["name"].strip(), fields.get("contact"), fields.get("lead_days"), _today()),
-            )
-        except Exception as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return {"ok": True, "id": sid}
+    try:
+        with db.connect() as conn:
+            return write_supplier(conn, body.fields)
+    except (DuplicateError, CreateError) as exc:
+        _raise_write(exc)
+        raise  # pragma: no cover
 
 
 @router.patch("/suppliers/{row_id}")
@@ -363,6 +351,42 @@ def replace_supplier(row_id: str, body: EntityBody) -> dict[str, Any]:
     try:
         with db.connect() as conn:
             new_id = supersede_supplier(conn, row_id, body.fields)
+    except LifecycleError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"ok": True, "id": new_id, "superseded": row_id}
+
+
+@router.get("/products")
+def list_products() -> dict[str, Any]:
+    with db.connect() as conn:
+        items = _rows(
+            conn,
+            """
+            SELECT p.*, c.name AS customer_name, m.grade AS material_grade
+            FROM products p
+            LEFT JOIN customers c ON c.id = p.customer_id
+            LEFT JOIN materials m ON m.id = p.material_id
+            ORDER BY p.product_number COLLATE NOCASE, p.effective_from
+            """,
+        )
+    return {"ok": True, "items": items}
+
+
+@router.post("/products")
+def create_product(body: EntityBody) -> dict[str, Any]:
+    try:
+        with db.connect() as conn:
+            return write_product(conn, body.fields)
+    except (DuplicateError, CreateError) as exc:
+        _raise_write(exc)
+        raise  # pragma: no cover
+
+
+@router.patch("/products/{row_id}")
+def replace_product(row_id: str, body: EntityBody) -> dict[str, Any]:
+    try:
+        with db.connect() as conn:
+            new_id = supersede_product(conn, row_id, body.fields)
     except LifecycleError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {"ok": True, "id": new_id, "superseded": row_id}

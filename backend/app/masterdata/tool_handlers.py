@@ -14,7 +14,15 @@ from .aliases import (
     resolve_machine_alias,
     resolve_vendor_alias,
 )
-from .lifecycle import LifecycleError, supersede_customer, supersede_machine, supersede_material, supersede_rate, supersede_supplier
+from .lifecycle import (
+    LifecycleError,
+    supersede_customer,
+    supersede_machine,
+    supersede_material,
+    supersede_product,
+    supersede_rate,
+    supersede_supplier,
+)
 from .seed_master_data import seed_master_data
 
 
@@ -85,6 +93,8 @@ def masterdata_supersede(
                 new_id = supersede_material(conn, old_id, data)
             elif entity == "supplier":
                 new_id = supersede_supplier(conn, old_id, data)
+            elif entity == "product":
+                new_id = supersede_product(conn, old_id, data)
             elif entity in {"mhr", "rm", "outsource"}:
                 table = {
                     "mhr": "machine_hour_rates",

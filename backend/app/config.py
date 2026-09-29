@@ -96,6 +96,10 @@ class Settings(BaseSettings):
     # fall back to mhr-demo.md and client-names.md.
     masterdata_enabled: bool = True
 
+    # Telegram user ids allowed to attest MHR via Hermes MCP (comma-separated).
+    # Empty = fail closed: jarvis_mhr_attest_rate refuses every caller.
+    telegram_owner_user_ids: str = ""
+
     # Engineering bench vision queue (needs_vision list + owner analyse action); default off.
     vision_bench_enabled: bool = False
 

@@ -1,49 +1,93 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 
 import { api } from "@/lib/api";
 
 import { AliasManager } from "./AliasManager";
-import { Field, Modal, Toolbar, superseded, text, useEntity, usePaged, type Row } from "./shared";
+import {
+  Field,
+  HistoryRow,
+  Modal,
+  Toolbar,
+  YesNoField,
+  groupWithHistory,
+  superseded,
+  text,
+  useEntity,
+  usePaged,
+  type Row,
+} from "./shared";
 
-const EMPTY = { name: "", gstin: "", currency: "INR", default_scope: "ask", payment_terms_days: "" };
+const CREATE_EMPTY = { name: "", nda: "" as "" | "yes" | "no" };
+const REPLACE_EMPTY = {
+  name: "",
+  gstin: "",
+  currency: "INR",
+  default_scope: "ask",
+  payment_terms_days: "",
+  nda: "" as "" | "yes" | "no",
+};
 
 export function CustomerTable() {
   const { items, error, loading, reload } = useEntity("customers");
   const [query, setQuery] = useState("");
-  const paged = usePaged(items, query, ["name", "gstin", "default_scope"]);
+  const grouped = groupWithHistory(items);
+  const paged = usePaged(grouped, query, ["name", "gstin", "default_scope"], (g) => g.current);
   const [editing, setEditing] = useState<Row | null>(null);
-  const [fields, setFields] = useState(EMPTY);
+  const [mode, setMode] = useState<"create" | "replace">("create");
+  const [createFields, setCreateFields] = useState(CREATE_EMPTY);
+  const [replaceFields, setReplaceFields] = useState(REPLACE_EMPTY);
   const [formError, setFormError] = useState("");
 
   function openNew() {
+    setMode("create");
     setEditing({});
-    setFields(EMPTY);
+    setCreateFields(CREATE_EMPTY);
     setFormError("");
   }
 
   function openReplace(row: Row) {
+    setMode("replace");
     setEditing(row);
-    setFields({
+    setReplaceFields({
       name: String(row.name ?? ""),
       gstin: String(row.gstin ?? ""),
       currency: String(row.currency ?? "INR"),
       default_scope: String(row.default_scope ?? "ask"),
       payment_terms_days: row.payment_terms_days == null ? "" : String(row.payment_terms_days),
+      nda: row.nda ? "yes" : "no",
     });
     setFormError("");
   }
 
   async function save() {
     setFormError("");
-    const payload = {
-      ...fields,
-      payment_terms_days: fields.payment_terms_days ? Number(fields.payment_terms_days) : null,
-    };
     try {
-      if (editing && editing.id) await api.masterdataReplace("customers", String(editing.id), payload);
-      else await api.masterdataCreate("customers", payload);
+      if (mode === "replace" && editing?.id) {
+        await api.masterdataReplace("customers", String(editing.id), {
+          name: replaceFields.name,
+          gstin: replaceFields.gstin,
+          currency: replaceFields.currency,
+          default_scope: replaceFields.default_scope,
+          payment_terms_days: replaceFields.payment_terms_days ? Number(replaceFields.payment_terms_days) : null,
+          nda: replaceFields.nda === "yes" ? 1 : 0,
+          allow_cloud_vision: 0,
+        });
+      } else {
+        if (!createFields.name.trim()) {
+          setFormError("Name is required");
+          return;
+        }
+        if (createFields.nda !== "yes" && createFields.nda !== "no") {
+          setFormError("Choose NDA yes or no");
+          return;
+        }
+        await api.masterdataCreate("customers", {
+          name: createFields.name,
+          nda: createFields.nda,
+        });
+      }
       setEditing(null);
       await reload();
     } catch (err) {
@@ -69,44 +113,82 @@ export function CustomerTable() {
             <th>Currency</th>
             <th>Scope</th>
             <th>Terms</th>
+            <th>NDA</th>
             <th>Vision</th>
             <th></th>
           </tr>
         </thead>
         <tbody>
-          {paged.slice.map((row) => (
-            <tr key={String(row.id)} className={`border-t border-white/10 ${superseded(row) ? "line-through opacity-50" : ""}`}>
-              <td className="py-2">{text(row, "name")}</td>
-              <td>{text(row, "gstin")}</td>
-              <td>{text(row, "currency")}</td>
-              <td>{text(row, "default_scope")}</td>
-              <td>{text(row, "payment_terms_days")}</td>
-              <td>{row.allow_cloud_vision ? "consented" : "off"}</td>
-              <td>
-                {superseded(row) ? (
-                  "Superseded"
-                ) : (
-                  <button type="button" className="text-cyan" onClick={() => openReplace(row)}>
+          {paged.slice.map(({ current, history }) => (
+            <Fragment key={String(current.id)}>
+              <tr className="border-t border-white/10">
+                <td className="py-2">{text(current, "name")}</td>
+                <td>{text(current, "gstin")}</td>
+                <td>{text(current, "currency")}</td>
+                <td>{text(current, "default_scope")}</td>
+                <td>{text(current, "payment_terms_days")}</td>
+                <td>{current.nda ? "yes" : "no"}</td>
+                <td>{current.allow_cloud_vision ? "consented" : "off"}</td>
+                <td>
+                  <button type="button" className="text-cyan" onClick={() => openReplace(current)}>
                     Replace
                   </button>
-                )}
-              </td>
-            </tr>
+                </td>
+              </tr>
+              {history.map((row) => (
+                <HistoryRow key={String(row.id)}>
+                  <td className="py-1 pl-4">{text(row, "name")}</td>
+                  <td>{text(row, "gstin")}</td>
+                  <td>{text(row, "currency")}</td>
+                  <td>{text(row, "default_scope")}</td>
+                  <td>{text(row, "payment_terms_days")}</td>
+                  <td>{row.nda ? "yes" : "no"}</td>
+                  <td>Superseded</td>
+                  <td></td>
+                </HistoryRow>
+              ))}
+            </Fragment>
           ))}
         </tbody>
       </table>
       <Pager page={paged.page} pages={paged.pages} setPage={paged.setPage} />
       {editing ? (
-        <Modal title={editing.id ? "Replace customer" : "Add customer"} onClose={() => setEditing(null)}>
-          <Field label="Name" value={fields.name} onChange={(value) => setFields({ ...fields, name: value })} />
-          <Field label="GSTIN" value={fields.gstin} onChange={(value) => setFields({ ...fields, gstin: value })} />
-          <Field label="Currency" value={fields.currency} onChange={(value) => setFields({ ...fields, currency: value })} />
-          <Field label="Default scope" value={fields.default_scope} onChange={(value) => setFields({ ...fields, default_scope: value })} />
-          <Field
-            label="Payment terms (days)"
-            value={fields.payment_terms_days}
-            onChange={(value) => setFields({ ...fields, payment_terms_days: value })}
-          />
+        <Modal title={mode === "replace" ? "Replace customer" : "Add customer"} onClose={() => setEditing(null)}>
+          {mode === "create" ? (
+            <>
+              <Field label="Name" value={createFields.name} onChange={(value) => setCreateFields({ ...createFields, name: value })} />
+              <YesNoField
+                label="NDA? Drawings must not leave the shop."
+                value={createFields.nda}
+                onChange={(value) => setCreateFields({ ...createFields, nda: value })}
+              />
+            </>
+          ) : (
+            <>
+              <Field label="Name" value={replaceFields.name} onChange={(value) => setReplaceFields({ ...replaceFields, name: value })} />
+              <Field label="GSTIN" value={replaceFields.gstin} onChange={(value) => setReplaceFields({ ...replaceFields, gstin: value })} />
+              <Field
+                label="Currency"
+                value={replaceFields.currency}
+                onChange={(value) => setReplaceFields({ ...replaceFields, currency: value })}
+              />
+              <Field
+                label="Default scope"
+                value={replaceFields.default_scope}
+                onChange={(value) => setReplaceFields({ ...replaceFields, default_scope: value })}
+              />
+              <Field
+                label="Payment terms (days)"
+                value={replaceFields.payment_terms_days}
+                onChange={(value) => setReplaceFields({ ...replaceFields, payment_terms_days: value })}
+              />
+              <YesNoField
+                label="NDA? Drawings must not leave the shop."
+                value={replaceFields.nda}
+                onChange={(value) => setReplaceFields({ ...replaceFields, nda: value })}
+              />
+            </>
+          )}
           {formError ? <p className="mb-2 text-sm text-red">{formError}</p> : null}
           <button type="button" className="rounded bg-cyan px-3 py-2 text-sm font-medium text-ink" onClick={() => void save()}>
             Save

@@ -30,15 +30,16 @@ def setup_module(_module=None):
         seed_master_data(conn)
 
 
-def test_page_exposes_six_tabs_and_replace():
+def test_page_exposes_seven_tabs_and_replace():
     text = PAGE.read_text(encoding="utf-8")
-    for label in ("Customers", "Machines", "Materials", "Suppliers", "MHR Floors", "Outsource Vendors"):
+    for label in ("Customers", "Products", "Machines", "Materials", "Suppliers", "MHR Floors", "Outsource Vendors"):
         assert label in text
     screen = (ROOT.parent / "frontend" / "src" / "app" / "masterdata" / "page.tsx").read_text(encoding="utf-8")
     assert "MasterDataScreen" in screen
     customer = (ROOT.parent / "frontend" / "src" / "components" / "masterdata" / "CustomerTable.tsx").read_text(encoding="utf-8")
     assert "Replace" in customer
     assert "Delete" not in customer
+    assert "NDA" in customer
 
 
 def test_crud_replace_refuses_delete_and_options(monkeypatch):

@@ -498,5 +498,6 @@ export const api = {
       machines: Array<{ id: string; name: string; machine_type: string }>;
       materials: Array<{ id: string; grade: string }>;
       customers: Array<{ id: string; name: string }>;
+      products?: Array<{ id: string; product_number: string; name: string }>;
     }>("/api/masterdata/options"),
 };

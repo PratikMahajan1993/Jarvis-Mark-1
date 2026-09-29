@@ -41,7 +41,7 @@ def _row(conn: sqlite3.Connection, table: str, row_id: str) -> sqlite3.Row:
 
 
 def _end_date(conn: sqlite3.Connection, table: str, row_id: str, day: str, successor: str) -> None:
-    if table in {"customers", "machines"}:
+    if table in {"customers", "machines", "products"}:
         conn.execute(
             f"""
             UPDATE {table}
@@ -199,6 +199,47 @@ def supersede_material(conn: sqlite3.Connection, old_id: str, new_material_data:
     )
     _end_date(conn, "materials", old_id, day, new_id)
     _audit(conn, f"supersede material {old_id} -> {new_id}")
+    return new_id
+
+
+def supersede_product(conn: sqlite3.Connection, old_id: str, new_product_data: dict) -> str:
+    old = _row(conn, "products", old_id)
+    name = (new_product_data.get("name") or old["name"] or "").strip()
+    product_number = (new_product_data.get("product_number") or old["product_number"] or "").strip()
+    customer_id = (new_product_data.get("customer_id") or old["customer_id"] or "").strip()
+    uom = (new_product_data.get("uom") or old["uom"] or "").strip()
+    if not name or not product_number or not customer_id or not uom:
+        raise LifecycleError("Product name, number, customer, and uom are required.")
+    if "monitor_stock" in new_product_data and new_product_data.get("monitor_stock") is not None:
+        raw = new_product_data.get("monitor_stock")
+        if isinstance(raw, bool):
+            monitor_stock = 1 if raw else 0
+        else:
+            text = str(raw).strip().lower()
+            monitor_stock = 1 if text in {"1", "true", "yes", "y"} else 0
+    else:
+        monitor_stock = int(old["monitor_stock"] or 0)
+    day = _today()
+    new_id = _new_id("prod")
+    # Free unique active product_number without destroying the old row.
+    conn.execute(
+        "UPDATE products SET product_number = ? WHERE id = ?",
+        (f"{old['product_number']} [superseded {old_id}]", old_id),
+    )
+    material_id = new_product_data.get("material_id", old["material_id"])
+    if material_id == "":
+        material_id = None
+    conn.execute(
+        """
+        INSERT INTO products (
+          id, product_number, name, customer_id, uom, monitor_stock, material_id,
+          status, effective_from
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?)
+        """,
+        (new_id, product_number, name, customer_id, uom, monitor_stock, material_id, day),
+    )
+    _end_date(conn, "products", old_id, day, new_id)
+    _audit(conn, f"supersede product {old_id} -> {new_id}")
     return new_id
 
 
