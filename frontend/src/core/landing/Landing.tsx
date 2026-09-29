@@ -7,6 +7,7 @@ import { getSubstrateState, onSubstrateOut, postSubstrate } from "@/core/root/su
 import { prefetchEngineering } from "@/core/sections/registry";
 import { useDesk } from "@/core/stores/deskStore";
 import { useSubstrateState } from "@/core/root/substrateBridge";
+import { LandingReadout } from "./LandingFrame";
 import { GATES, gatesComplete, landingStatusLine, type Gate } from "./landingStatus";
 
 const LANDED_KEY = "jarvis.landed";
@@ -27,6 +28,7 @@ export function Landing({ onDone }: { onDone: () => void }) {
   const pass = (g: Gate) => setPassed((p) => (p.has(g) ? p : new Set(p).add(g)));
 
   useEffect(() => {
+    document.querySelector("[data-landing-static]")?.remove();
     start.current = performance.now();
     postSubstrate({ type: "gather", progress: 0 });
     void document.fonts.ready.then(() => pass("fonts"));
@@ -93,13 +95,7 @@ export function Landing({ onDone }: { onDone: () => void }) {
       data-landing
       role="status"
     >
-      <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[color:var(--muted)]">{line}</p>
-      <div className="mt-3 h-px w-56 bg-[color:var(--border)]">
-        <div
-          className="h-px bg-[color:var(--accent)] transition-[width] duration-300"
-          style={{ width: `${(count / GATES.length) * 100}%` }}
-        />
-      </div>
+      <LandingReadout line={line} progress={count / GATES.length} />
     </motion.div>
   );
 }

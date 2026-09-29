@@ -6,7 +6,7 @@ alwaysApply: false
 
 # Scroll Substrate
 
-Decisions: `docs/overhaul/EXPERIENCE_DECISIONS.md` (`X#`), `docs/overhaul/PLATFORM_DECISIONS.md` (`P#`). The as-built delta at the end of each, and `docs/CURRENT.md`, records open differences (snap type, client-rendered landing, deck `deltaX`, scheduler off at boot). Do not close those in a feature PR. Otherwise the contracts win on conflict; fix this rule in the same PR.
+Decisions: `docs/overhaul/EXPERIENCE_DECISIONS.md` (`X#`), `docs/overhaul/PLATFORM_DECISIONS.md` (`P#`). The as-built delta at the end of each, and `docs/CURRENT.md`, records open differences (snap type, deck `deltaX`, scheduler off at boot). Do not close those in a feature PR. Otherwise the contracts win on conflict; fix this rule in the same PR.
 
 ## Locked base
 

@@ -84,13 +84,13 @@ Shipped detail that the HUD bullets do not repeat:
 - Voice: `voice.ts` posts analyser RMS `level` to the substrate. Space types in fields, including the baton; the mic runs when not typing; Space never scrolls.
 - Deck: pdf.js page-1 thumbnails cached in IndexedDB (`pdfThumbCache.ts`); empty deck is a drop target; card-to-stage and HITL-to-chip use shared `layoutId`. Arrow keys cycle the deck.
 - Feature platform: `backend/app/core/features.py` (event-loop-safe `publish`, `GET /api/features`, `GET /api/events`). SDK hooks are the exports in `frontend/src/sdk/index.ts`, including `useJarvisSend`, `useOrb`, and `useFeatureQuery`. OpenAPI types are committed at `frontend/src/lib/api/schema.gen.ts`. `npm run new:feature` writes the feature and registers `frontend/src/features/index.ts` and `backend/app/features/__init__.py`. Weather is the first feature (`frontend/src/features/weather`); its backend module is `features_weather.py`, not `backend/app/features/weather/`.
-- Substrate degrader keys off worker `simMs` (bloom first, then a slower sim). `frontend/src/substrate/engine.ts` and `swarmPass.ts` have uncommitted edits on this working tree.
+- Substrate degrader keys off worker `simMs` (bloom first, then a slower sim).
+- Landing first frame is server HTML (`LandingFirstFrame` in `app/page.tsx`): “Waking substrate” and a hairline, painted before the desk bundle runs. The client overlay removes that node when it mounts.
 - Capability matrix section **S** covers landing, snap, dock, and deck (`work/CAPABILITY_TEST_MATRIX.md`).
 
 Still open:
 
 - Lenis snap type is `"lock"` (`core/scroll/engine.ts`: one gesture, one section). Contract X2 says “mandatory”. Do not change the type until the owner picks; both are recorded on purpose.
-- Landing markup is client-rendered (`app/page.tsx` loads `Desk` with `ssr: false`). X1 still asks for a server-rendered first paint.
 - Horizontal trackpad `deltaX` does not cycle the deck. Arrow keys do.
 - Feature job runner (`backend/app/core/scheduler.py`) is not started from API lifespan. Jobs stay off until a feature registers one and startup calls `start`.
 

@@ -213,7 +213,7 @@ Bloom and auto-rotate are kept exactly as in the owner's exports; the owner rais
 
 The decisions above are still the contract. `docs/CURRENT.md` is the only open-gap list. Do not "fix" these in a drive-by:
 
-- **X1 landing** is client-rendered. `app/page.tsx` loads `Desk` with `ssr: false`, so there is no CSS-only first paint before JavaScript. Hermes is named on the status line and does not gate exit. Chrome fade is staggered 80 ms (`Desk.tsx`).
+- **X1 landing** first frame is server HTML (`LandingFirstFrame`): status line and hairline, before the desk bundle. The desk itself still loads with `ssr: false`. Hermes is named on the status line and does not gate exit. Chrome fade is staggered 80 ms (`Desk.tsx`).
 - **X2 snap** in code is Lenis type `"lock"` (`core/scroll/engine.ts`: one gesture moves one section). This section still says "mandatory". Leave the type until the owner changes this sentence.
 - **X9 `deltaX`:** arrow keys cycle the deck. Horizontal trackpad `deltaX` is not wired.
 

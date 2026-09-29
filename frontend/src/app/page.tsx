@@ -1,12 +1,11 @@
-"use client";
-
-import dynamic from "next/dynamic";
-
-const Desk = dynamic(() => import("@/core/desk/Desk").then((mod) => ({ default: mod.Desk })), {
-  ssr: false,
-  loading: () => <div className="h-[100dvh]" />,
-});
+import { DeskGate } from "./DeskGate";
+import { LandingFirstFrame } from "@/core/landing/LandingFrame";
 
 export default function HomePage() {
-  return <Desk />;
+  return (
+    <>
+      <LandingFirstFrame />
+      <DeskGate />
+    </>
+  );
 }
