@@ -195,14 +195,18 @@ Each decision has an ID (`X#`). Phase 3 commits and tests cite these IDs.
 
 ---
 
-## Pending confirmation (owner, before Phase 3)
+## Confirmed by owner (2026-09-29)
 
 1. **X1:** the landing also plays on refresh, in its short 0.6 s form.
 2. **X4:** Engineering → Casual happens only on an explicit request, never on every casual utterance.
-3. ~~**X5:** `JarvisCore` leaves the desk.~~ **Confirmed 2026-09-29** (option a).
+3. **X5:** `JarvisCore` leaves the desk (option a).
 4. **X8:** parked approvals are tracked client-side, so no database migration is needed.
-5. ~~**X5, particle model.**~~ **Confirmed 2026-09-29:** option c, casberry-style formulas in the worker.
-6. **X5, formulas:** the owner pastes the **ASCI System** and **CHAT GPT** exports, in the same export format as Cortex Dinamico.
-7. **X5, Cortex idle:** "default formula for idle" means the owner's exported `PARAMS` (radii 37.2 / 18.8, chaos 0, pulse 3.4), not the slider defaults (30 / 15, chaos 0.5, pulse 1.0).
-8. **X5, colour:** formula colours win on the canvas. For example, Cortex is blue-violet, not Casual mint.
-9. **X5, bloom and auto-rotate:** both kept, as in the owner's export.
+5. **X5:** option c, casberry-style formulas in the worker.
+6. **X5:** all three formula exports received and stored verbatim in `ORB_FORMULAS.md`.
+7. **X5:** Cortex idle = the owner's exported `PARAMS`, not the slider defaults.
+8. **X5:** formula colours win on the canvas.
+9. **P2:** Weather becomes the first plug-in feature.
+
+Bloom and auto-rotate are kept exactly as in the owner's exports; the owner raised no objection. Speed controls act as clock rates (see `ORB_FORMULAS.md`), so state changes never scramble the swarm.
+
+**Phase 3 is waiting for the owner's explicit "go".**

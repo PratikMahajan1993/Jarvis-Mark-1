@@ -85,7 +85,7 @@ Worker: controls = ease(section.states[mode]) → formula.body() × count (both 
   - the blend follows scroll continuously;
   - director jumps morph origin → destination directly;
   - an index-staggered wave with a small bulge;
-  - one shared formula clock;
+  - per-formula clocks that never restart; speed controls (`speedControls`) change the clock *rate* and never multiply total time;
   - no particle moves more than 3 world units per frame (Vitest sweep).
   
   Never switch formulas while the blend is between 0 and 1.

@@ -172,6 +172,7 @@ Job(id, every_s=None, cron=None, fn=..., run_on_start=False)
     id: "cortex-dinamico",
     name: "Cortex Dinamico",
     params: { radiusOuter: 37.2, radiusInner: 18.8, neuroActivity: 0, chaosFactor: 0, pulseSpeed: 3.4 }, // owner export = idle
+    speedControls: ["pulseSpeed"],   // pinned at idle; state values drive this formula's clock rate instead
     body(i, count, target, color, time, addControl, setInfo, annotate, THREE) {
       // USER CODE START — pasted verbatim from the casberry export
       // USER CODE END
