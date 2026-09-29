@@ -81,6 +81,14 @@ Worker: controls = ease(section.states[mode]) → formula.body() × count (both 
 
 - Formulas live in `substrate/formulas/<id>.ts` via `defineOrbFormula` — the casberry `USER CODE` pasted **verbatim**, owner-exported `params` = idle. Real functions only; never `eval` / `new Function`. Every formula must stay allocation-free inside the loop and produce finite numbers (Vitest checks this).
 - A section's `orb` declares `formula`, `placement` (screen centre + height fraction), `dim`, and per-state control values. Tune numbers there, never in the engine.
+- **Morphs must be very smooth** (owner requirement, X5):
+  - the blend follows scroll continuously;
+  - director jumps morph origin → destination directly;
+  - an index-staggered wave with a small bulge;
+  - one shared formula clock;
+  - no particle moves more than 3 world units per frame (Vitest sweep).
+  
+  Never switch formulas while the blend is between 0 and 1.
 - States change **formula controls / brightness / tint only**. The **only** positional override is `hitl` while the modal is open (centre, height ≥ 0.6). Parked approvals do not move the orb.
 - Features influence the orb only through `useOrb().glance()` / `.pulse()`.
 

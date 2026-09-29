@@ -95,6 +95,17 @@ Each decision has an ID (`X#`). Phase 3 commits and tests cite these IDs.
 | speaking | Chaos or distortion follows `level` (an `AnalyserNode` on the TTS WAV, about 30 Hz) |
 | hitl | Slow and amber (through the formula's own colour control when it has one, otherwise a tint toward `#FFB020`). The swarm moves to screen centre, at scale ≥ 0.6 of viewport height, **while the modal is open.** A parked approval does not move it. |
 
+- **Morphing between sections must be very smooth** (owner requirement, 2026-09-29). This is how it's guaranteed:
+  - **The morph follows the scroll.** Targets, colours and placement blend continuously with scroll position (smoothstep), so the swarm is always part-way between the two shapes. It never pops, and scrolling backwards reverses the morph.
+  - **Two layers of smoothing:** the per-particle easing (k = 1 − 0.9^(dt·60)), plus placement springs. Fast flicks and Lenis snaps therefore still read as a glide.
+  - **Direct jumps:** when the director jumps across sections (for example Monitor → Engineering), the morph goes **straight from origin to destination** on the scroll's own progress. It does not flash through the shape of the section in between.
+  - **Wave, not a cloud-swap.** Each particle starts its morph slightly offset by index (a stagger of about 15% of the blend), with a small outward bulge mid-morph. The shape visibly unfolds into the next one instead of 20,000 particles crossing randomly.
+  - **One shared clock** for all formulas, so a shape never restarts or jumps when you arrive at it. State control values keep easing through a morph.
+  - **Frames are protected during a morph:** the simulation stays at 60 Hz. If over budget, bloom resolution drops first.
+  - **Reduced motion:** no wave or bulge. Particles snap to the destination shape with a 200 ms fade.
+  - **Acceptance:**
+    - *Vitest:* a scripted sweep over 60 frames between every pair of sections shows no particle moving more than 3 world units in one frame, and no discontinuity at blend 0 or 1.
+    - *Headless:* a screen recording of a slow and a fast scroll through all sections shows no popping.
 - **Formulas without named controls** (currently CHAT GPT) use generic modifiers: time-scale (thinking ×2), brightness (listening ×1.25; speaking 1 + 0.6·level), and the HITL tint.
 - In Engineering the swarm is dimmed, but state changes apply at full strength, so it stays reactive.
 - **Performance budget:** formula evaluation ≤ 6 ms of worker time per frame (it doubles while blending two sections). When over budget, the degrade order is:
