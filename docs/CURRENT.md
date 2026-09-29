@@ -70,6 +70,15 @@ Hermes thread map: `data/hermes_sessions.json` (separate from playbook files). P
 - Full Hermes browser computer-use end-to-end.
 - Capability matrix: `work/CAPABILITY_TEST_MATRIX.md`.
 
+## Scroll Overhaul (branch cursor/scroll-substrate-overhaul-401c)
+
+- Single vertical page: Monitor, Casual, Engineering sections (Lenis + snap, `core/scroll/`). PageUp/PageDown and Alt+1-9 navigate.
+- Landing gates (`core/landing/`), server section hints (`section_hint.py`), scroll director (`core/scroll/director.ts`).
+- TaskDock: parked approvals and engineering tasks; Engineering deck carousel; baton autosave; `/api/drafts/{key}`.
+- Feature platform: `app/core/features.py`, `/api/events` SSE, `frontend/src/sdk`, `npm run new:feature`, `npm run api:schema`.
+- Known gaps: voice level producer, weather not yet ported to a feature, deck lacks pdf thumbnails/quote chips, parked-approval expiry toast, Space vs mic key, snap lock vs mandatory.
+- `npm run perf` runs the perf gate.
+
 ## Runtime Notes
 
 - Start Hermes gateway. Speech uses the Gemini key already in `.env` (Charon). Voicebox is not part of the desk.
