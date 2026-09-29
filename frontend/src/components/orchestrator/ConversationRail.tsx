@@ -9,6 +9,15 @@ export type RailConversation = {
   preview?: string;
   active?: boolean;
   waiting?: boolean;
+  /** X9 deck card fields (from conversation focus / scene when present). */
+  customer?: string;
+  drawingNumber?: string;
+  revision?: string;
+  quoteStep?: string;
+  verifyBlockers?: number;
+  verifyWarnings?: number;
+  draftTotal?: string;
+  thumbnailUrl?: string;
 };
 
 function shortTitle(title: string) {

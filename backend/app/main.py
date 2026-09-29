@@ -92,6 +92,7 @@ from .drafts import router as drafts_router
 app.include_router(drafts_router)
 from app.core.features import events_router  # noqa: E402
 app.include_router(events_router)
+from . import features_weather  # noqa: F401,E402
 
 _LOCAL_CLIENT_HOSTS = frozenset({"127.0.0.1", "::1", "localhost", "testclient"})
 _MUTATING_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})

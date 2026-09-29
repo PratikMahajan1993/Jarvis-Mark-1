@@ -3,7 +3,7 @@
 import { ActivityStream } from "@/components/orchestrator/ActivityStream";
 import { AgentOrbit } from "@/components/orchestrator/monitor/AgentOrbit";
 import { SuggestedTasksPanel } from "@/components/orchestrator/SuggestedTasksPanel";
-import { WeatherCard } from "@/components/orchestrator/WeatherCard";
+import { Slot } from "@/sdk";
 import * as desk from "@/core/desk/controller";
 import { useTurnView } from "@/core/desk/useTurnView";
 import type { SectionProps } from "@/core/sections/defineSection";
@@ -29,7 +29,7 @@ export function MonitorSection(_props: SectionProps) {
 
       {weatherLine ? (
         <div className="col-span-3 col-start-10 row-span-2 row-start-1 min-h-0">
-          <WeatherCard line={weatherLine} />
+          <Slot id="monitor.rail" />
         </div>
       ) : null}
 

@@ -205,6 +205,10 @@ export function startScrollEngine(
 
   const onKey = (event: KeyboardEvent) => {
     if (event.defaultPrevented || isEditableTarget(event.target)) return;
+    if (event.code === "Space" && !event.shiftKey) {
+      event.preventDefault();
+      return;
+    }
     const idx = sectionForKey(event, activeIdx, count);
     if (idx == null) return;
     event.preventDefault();

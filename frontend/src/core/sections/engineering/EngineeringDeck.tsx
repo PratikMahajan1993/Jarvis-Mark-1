@@ -4,6 +4,8 @@ import { AnimatePresence, motion, useReducedMotion, type PanInfo } from "motion/
 import { useEffect, useMemo, useState } from "react";
 import * as desk from "@/core/desk/controller";
 import type { RailConversation } from "@/components/orchestrator/ConversationRail";
+import { parkedApprovalForConversation } from "@/core/sections/engineering/deckCardMeta";
+import { useTaskQueue } from "@/core/stores/taskQueueStore";
 import { SPRING } from "@/lib/pane/springs";
 
 const MAX_VISIBLE = 5;
@@ -13,14 +15,44 @@ export function engineeringTasks(items: RailConversation[]): RailConversation[] 
   return items.filter((c) => TASK_KINDS.has((c.kindLabel || "").toLowerCase()));
 }
 
-function Card({ item, depth, fanned, front, onOpen }: {
+function DrawingPlaceholder() {
+  return (
+    <div
+      className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg border border-[color:var(--border)] bg-black/30 text-[color:var(--muted)]"
+      aria-hidden
+      data-deck-thumb="placeholder"
+    >
+      <svg viewBox="0 0 24 24" className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth="1.25">
+        <path d="M4 20V4l8 4 8-4v16l-8-4-8 4z" />
+        <path d="M12 8v12" />
+      </svg>
+    </div>
+  );
+}
+
+function Card({
+  item,
+  depth,
+  fanned,
+  front,
+  onOpen,
+  parkedTitle,
+}: {
   item: RailConversation;
   depth: number;
   fanned: boolean;
   front: boolean;
   onOpen: () => void;
+  parkedTitle?: string;
 }) {
   const spread = fanned ? 46 : 14;
+  const subline = [item.customer, item.drawingNumber, item.revision ? `Rev ${item.revision}` : ""]
+    .filter(Boolean)
+    .join(" · ");
+  const verifyParts: string[] = [];
+  if (item.verifyBlockers != null) verifyParts.push(`${item.verifyBlockers} blocker${item.verifyBlockers === 1 ? "" : "s"}`);
+  if (item.verifyWarnings != null) verifyParts.push(`${item.verifyWarnings} warn`);
+
   return (
     <motion.button
       type="button"
@@ -39,18 +71,58 @@ function Card({ item, depth, fanned, front, onOpen }: {
         zIndex: MAX_VISIBLE - depth,
       }}
       transition={SPRING.pane}
-      className="absolute inset-x-0 bottom-0 flex h-36 flex-col justify-between rounded-2xl border border-[color:var(--border)] bg-[color:var(--surface)] p-4 text-left shadow-[0_18px_40px_rgba(0,0,0,0.45)]"
+      className="absolute inset-x-0 bottom-0 flex h-44 flex-col rounded-2xl border border-[color:var(--border)] bg-[color:var(--surface)] p-3 text-left shadow-[0_18px_40px_rgba(0,0,0,0.45)]"
       aria-label={front ? `Resume ${item.title}` : item.title}
       data-deck-card
     >
-      <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-[color:var(--accent)]">
-        {item.kindLabel || "Task"}
-        {item.waiting ? " · approval parked" : ""}
-      </span>
-      <span className="line-clamp-2 font-display text-lg leading-snug text-[color:var(--fg)]">{item.title}</span>
-      <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-[color:var(--muted)]">
-        {item.time || "Waiting"}
-      </span>
+      <div className="flex gap-3">
+        {item.thumbnailUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element -- deck thumb is tool-owned blob/data URL when present
+          <img
+            src={item.thumbnailUrl}
+            alt=""
+            className="h-14 w-14 shrink-0 rounded-lg border border-[color:var(--border)] object-cover"
+            data-deck-thumb="image"
+          />
+        ) : (
+          <DrawingPlaceholder />
+        )}
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-1.5">
+            {item.quoteStep ? (
+              <span className="rounded-full border border-[color:var(--accent)]/40 px-2 py-0.5 font-mono text-[9px] uppercase tracking-[0.14em] text-[color:var(--accent)]">
+                {item.quoteStep}
+              </span>
+            ) : null}
+            {parkedTitle ? (
+              <span
+                className="rounded-full bg-[color:var(--accent)]/15 px-2 py-0.5 font-mono text-[9px] uppercase tracking-[0.12em] text-[color:var(--accent)]"
+                title={parkedTitle}
+              >
+                Approval parked
+              </span>
+            ) : null}
+          </div>
+          <span className="mt-1 line-clamp-2 font-display text-base leading-snug text-[color:var(--fg)]">{item.title}</span>
+          {subline ? (
+            <span className="mt-0.5 line-clamp-1 font-mono text-[9px] uppercase tracking-[0.1em] text-[color:var(--muted)]">
+              {subline}
+            </span>
+          ) : null}
+        </div>
+      </div>
+      <div className="mt-auto flex flex-wrap items-center justify-between gap-2 pt-2">
+        <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-[color:var(--muted)]">
+          {item.kindLabel || "Task"}
+          {item.time ? ` · ${item.time}` : " · Waiting"}
+        </span>
+        {verifyParts.length ? (
+          <span className="font-mono text-[9px] text-[color:var(--muted)]">{verifyParts.join(" · ")}</span>
+        ) : null}
+        {item.draftTotal ? (
+          <span className="font-mono text-[9px] text-[color:var(--accent)]">Draft {item.draftTotal}</span>
+        ) : null}
+      </div>
     </motion.button>
   );
 }
@@ -60,6 +132,8 @@ export function EngineeringDeck({ items, hero }: { items: RailConversation[]; he
   const reduced = useReducedMotion();
   const [order, setOrder] = useState<string[]>([]);
   const [fanned, setFanned] = useState(false);
+  const pendingItems = useTaskQueue((s) => s.items);
+  const parkedIds = useTaskQueue((s) => s.parkedIds);
   const ids = useMemo(() => items.map((i) => i.id), [items]);
 
   useEffect(() => {
@@ -118,16 +192,20 @@ export function EngineeringDeck({ items, hero }: { items: RailConversation[]; he
     >
       <div className={["relative h-52", hero ? "w-[min(420px,80%)]" : "w-40"].join(" ")} style={{ perspective: 1200 }}>
         <AnimatePresence initial={false}>
-          {visible.map((item, i) => (
-            <Card
-              key={item.id}
-              item={item}
-              depth={i}
-              fanned={fanned}
-              front={i === 0}
-              onOpen={() => void desk.selectConversation(item.id)}
-            />
-          ))}
+          {visible.map((item, i) => {
+            const parked = parkedApprovalForConversation(pendingItems, parkedIds, item);
+            return (
+              <Card
+                key={item.id}
+                item={item}
+                depth={i}
+                fanned={fanned}
+                front={i === 0}
+                onOpen={() => void desk.selectConversation(item.id)}
+                parkedTitle={parked?.title}
+              />
+            );
+          })}
         </AnimatePresence>
         {ordered.length > MAX_VISIBLE ? (
           <span className="absolute -top-8 right-0 rounded-full bg-black/60 px-2 py-0.5 font-mono text-[10px] text-[color:var(--muted)]">

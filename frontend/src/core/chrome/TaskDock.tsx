@@ -1,9 +1,10 @@
 "use client";
 
 import { AnimatePresence, motion } from "motion/react";
+import { useEffect } from "react";
 import * as desk from "@/core/desk/controller";
 import { useDesk } from "@/core/stores/deskStore";
-import { useTaskQueue } from "@/core/stores/taskQueueStore";
+import { startParkedExpiryWatcher, useTaskQueue } from "@/core/stores/taskQueueStore";
 import { SPRING } from "@/lib/pane/springs";
 
 const ENGINEERING_KINDS = new Set(["drawing", "workflow", "job"]);
@@ -17,6 +18,10 @@ export function TaskDock() {
   const conversations = useDesk((s) => s.desk);
   const engineering = conversations.filter((c) => ENGINEERING_KINDS.has((c.kindLabel || "").toLowerCase()));
   const count = parked.length + (engineering.length ? 1 : 0);
+
+  useEffect(() => {
+    startParkedExpiryWatcher();
+  }, []);
 
   return (
     <aside

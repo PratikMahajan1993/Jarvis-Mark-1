@@ -54,6 +54,8 @@ export type PendingAction = {
   consequence?: string;
   status?: string;
   session_id?: string;
+  created_at?: string;
+  expires_at?: string;
 };
 
 export type ActivityEvent = {

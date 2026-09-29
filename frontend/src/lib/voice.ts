@@ -1,3 +1,5 @@
+import { postSubstrate } from "@/core/root/substrateBridge";
+
 type SpeechRecognitionLike = {
   lang: string;
   interimResults: boolean;
@@ -500,6 +502,48 @@ let glanceStoreLoaded = false;
 let activeSource: AudioBufferSourceNode | null = null;
 let playbackCtx: AudioContext | null = null;
 let speakAbort: AbortController | null = null;
+let levelRaf = 0;
+let levelAnalyser: AnalyserNode | null = null;
+let levelScratch: Float32Array | null = null;
+
+function stopLevelLoop() {
+  if (levelRaf) {
+    cancelAnimationFrame(levelRaf);
+    levelRaf = 0;
+  }
+  levelAnalyser = null;
+  levelScratch = null;
+  postSubstrate({ type: "level", value: 0 });
+}
+
+function startLevelLoop(analyser: AnalyserNode) {
+  stopLevelLoop();
+  levelAnalyser = analyser;
+  const scratch = new Float32Array(analyser.fftSize);
+  levelScratch = scratch;
+  const tick = () => {
+    if (!levelAnalyser || levelScratch !== scratch) return;
+    levelAnalyser.getFloatTimeDomainData(scratch);
+    let sum = 0;
+    for (let i = 0; i < scratch.length; i += 1) {
+      const s = scratch[i]!;
+      sum += s * s;
+    }
+    const rms = Math.sqrt(sum / scratch.length);
+    postSubstrate({ type: "level", value: Math.min(1, rms * 6) });
+    levelRaf = requestAnimationFrame(tick);
+  };
+  levelRaf = requestAnimationFrame(tick);
+}
+
+function connectPlayback(ctx: AudioContext, source: AudioBufferSourceNode) {
+  const analyser = ctx.createAnalyser();
+  analyser.fftSize = 256;
+  analyser.smoothingTimeConstant = 0.55;
+  source.connect(analyser);
+  analyser.connect(ctx.destination);
+  startLevelLoop(analyser);
+}
 
 function playbackContext(): AudioContext | null {
   if (typeof window === "undefined") return null;
@@ -528,14 +572,16 @@ function apiRoot(): string {
 }
 
 function stopSource() {
-  if (!activeSource) return;
-  try {
-    activeSource.onended = null;
-    activeSource.stop();
-  } catch {
-    /* already stopped */
+  if (activeSource) {
+    try {
+      activeSource.onended = null;
+      activeSource.stop();
+    } catch {
+      /* already stopped */
+    }
+    activeSource = null;
   }
-  activeSource = null;
+  stopLevelLoop();
 }
 
 function stopAudio() {
@@ -616,10 +662,11 @@ function playBuffer(blob: Blob, gen: number): Promise<void> {
     await new Promise<void>((resolve) => {
       const source = ctx.createBufferSource();
       source.buffer = decoded;
-      source.connect(ctx.destination);
       activeSource = source;
+      connectPlayback(ctx, source);
       source.onended = () => {
         if (activeSource === source) activeSource = null;
+        stopLevelLoop();
         deafUntil = Date.now() + 500;
         resolve();
       };

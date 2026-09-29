@@ -6,6 +6,7 @@ import {
   type GoogleConnectStatus,
 } from "@/components/orchestrator/ConnectGoogleModal";
 import type { RailConversation } from "@/components/orchestrator/ConversationRail";
+import { deckMetaFromFocus } from "@/core/sections/engineering/deckCardMeta";
 import type { SuggestedTask } from "@/components/orchestrator/SuggestedTasksPanel";
 import {
   initialWorkspaceFromBootstrap,
@@ -86,19 +87,23 @@ function mapDeskItems(rows: Conversation[], activeConversationId: string | null)
   return rows
     .filter((row) => !row.minimized)
     .slice(0, MAX_OPEN_CONVERSATIONS)
-    .map((row) => ({
-      id: row.id,
-      sessionId: row.session_id,
-      title: row.title || row.category || "Note",
-      kindLabel:
-        row.kind_label || (row.category === "workflow" ? "Job" : row.category === "drawing" ? "Drawing" : "Note"),
-      time: row.updated_at
-        ? new Date(row.updated_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
-        : undefined,
-      preview: row.speak || row.turns?.slice(-1)[0]?.content || "",
-      active: activeConversationId === row.id,
-      waiting: Boolean(row.waiting || (row.pending && row.pending.length)),
-    }));
+    .map((row) => {
+      const deck = deckMetaFromFocus(row.focus, row.scene);
+      return {
+        id: row.id,
+        sessionId: row.session_id,
+        title: row.title || row.category || "Note",
+        kindLabel:
+          row.kind_label || (row.category === "workflow" ? "Job" : row.category === "drawing" ? "Drawing" : "Note"),
+        time: row.updated_at
+          ? new Date(row.updated_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
+          : undefined,
+        preview: row.speak || row.turns?.slice(-1)[0]?.content || "",
+        active: activeConversationId === row.id,
+        waiting: Boolean(row.waiting || (row.pending && row.pending.length)),
+        ...deck,
+      } satisfies RailConversation;
+    });
 }
 
 /* ── Section routing ─────────────────────────────────────────────────── */
@@ -1057,9 +1062,9 @@ export function handleDeskKey(event: KeyboardEvent) {
       return;
     }
   }
-  if (event.code === "Space" && !typing && listenAllowed(current) && !event.shiftKey) {
+  if (event.code === "Space" && !typing && !event.shiftKey) {
     event.preventDefault();
-    void startMic();
+    if (listenAllowed(current)) void startMic();
     return;
   }
   if (event.key === "Escape") {

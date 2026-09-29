@@ -1,5 +1,6 @@
 "use client";
 
+import "@/features";
 import { MotionConfig } from "motion/react";
 import { Profiler, useState } from "react";
 import { Landing } from "@/core/landing/Landing";
@@ -8,6 +9,7 @@ import { BatonDock } from "@/core/chrome/BatonDock";
 import { Modals } from "@/core/chrome/Modals";
 import { SectionNav } from "@/core/chrome/SectionNav";
 import { TaskDock } from "@/core/chrome/TaskDock";
+import { ToastLayer } from "@/core/chrome/ToastLayer";
 import { StatusCluster } from "@/core/chrome/StatusCluster";
 import { ThemeSync } from "@/core/chrome/ThemeSync";
 import { Backdrop } from "@/core/layers/Backdrop";
@@ -40,6 +42,7 @@ export function Desk() {
         <StatusCluster />
         <SectionNav sections={SECTIONS} onNavigate={goToSection} />
         <TaskDock />
+        <ToastLayer />
         <BatonDock sections={SECTIONS} />
       </div>
       <Modals />

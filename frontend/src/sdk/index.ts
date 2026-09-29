@@ -1,9 +1,17 @@
 import { useEffect, useState } from "react";
 import { getSection, useSectionState } from "@/core/stores/sectionStore";
+import { useDesk } from "@/core/stores/deskStore";
 import { useTaskQueue } from "@/core/stores/taskQueueStore";
 import { loadBatonText, saveBatonText } from "@/core/desk/drafts";
 
 export { useTaskQueue };
+export { Slot } from "./Slot";
+export { defineFeature, defineCard, getCardsForSlot, registeredFeatures } from "./featureRegistry";
+export type { CardDef, FeatureDef } from "./featureRegistry";
+
+export function useWeatherLine(): string {
+  return useDesk((s) => s.weatherLine);
+}
 
 export function useSection() {
   return useSectionState((s) => s);
