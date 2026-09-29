@@ -91,3 +91,22 @@ export function sectionForKey(
 export function expoOut(t: number): number {
   return t >= 1 ? 1 : 1 - Math.pow(2, -10 * t);
 }
+
+/**
+ * Section index to align to when scroll rests between section tops.
+ * Uses gesture direction when misaligned; `direction === 0` falls back to nearest.
+ */
+export function realignSectionIndex(
+  progress: number,
+  count: number,
+  direction: -1 | 0 | 1,
+  eps = 1e-2,
+): number {
+  if (count <= 0) return 0;
+  const p = clamp(progress, 0, count - 1);
+  const nearest = Math.round(p);
+  if (Math.abs(p - nearest) <= eps) return nearest;
+  if (direction > 0) return Math.min(count - 1, Math.ceil(p - eps));
+  if (direction < 0) return Math.max(0, Math.floor(p + eps));
+  return nearest;
+}

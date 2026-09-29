@@ -4,6 +4,7 @@ import {
   blendChanged,
   expoOut,
   nextMounted,
+  realignSectionIndex,
   resolveOrbBlend,
   sectionForKey,
 } from "./progress";
@@ -94,6 +95,25 @@ describe("nextMounted", () => {
     expect(nextMounted([true, true, true], 0.5, lazies)).toEqual([true, true, true]);
     expect(nextMounted([true, true, true], 0, lazies)).toEqual([true, true, true]);
     expect(nextMounted([true, true, false], 0.5, lazies)).toEqual([true, true, false]);
+  });
+});
+
+describe("realignSectionIndex", () => {
+  it("keeps integer positions", () => {
+    expect(realignSectionIndex(0, 3, 0)).toBe(0);
+    expect(realignSectionIndex(1, 3, 1)).toBe(1);
+    expect(realignSectionIndex(2, 3, -1)).toBe(2);
+  });
+
+  it("steps forward or back by gesture direction between sections", () => {
+    expect(realignSectionIndex(0.11, 3, 1)).toBe(1);
+    expect(realignSectionIndex(0.89, 3, -1)).toBe(0);
+    expect(realignSectionIndex(1.12, 3, 1)).toBe(2);
+  });
+
+  it("falls back to nearest when direction is neutral", () => {
+    expect(realignSectionIndex(0.11, 3, 0)).toBe(0);
+    expect(realignSectionIndex(0.6, 3, 0)).toBe(1);
   });
 });
 

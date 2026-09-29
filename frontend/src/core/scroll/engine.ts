@@ -16,6 +16,7 @@ import {
   activeFromProgress,
   blendChanged,
   expoOut,
+  realignSectionIndex,
   resolveOrbBlend,
   sectionForKey,
   type Jump,
@@ -92,6 +93,14 @@ export function startScrollEngine(
     duration: SNAP_S,
     easing: expoOut,
     debounce: 120,
+    onSnapStart: () => {
+      snapAnimating = true;
+    },
+    onSnapComplete: () => {
+      snapAnimating = false;
+      lastWheelDir = 0;
+      settle();
+    },
   });
   snap.addElements(frameEls(), { align: ["start"] });
   let activeIdx = Math.max(0, ids.indexOf(sectionStore.get().active));
@@ -99,6 +108,8 @@ export function startScrollEngine(
   let lastBlend: OrbBlend | null = null;
   let settleTimer = 0;
   let pointerDown = false;
+  let lastWheelDir: -1 | 0 | 1 = 0;
+  let snapAnimating = false;
 
   postSubstrate({ type: "sections", specs: Object.fromEntries(sections.map((s) => [s.id, s.orb])) });
 
@@ -122,12 +133,12 @@ export function startScrollEngine(
   };
 
   const realignIfNeeded = () => {
-    if (jump || pointerDown || lenis.isLocked) return;
+    if (jump || pointerDown || lenis.isLocked || lenis.isSmooth || snapAnimating) return;
     const unit = unitPx();
     const p = lenis.scroll / unit;
-    const nearest = Math.max(0, Math.min(count - 1, Math.round(p)));
-    if (Math.abs(p - nearest) <= ALIGN_EPS) return;
-    lenis.scrollTo(nearest * unit, { duration: reduced ? 0 : 0.6, easing: expoOut, immediate: reduced });
+    const target = realignSectionIndex(p, count, lastWheelDir, ALIGN_EPS);
+    if (Math.abs(p - target) <= ALIGN_EPS) return;
+    lenis.scrollTo(target * unit, { duration: reduced ? 0 : 0.6, easing: expoOut, immediate: reduced });
   };
 
   const settle = () => {
@@ -143,6 +154,10 @@ export function startScrollEngine(
     if (!sectionStore.get().scrolling) setScrolling(true);
     settle();
   };
+
+  const offVirtualScroll = lenis.on("virtual-scroll", (data: { deltaY: number }) => {
+    if (data.deltaY) lastWheelDir = Math.sign(data.deltaY) as -1 | 1;
+  });
 
   const offScroll = lenis.on("scroll", () => {
     update();
@@ -234,6 +249,7 @@ export function startScrollEngine(
   return () => {
     cancelFrame(tick);
     offScroll();
+    offVirtualScroll();
     offRequest();
     window.clearTimeout(settleTimer);
     window.clearTimeout(resizeTimer);
