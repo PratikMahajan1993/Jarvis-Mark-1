@@ -1,5 +1,6 @@
 "use client";
 
+import { motion, useReducedMotion } from "motion/react";
 import { useCallback, useEffect, useMemo } from "react";
 import type { MailAttachment, Scene } from "@/lib/types";
 import {
@@ -9,6 +10,7 @@ import {
 } from "@/lib/viewerMatch";
 import { DrawingViewer } from "@/components/DrawingViewer";
 import type { QuoteSheetRow } from "@/lib/pane/quoteContract";
+import { SPRING } from "@/lib/pane/springs";
 import { CalloutPins } from "./CalloutPins";
 
 export type StageFocusMode = "normal" | "stage";
@@ -42,6 +44,8 @@ export function DrawingStage({
   active,
   focusMode,
   onFocusModeChange,
+  morphLayoutId,
+  highlight = false,
 }: {
   scene: Scene;
   focus?: Record<string, unknown>;
@@ -51,8 +55,14 @@ export function DrawingStage({
   active: boolean;
   focusMode: StageFocusMode;
   onFocusModeChange: (mode: StageFocusMode) => void;
+  /** X9 shared-layout morph from the front deck card (omit under reduced motion). */
+  morphLayoutId?: string;
+  /** Brief highlight after a deck drop opens the PDF. */
+  highlight?: boolean;
 }) {
+  const reduced = useReducedMotion();
   const drawing = useMemo(() => pickDrawingAttachment(scene, focus), [scene, focus]);
+  const layoutId = reduced ? undefined : morphLayoutId;
 
   const toggleFocus = useCallback(
     (current: StageFocusMode) => onFocusModeChange(current === "stage" ? "normal" : "stage"),
@@ -88,9 +98,15 @@ export function DrawingStage({
   }, [active, focusMode, toggleFocus, leaveFocus]);
 
   return (
-    <div
-      className="relative h-full min-h-0 w-full overflow-hidden"
+    <motion.div
+      layoutId={layoutId}
+      transition={SPRING.pane}
+      className={[
+        "relative h-full min-h-0 w-full overflow-hidden",
+        highlight ? "ring-2 ring-[color:var(--accent)]/70 ring-offset-2 ring-offset-transparent" : "",
+      ].join(" ")}
       data-drawing-stage
+      data-drop-highlight={highlight ? "true" : undefined}
       onDoubleClick={onDoubleClick}
     >
       <div
@@ -123,6 +139,6 @@ export function DrawingStage({
           <CalloutPins rows={pinRows} page={1} />
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }

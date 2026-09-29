@@ -15,6 +15,13 @@ export type TaskQueueState = {
   parkedIds: string[];
 };
 
+type ExpiryHandlers = {
+  /** Called after a parked chip is removed for client TTL — open Authorize if idle. */
+  onTtlExpired?: (action: PendingAction) => void;
+};
+
+let expiryHandlers: ExpiryHandlers = {};
+
 function loadParked(): string[] {
   if (typeof window === "undefined") return [];
   try {
@@ -67,8 +74,8 @@ function toastExpiredApproval(action: PendingAction | undefined, reason: "server
   const title = action?.title?.trim();
   const detail =
     reason === "server"
-      ? "Server removed this approval — check the task dock."
-      : "Parked approval expired — reopen from the task dock if it is still listed.";
+      ? "Server removed this approval — it is no longer pending."
+      : "Parked approval expired — it needs a decision.";
   pushToast(title ? `${title}: ${detail}` : detail, `approval-expired-${action?.id ?? reason}-${Date.now()}`);
 }
 
@@ -106,19 +113,43 @@ export function unmarkParked(id: string) {
   clearParkedAt(id);
 }
 
-/** Replace the pending set; parked ids for rows that left the server are dropped. */
-export function setPendingItems(items: PendingAction[]) {
-  const open = items.filter((a) => String(a.status || "pending").toLowerCase() === "pending");
+/**
+ * Merge one session's `/api/pending` list into the dock.
+ * Only parked ids that belong to this session and are omitted from the refresh
+ * are treated as server-expired.
+ */
+export function setPendingItems(items: PendingAction[], sessionId: string) {
+  const open = items
+    .filter((a) => String(a.status || "pending").toLowerCase() === "pending")
+    .map((a) => (a.session_id ? a : { ...a, session_id: sessionId }));
   const live = new Set(open.map((a) => a.id));
   const prev = taskQueueStore.get();
-  const dropped = prev.parkedIds.filter((id) => !live.has(id));
+
+  const keptParked: string[] = [];
+  const dropped: string[] = [];
+  for (const id of prev.parkedIds) {
+    if (live.has(id)) {
+      keptParked.push(id);
+      continue;
+    }
+    const prevItem = prev.items.find((a) => a.id === id);
+    if (prevItem?.session_id === sessionId) {
+      dropped.push(id);
+    } else {
+      // Other session (or unknown) — do not treat omission as expiry.
+      keptParked.push(id);
+    }
+  }
+
   for (const id of dropped) {
     toastExpiredApproval(prev.items.find((a) => a.id === id), "server");
     clearParkedAt(id);
   }
-  const parked = prev.parkedIds.filter((id) => live.has(id));
-  taskQueueStore.set({ items: open, parkedIds: parked });
-  persistParked(parked);
+
+  const otherItems = prev.items.filter((a) => a.session_id !== sessionId && !live.has(a.id));
+  const nextItems = [...otherItems, ...open];
+  taskQueueStore.set({ items: nextItems, parkedIds: keptParked });
+  persistParked(keptParked);
 }
 
 /** First pending action that is not parked. */
@@ -142,27 +173,31 @@ export function removePending(id: string) {
   unmarkParked(id);
 }
 
-/** Client TTL for parked chips still on the server (X8). */
-export function reconcileExpiredParkedApprovals(nowMs = Date.now()) {
+/** Client TTL for parked chips still on the server (X8). Returns expired actions. */
+export function reconcileExpiredParkedApprovals(nowMs = Date.now()): PendingAction[] {
   const { items, parkedIds } = taskQueueStore.get();
-  if (!parkedIds.length) return;
+  if (!parkedIds.length) return [];
   const atMap = loadParkedAt();
-  let changed = false;
+  const expired: PendingAction[] = [];
   for (const id of [...parkedIds]) {
     const action = items.find((a) => a.id === id);
     if (!action) continue;
     if (!isParkedApprovalExpired(action, nowMs, atMap[id])) continue;
     toastExpiredApproval(action, "ttl");
     unmarkParked(id);
-    changed = true;
+    expired.push(action);
+    expiryHandlers.onTtlExpired?.(action);
   }
-  return changed;
+  return expired;
 }
 
 let expiryTimer: ReturnType<typeof setInterval> | null = null;
 
 /** Idempotent interval — started from TaskDock. */
-export function startParkedExpiryWatcher() {
+export function startParkedExpiryWatcher(handlers?: ExpiryHandlers) {
+  if (handlers) {
+    expiryHandlers = { ...expiryHandlers, ...handlers };
+  }
   if (typeof window === "undefined" || expiryTimer) return;
   reconcileExpiredParkedApprovals();
   expiryTimer = setInterval(() => reconcileExpiredParkedApprovals(), 30_000);

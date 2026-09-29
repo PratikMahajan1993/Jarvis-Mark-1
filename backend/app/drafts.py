@@ -3,15 +3,17 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, HTTPException, Request
+from pydantic import BaseModel, Field, ValidationError
 
 from . import db
 
 router = APIRouter()
 MAX_BODY_BYTES = 64_000
+DRAFT_KEY_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
 
 
 class DraftBody(BaseModel):
@@ -19,6 +21,8 @@ class DraftBody(BaseModel):
 
 
 def save_draft(key: str, body: dict[str, Any]) -> dict[str, Any]:
+    if not DRAFT_KEY_RE.fullmatch(key):
+        raise HTTPException(400, "invalid draft key")
     raw = json.dumps(body)
     if len(raw.encode()) > MAX_BODY_BYTES:
         raise HTTPException(413, "draft too large")
@@ -40,6 +44,21 @@ def load_draft(key: str) -> dict[str, Any] | None:
     return {"key": key, "body": json.loads(row[0]), "updated_at": row[1]}
 
 
+def _draft_body_from_raw(raw: bytes) -> dict[str, Any]:
+    """Parse `{"body": {...}}` from a raw request body (JSON or text/plain JSON)."""
+    if not raw:
+        return {}
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(400, "invalid JSON") from exc
+    try:
+        payload = DraftBody.model_validate(data)
+    except ValidationError as exc:
+        raise HTTPException(400, "invalid draft payload") from exc
+    return payload.body
+
+
 @router.get("/api/drafts/{key}")
 def api_get_draft(key: str) -> dict:
     return load_draft(key) or {"key": key, "body": {}, "updated_at": None}
@@ -51,6 +70,10 @@ def api_put_draft(key: str, payload: DraftBody) -> dict:
 
 
 @router.post("/api/drafts/{key}")
-def api_post_draft(key: str, payload: DraftBody) -> dict:
-    """POST twin of PUT so `navigator.sendBeacon` (pagehide) can save."""
-    return save_draft(key, payload.body)
+async def api_post_draft(key: str, request: Request) -> dict:
+    """POST twin of PUT so `navigator.sendBeacon` (pagehide) can save.
+
+    Accepts application/json `DraftBody` and text/plain whose body is the same JSON object.
+    """
+    body = _draft_body_from_raw(await request.body())
+    return save_draft(key, body)

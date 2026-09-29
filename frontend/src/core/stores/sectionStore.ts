@@ -9,6 +9,7 @@ import {
   type HudWorkspace,
 } from "@/components/orchestrator/hudWorkspace";
 import { liveLog } from "@/lib/liveLog";
+import { runAutosave } from "@/core/desk/autosave";
 import { autoContext, decideAuto } from "@/core/scroll/director";
 import { createStore } from "./createStore";
 
@@ -114,6 +115,9 @@ export function requestSection(
 export function reportScroll(progress: number, active: string, workspace: string | undefined) {
   const prev = sectionStore.get();
   sectionStore.set({ progress, active });
+  if (prev.active === "engineering" && active !== "engineering") {
+    void runAutosave("leave-engineering-scroll");
+  }
   if (active !== prev.active && workspace && isHudWorkspace(workspace)) {
     setWorkspace(workspace, "scroll");
   }

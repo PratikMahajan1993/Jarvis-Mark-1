@@ -26,7 +26,7 @@ declare global {
   }
 }
 
-type ReplayType = Exclude<SubstrateIn["type"], "init" | "resize" | "pointer">;
+type ReplayType = Exclude<SubstrateIn["type"], "init" | "resize" | "pointer" | "glance" | "pulse">;
 
 const REPLAY_ORDER: ReplayType[] = [
   "sections",
@@ -71,7 +71,7 @@ function publishGlobal(latest: SubstrateOut | null) {
  * replayed when a (re)mounted engine attaches, so callers never wait on boot order.
  */
 export function postSubstrate(msg: SubstrateIn) {
-  if (msg.type !== "init" && msg.type !== "resize" && msg.type !== "pointer") {
+  if (msg.type !== "init" && msg.type !== "resize" && msg.type !== "pointer" && msg.type !== "glance" && msg.type !== "pulse") {
     lastByType.set(msg.type, msg);
   }
   if (msg.type === "init") return;

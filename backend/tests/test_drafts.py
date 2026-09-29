@@ -1,3 +1,4 @@
+import json
 import sys
 import tempfile
 from pathlib import Path
@@ -27,3 +28,21 @@ def test_draft_roundtrip_and_overwrite():
 def test_draft_too_large_rejected():
     r = client.put("/api/drafts/big", json={"body": {"x": "y" * 70_000}})
     assert r.status_code == 413
+
+
+def test_draft_bad_key_rejected():
+    r = client.put("/api/drafts/-bad", json={"body": {"x": 1}})
+    assert r.status_code == 400
+    r2 = client.post("/api/drafts/.hidden", json={"body": {"x": 1}})
+    assert r2.status_code == 400
+
+
+def test_draft_text_plain_post_roundtrip_overwrite():
+    client.put("/api/drafts/eng-beacon", json={"body": {"rev": "A"}})
+    r = client.post(
+        "/api/drafts/eng-beacon",
+        content=json.dumps({"body": {"rev": "B", "via": "beacon"}}),
+        headers={"Content-Type": "text/plain"},
+    )
+    assert r.status_code == 200
+    assert client.get("/api/drafts/eng-beacon").json()["body"] == {"rev": "B", "via": "beacon"}

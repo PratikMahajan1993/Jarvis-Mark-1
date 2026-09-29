@@ -1,12 +1,12 @@
 # Jarvis — Capability & Workflow Test Matrix
 
-**Updated:** 2026-09-25 (consolidated from SYSTEM_TRUTH.md)  
+**Updated:** 2026-09-30 (scroll-substrate HUD on `overhaul`)  
 **Method:** Test one use case at a time → note pass/fail + latency → dispatch fix → continue.  
-**Status:** Active matrix for current sprint.  
-**Prerequisite:** One shell (`OrchestratorShell` at `:3000`), two state layers that must never collapse:
-- `HudWorkspace`: Casual | Monitor | Engineering (job of the screen)
+**Status:** Active matrix for the running scroll desk.  
+**Prerequisite:** One page (`JarvisRoot` + `Desk` at `:3000`). Vertical sections **Monitor → Casual → Engineering** (feature sections slot in by `order`). Lenis snap type **`lock`**. Two state layers that must never collapse:
+- `HudWorkspace`: Casual | Monitor | Engineering — **derived from the active scroll section**
 - Turn FSM (`orchestratorFsm.ts`): IDLE | LISTENING | THINKING | SPEAKING | AWAITING_HITL | EXECUTING  
-**Source of Truth:** `docs/SYSTEM_TRUTH.md`
+**Source of Truth:** `docs/SYSTEM_TRUTH.md` · as-built: `docs/CURRENT.md` · contracts: `docs/overhaul/EXPERIENCE_DECISIONS.md`
 
 ---
 
@@ -28,7 +28,7 @@ While you test in the HUD, tell the coordinator your observations (ID + what you
 Every kickoff to a worker must be self-contained: goal, repro, files in scope, acceptance check.
 
 ### Where a Fix Can Run
-Cloud workers lack Hermes (`:8642`), live Gemini speech, real Google OAuth, GPU-representative Ollama, and physical mic/speaker — checks needing those stay **desk**. Cloud *can* build/serve the HUD and drive headless Chrome (`--enable-unsafe-swiftshader` for orb/eye WebGL). Section **E** (HUD/FSM) and **P** (workspaces/morph/skins) are mostly **cloud** except talk-jump that needs a brain. Section **K** (voice) is mostly **desk**. Semantic router logic is **cloud** + **offline**; live orchestra highlight is **desk**.
+Cloud workers lack Hermes (`:8642`), live Gemini speech, real Google OAuth, GPU-representative Ollama, and physical mic/speaker — checks needing those stay **desk**. Cloud *can* build/serve the HUD and drive headless Chrome (`--enable-unsafe-swiftshader` for the substrate swarm). Section **E** (HUD/FSM) and **P** (sections/orb/pin) are mostly **cloud** except server `ui` hints that need a brain. Section **S** (landing/snap/dock/deck) is mostly **cloud**. Section **K** (voice) is mostly **desk**. Semantic router logic is **cloud** + **offline**; live orchestra highlight is **desk**.
 
 ---
 
@@ -41,7 +41,7 @@ Cloud workers lack Hermes (`:8642`), live Gemini speech, real Google OAuth, GPU-
 | A3 | Hermes timeout → soft fallback | Kill gateway mid-turn or cold CLI | No blank HUD; Gemini/legacy answers | desk |
 | A4 | Voice + type parity | Same ask via mic and keyboard | Same outcome (API + mic pipeline) | desk |
 | A5 | Drawing-session chat | Open drawing conversation (should land **Engineering**); ask about the part | Stays in drawing/vision context | desk |
-| A6 | Everyday desk vs discussion | Ambient ask → New discussion → leave → resume from Open notes | Chatter stays on correct `session_id`; unpinned ambient returns **Monitor** | desk · cloud |
+| A6 | Everyday desk vs discussion | Ambient ask → New discussion → leave → resume from Open notes | Chatter stays on correct `session_id`. Unpinned empty/everyday desk **does not** auto-scroll to Monitor | desk · cloud |
 | A7 | Job from suggested RFQ | "Start engineering review & quote" on RFQ card | Opens/resumes workflow note on **Engineering**; not ambient dump | desk |
 | A8 | Router `tool_ops` → Hermes | "Search my inbox for Deepak" (Hermes warm) | Hermes turn first; OPS/SEC agent highlighted | desk |
 | A9 | Router `tool_ops` local fallback | Same ask with Hermes down | Snapshot/local mail path; no 30s hang | desk · offline |
@@ -103,51 +103,65 @@ Cloud workers lack Hermes (`:8642`), live Gemini speech, real Google OAuth, GPU-
 
 ## E. Orchestrator HUD & FSM
 
+Running HUD is `JarvisRoot` + `Desk`, not `OrchestratorShell` / lens tabs / Pane.
+
 | ID | Capability | How to Test | Target | Tags |
 |----|------------|-------------|--------|------|
-| E1 | Fast HUD bootstrap | Cold open `:3000` | Idle UI <~2s; no long blank; lands in a workspace (often Monitor if ambient) | cloud |
-| E2 | Weather chip | Open **Casual** (not Monitor) | Sensible local weather in right rail (`shrink-0`); **absent on Monitor** | desk · cloud |
+| E1 | Fast HUD bootstrap | Cold open `:3000` | Landing overlay first (gates in parallel). Idle desk after min ~1.4 s (0.6 s on same-tab refresh), hard cap 4 s. Lands on pinned saved section, else restored conversation category, else Monitor. No long blank | cloud |
+| E2 | Weather chip | Open **Monitor** and **Casual** | Sensible local weather on Monitor rail (`features/weather` → `monitor.rail`) and Casual right rail (`shrink-0`). Full feature-slot check is **S5** | desk · cloud |
 | E3 | RFQ suggested cards | Refresh office tasks | Cards from drawing/RFQ mail (Casual "Suggested"; Monitor "Findings") | desk |
 | E4 | Production suggested card | Shop log bound | Human-readable OEE (no raw dict dump) | desk |
 | E5 | Card → engineering chat | "Start engineering review & quote" | Opens useful workflow thread on **Engineering** | desk |
 | E6 | Card → custom chat | "Open chat for custom tasks" | Discusses that instance on **Casual** | desk |
 | E7 | Dismiss task | Dismiss button | Stays dismissed on reload | desk · cloud |
-| E8 | FSM IDLE → LISTENING | Space / mic while idle | Mic opens; Casual orb `listening` (Monitor eye stays the presence) | desk · cloud |
+| E8 | FSM IDLE → LISTENING | Space / mic while idle and **not in a field** | Mic opens; substrate listening controls. Space in the baton types a space (see **E19**) | desk · cloud |
 | E9 | FSM no listen while SPEAKING | Mic during TTS playback | Structurally refused (no second recognizer) | desk |
 | E10 | FSM THINKING before network | Send any chat | "Orchestrating…" / transmitting immediately; not blank | cloud |
-| E11 | FSM AWAITING_HITL panel | Any pending action | HitlModal + blast-radius; **Authorize / Reject**; compose uses DraftComposeModal | desk · cloud |
+| E11 | FSM AWAITING_HITL panel | Any pending action | HitlModal + blast-radius; **Authorize / Reject / Later**; compose uses DraftComposeModal. Modal opens **in place** (no auto-scroll). Park/resume is **S3** | desk · cloud |
 | E12 | VoiceLine vs board ownership | Read mail / open compose | Center VoiceLine hidden; board/modal owns text | cloud |
 | E13 | Mail board scroll | Long mail thread on board | Scroll on SpotlightCard `bodyClassName`, not outer card | cloud |
-| E14 | Orchestra agent states | After mail/OEE/HITL turns | Casual: node `active`/`waiting` dots. Monitor: matching still suns | desk · cloud |
-| E15 | Activity stream | After a few turns | Recent SYS/OPS/SEC lines; max ~8; visible across workspaces | cloud |
+| E14 | Orchestra agent states | After mail/OEE/HITL turns | Casual: node `active`/`waiting` dots. Monitor: matching still suns under the presence line | desk · cloud |
+| E15 | Activity stream | After a few turns | Recent SYS/OPS/SEC lines; max ~8; on Monitor (chrome stays while you scroll) | cloud |
 | E16 | Open notes cap | On Casual, open 4th discussion | Max **3** expanded; oldest parked | desk · cloud |
-| E17 | React Bits Casual orb | Load **Casual** | Mint `JarvisCore` Particles/LightRays; no layout break. Not the Monitor eye | cloud |
+| E17 | Casual substrate swarm | Load **Casual** | Cortex Dinamico particle swarm on the root canvas. **Fail** if React Bits Particles / `JarvisCore` desk orb returns | cloud |
 | E18 | Persist focused note | Reload with note open | Restores conversation from `localStorage` | desk · cloud |
-| E19 | Escape / Space shortcuts | Escape during listen; Space when allowed | Listen stops; no stuck FSM | desk · cloud |
+| E19 | Escape / Space shortcuts | Focus the baton; type Space. Then click empty chrome and press Space. Escape during listen | Space **types** in the baton and any field. Space is **mic** when not in a field. Space **never** scrolls the page. Escape stops listen; no stuck FSM | desk · cloud |
 
-## P. HUD Workspaces, Morph & Skins (This Pass)
+## P. Sections, Orb Morph & Pin (This Pass)
 
-All three skins live in one `OrchestratorShell` — no extra Next routes.
+All three sections live on one `Desk` page under `JarvisRoot` — no extra Next routes, no lens switcher.
 
 | ID | Capability | How to Test | Target | Tags |
 |----|------------|-------------|--------|------|
-| P1 | Three workspaces, one shell | Click Casual / Monitor / Engineering in top-left switcher | Same page (`:3000`); labels match; FSM does not change workspace by itself | cloud |
-| P2 | Hybrid auto from focus (unpinned) | Unpin. Open a discussion → Casual. Open a drawing/job → Engineering. Return to everyday/ambient desk | Ambient empty desk → **Monitor**. Pin off is required | cloud |
-| P3 | Pin locks auto | Pin Casual. Focus a discussion (would stay). Empty-desk / timeout must not yank. Switcher, + New, RFQ engineering, focusing a job/drawing still allowed | Pin holds auto-switch; explicit work still moves | cloud |
-| P4 | Talk-jump: short status stays | Pin off. On **Monitor**, type "what's the status?" or "any updates" | Stays Monitor; no morph to Casual | desk · cloud |
-| P5 | Talk-jump: mail/chat → Casual | On **Monitor**, "any unread mail?" or "hey, what's up?" | Morphs to **Casual** before/with the turn | desk |
-| P6 | Talk-jump: drawing/quote/strategy → Engineering | On **Monitor**, "quote this drawing" / "machining strategy for the part" | Morphs to **Engineering** | desk |
-| P7 | Lens morph — presence | Casual → Monitor (and back). Watch the center | Orb ↔ eye ↔ bench crossfade in the **same center**, ~1.2s. **No black gap** | cloud |
-| P8 | Lens morph — theme then chrome | Same switch, keep watching | Warm Monitor tokens **after** presence. Rails, weather, Findings, still suns fade **last** (~2.4s) | cloud |
-| P9 | Reduced-motion snap | Enable OS/browser `prefers-reduced-motion`, switch workspace | Instant snap; no staged delay / black flash | cloud |
-| P10 | Monitor Evil Eye (stock + budget) | Open Monitor; leave it ~10s; then switch away | Centered eye; stock props (`eyeColor="#FF6F37"`, intensity 1.5, pupil 0.6, iris 0.25, glow 0.3, scale 0.8, noise 1, pupilFollow 1, flameSpeed 1, bg `#120F17`). Internal ~55% / 30fps. **Pauses** off Monitor (tab hidden or other workspace) | cloud |
-| P11 | Monitor chrome (what is hidden) | Sit on Monitor after chrome lands | **No** Aero Shards. **No** weather card. **No** left Open-notes rail. **No** giant "Awaiting instruction" over the eye. **No** bottom `[RES.01]` dots. Findings rail on the right (same task data, "Findings" heading). CommandBaton quieter; switcher + Prefs + activity stay | cloud |
-| P12 | Monitor still suns | Monitor after chrome | Quiet horizontal row of small amber discs **below** the eye — not a revolving orbit. Active a touch brighter; codes muted. Fade in with chrome (last) | cloud |
-| P13 | Casual chrome | Switch to Casual; wait for chrome | Mint orb; left Open notes (max 3); weather `shrink-0`; suggested tasks; CommandBaton; tiny orchestra dots. Accent `#7dffe0` | cloud |
-| P14 | Engineering bench | Switch to Engineering (empty job and/or a drawing job) | Drawing-first bench (~55% viewer + ~40% quote/status stack). **No** competing full-page WebGL (no eye, no Casual orb under drawings, no shards). SpotlightCard / GlareHover OK | cloud |
-| P15 | HITL copy on every workspace | Queue a pending action from Casual, then glance Monitor/Engineering with a pending if available | Overlay buttons **Authorize / Reject** (not Shall I). Overlay, not a new conversation | desk · cloud |
+| P1 | Three sections, one page | Click Monitor / Casual / Engineering in left **SectionNav** | Same page (`:3000`); labels match order Monitor → Casual → Engineering. FSM does not change section by itself | cloud |
+| P2 | Auto-from-focus; no ambient jump | Unpin. Open a discussion → Casual. Open a drawing/job → Engineering. Return to everyday/ambient (minimize / everyday note) | Discussion/job still auto-scroll. Empty/everyday desk **stays put** — no auto-jump to Monitor | cloud |
+| P3 | Pin blocks auto only | Pin. Trigger a server hint or auto-focus that would otherwise scroll. Then hand-scroll, click SectionNav, PageUp/PageDown, Alt+1–9 | Pin drops automatic scrolls. Hand scroll / nav / keys still move | cloud |
+| P4 | Server hint: short status stays | Pin off. On **Monitor**, type "what's the status?" or "any updates" | Stays Monitor. Client `talkJumpWorkspace` is **retired**; jumps come from `ui: {section, reason}` | desk · cloud |
+| P5 | Server hint: mail/chat → Casual | On **Monitor**, "any unread mail?" or "hey, what's up?" | Scrolls to **Casual**. Same quote/drawing words **on Casual** stay Casual unless quote-start / drawing vision (**P6**) | desk |
+| P6 | Server hint: drawing/quote → Engineering | On **Monitor**, "quote this drawing" / "machining strategy for the part". On **Casual**, quote-start or vision with a drawing | Scrolls to **Engineering**; Casual quote-start opens the stage on that drawing. Engineering yields only to **explicit** (nav / "back to chat") | desk |
+| P7 | Orb morph follows scroll | Scroll Monitor ↔ Casual ↔ Engineering (slow and a flick) | One particle swarm; formulas blend with scroll (ASCI → Cortex → CHAT GPT). Direct jump does not flash the in-between shape. **No black gap. No Evil Eye** | cloud |
+| P8 | Fixed chrome; baton dim | Same scroll, watch L3 | StatusCluster, SectionNav, TaskDock, CommandBaton stay fixed. Backdrop/theme blend with scroll. Baton dims while moving, restores ~400 ms after | cloud |
+| P9 | Reduced-motion snap | Enable OS/browser `prefers-reduced-motion`, change section | Instant snap; no wave/bulge / staged delay / black flash | cloud |
+| P10 | ~~Monitor Evil Eye~~ | — | **SKIP.** Eye shader / `EvilEye` removed; swarm is the presence. Fail if the stock eye returns on Monitor | retired |
+| P11 | Monitor chrome | Sit on Monitor after landing | Findings rail on the right. Weather **is** on the rail (feature — **S5**). **No** Aero Shards. **No** left Open-notes rail. **No** giant "Awaiting instruction". CommandBaton quieter; SectionNav + pin + Prefs + activity stay | cloud |
+| P12 | Monitor still suns | Monitor after landing | Quiet horizontal row of small amber discs **below** the presence line — not a revolving orbit. Active a touch brighter; codes muted | cloud |
+| P13 | Casual chrome | Scroll to Casual | Cortex swarm; left Open notes (max 3); weather; suggested tasks; CommandBaton; tiny orchestra dots. Accent `#7dffe0` | cloud |
+| P14 | Engineering bench + deck | Scroll to Engineering (empty deck, then a drawing job) | Empty: stacked task deck as hero (thumbs, quote-step chip). Active job: drawing stage + quote stack; deck pile on the left; card morphs into the stage. Dim side orb. **No** second WebGL. SpotlightCard / GlareHover OK | cloud |
+| P15 | HITL copy on every section | Queue a pending action from Casual, then glance Monitor/Engineering with a pending if available | Overlay **Authorize / Reject / Later** (not Shall I). Opens **where you are** — no scroll. Orb centres while the modal is open; a parked chip does not | desk · cloud |
 | P16 | ~~Aero Shards on Monitor~~ | — | **SKIP this pass.** Owner removed shards; bit stays vendored only. Fail if they reappear on Monitor | retired |
-| P17 | ~~Revolving agent orbs~~ | — | **SKIP this pass.** Replaced by still suns (P12). Fail if orbs orbit the eye again | retired |
+| P17 | ~~Revolving agent orbs~~ | — | **SKIP this pass.** Replaced by still suns (P12). Fail if orbs orbit the presence again | retired |
+
+## S. Scroll HUD (Landing, Snap, Dock, Deck, Feature)
+
+Checks the old lens matrix cannot cover. Keep this list short.
+
+| ID | Capability | How to Test | Target | Tags |
+|----|------------|-------------|--------|------|
+| S1 | Landing gates | Cold open `:3000`. Repeat with a same-tab refresh | Overlay names a real gate (Waking substrate · Loading desk · Checking Hermes · Ready). Gates: substrate, fonts, desk, Monitor DOM, Casual DOM, Engineering chunk prefetch. Hermes is **display-only** and never blocks exit. Min 1.4 s cold / 0.6 s refresh; cap 4 s. Then instant jump to the target section | cloud |
+| S2 | Section snap (`lock`) | Wheel through the page; PageUp/PageDown; Alt+1–3. Try Space on empty chrome vs in the baton | Always rest on a section top; one gesture → one section (~0.9 s, expo-out). PageUp/PageDown/Alt+n jump. Space does **not** snap (see **E19**) | cloud |
+| S3 | TaskDock Later park / resume | Queue HITL → **Later**. Click the dock chip. Try to Authorize from the chip | Modal morphs to a TaskDock chip; FSM returns to IDLE (chat/mic work). Chip reopens the full modal — **never** Authorize/Reject from the chip. Client TTL `parkedAt`+30 min unless `expires_at`, then Authorize reopens | desk · cloud |
+| S4 | Engineering deck drop | On Engineering with an empty (or hero) deck, drop a drawing PDF | Prompt: quote workflow vs view/discuss. Quote starts shop-quote (`quote this drawing`); discuss opens the drawing without queuing send. Thumbs render (pdf.js page 1, IndexedDB by sha256). Front card morphs into the stage | desk · cloud |
+| S5 | Weather as feature | Open Monitor; inspect the rail Slot | Chip comes from `features/weather` on slot `monitor.rail` (`defineFeature` + `<Slot>`). Not a core-only leftover. Casual may still show a chip; Monitor is the feature home | desk · cloud |
 
 ## F. Shop / Sheets / CNC / Docs
 
@@ -164,7 +178,7 @@ All three skins live in one `OrchestratorShell` — no extra Next routes.
 
 ## G. RFQ → Quote → Send (Office-Day Spine)
 
-Engineering workspace is the visual home; tools/HITL unchanged.
+Engineering **section** is the visual home; tools/HITL unchanged.
 
 | ID | Capability | How to Test | Target | Tags |
 |----|------------|-------------|--------|------|
@@ -213,8 +227,8 @@ Engineering workspace is the visual home; tools/HITL unchanged.
 | J3 | Minimize note | "Minimize the drawing note" | DB `minimized`; rail updates | desk · cloud |
 | J4 | Expand / open note | "Open the piston chat" | Note expanded + focused | desk · cloud |
 | J5 | UI command miss | "Check my mail" (not UI) | Not routed as UI; normal mail path | desk |
-| J6 | New discussion | + New / "start a discussion about …" | New row; session bound; explicit Casual | desk · cloud |
-| J7 | Minimize active → ambient | Minimize focused note | Returns to everyday desk; unpinned → **Monitor** | desk · cloud |
+| J6 | New discussion | + New / "start a discussion about …" | New row; session bound; auto-scrolls to **Casual** (pin will block) | desk · cloud |
+| J7 | Minimize active → ambient | Minimize focused note | Returns to everyday desk; **does not** auto-scroll to Monitor | desk · cloud |
 | J8 | Workflow resume key | Resume RFQ job by `resume_key` | Same workflow note, not duplicate; **Engineering** | desk · offline |
 
 ## K. Voice & TTS
@@ -231,7 +245,7 @@ Engineering workspace is the visual home; tools/HITL unchanged.
 
 ## L. Drawing, Vision & Viewer
 
-Prefer **Engineering** workspace for these (P14). Tools unchanged.
+Prefer the **Engineering** section for these (P14). Tools unchanged.
 
 | ID | Capability | How to Test | Target | Tags |
 |----|------------|-------------|--------|------|
@@ -245,7 +259,7 @@ Prefer **Engineering** workspace for these (P14). Tools unchanged.
 
 | ID | Capability | How to Test | Target | Tags |
 |----|------------|-------------|--------|------|
-| M1 | ~~Canvas as primary desk~~ | Open `:3000/canvas` only if checking leftover route | **SKIP as primary desk.** Engineering workspace is the bench. Optional smoke: page may still load; do not treat as the HUD | retired |
+| M1 | ~~Canvas as primary desk~~ | Open `:3000/canvas` only if checking leftover route | **SKIP as primary desk.** Engineering section is the bench. Optional smoke: page may still load; do not treat as the HUD | retired |
 | M2 | Board CRUD | Create/rename board via API | `/api/canvas/boards` round-trip | desk · offline |
 | M3 | Canvas file upload | Upload image/PDF to board | Stored under data; served back | desk |
 | M4 | Show artifact on HUD | Tool returns artifact widget | SceneBoard / Engineering stack displays artifact | desk |
@@ -277,25 +291,24 @@ Prefer **Engineering** workspace for these (P14). Tools unchanged.
 ## Suggested Test Order (Current Pass)
 
 1. **I3** — HUD `:3000`, API `:8000/api/health`, Hermes `:8642`, `tts` names Charon  
-2. **E1, P1** — bootstrap + three workspaces in one shell  
-3. **P7, P8, P9** — lens morph (presence → theme → chrome; reduced-motion)  
-4. **P10, P11, P12** — Monitor eye, chrome, still suns  
-5. **P13, E2, E16, E17** — Casual orb, weather, notes cap  
-6. **P14** — Engineering bench, no extra WebGL  
-7. **P2, P3** — auto-from-focus + pin  
-8. **P4, P5, P6** — talk-jump (needs typing; P5/P6 need a brain)  
-9. **P15, E11, B2–B3** — Authorize / Reject  
-10. **E8–E10, E14–E15** — FSM + orchestra/activity  
-11. **A1–A3, A8–A10, A14** — brain routing (Hermes warm)  
-12. **K1–K3, K6** — voice trust  
-13. **C3–C5, C8** — compose path  
-14. **D1–D2** — briefing  
-15. **E3–E7, A7** — office-day cards  
-16. **F1, F5** — shop + CNC  
-17. **G2–G6, L1–L2** — quote / drawing spine  
-18. **H1–H4** — memory  
-19. **N1–N2** — connectors  
-20. **O*** only after **G6** green  
+2. **S1, E1, P1** — landing gates + bootstrap + three sections on one page  
+3. **S2, P7, P8, P9** — snap + orb morph + chrome; reduced-motion  
+4. **P11, P12, P13, E2, S5, E16, E17** — Monitor/Casual chrome, weather as feature, notes cap  
+5. **P14, S4** — Engineering deck (morph, thumbs, drop)  
+6. **P2, P3** — auto-from-focus (no ambient jump) + pin blocks auto only  
+7. **P4, P5, P6** — server `ui` hints (needs typing; P5/P6 need a brain)  
+8. **P15, E11, S3, B2–B3** — Authorize / Reject / Later park-resume  
+9. **E8–E10, E14–E15, E19** — FSM + orchestra/activity + Space in baton  
+10. **A1–A3, A8–A10, A14** — brain routing (Hermes warm)  
+11. **K1–K3, K6** — voice trust  
+12. **C3–C5, C8** — compose path  
+13. **D1–D2** — briefing  
+14. **E3–E7, A7** — office-day cards  
+15. **F1, F5** — shop + CNC  
+16. **G2–G6, L1–L2** — quote / drawing spine  
+17. **H1–H4** — memory  
+18. **N1–N2** — connectors  
+19. **O*** only after **G6** green  
 
 ## Log Template (Per Case)
 
@@ -311,4 +324,4 @@ Agent (if dispatched):
 
 ---
 
-**Pick an ID when ready (this pass: coordinator **I3**, then **E1** / **P1**). The coordinator keeps the matrix moving and delegates fixes on your observations.**
+**Pick an ID when ready (this pass: coordinator **I3**, then **S1** / **E1** / **P1**). The coordinator keeps the matrix moving and delegates fixes on your observations.**

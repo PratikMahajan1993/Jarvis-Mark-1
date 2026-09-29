@@ -56,6 +56,10 @@ export type SubstrateIn =
   | { type: "route"; active: boolean }
   | { type: "gather"; progress: number }
   | { type: "pointer"; x: number; y: number }
+  /** Brief attention toward a screen point (0..1). */
+  | { type: "glance"; x: number; y: number; ms: number }
+  /** One-shot brightness pulse — ack (soft) or warn (stronger). */
+  | { type: "pulse"; kind: "ack" | "warn" }
   | { type: "visibility"; hidden: boolean }
   | { type: "reducedMotion"; on: boolean }
   | { type: "quality"; scale: number; fps: 30 | 60 };

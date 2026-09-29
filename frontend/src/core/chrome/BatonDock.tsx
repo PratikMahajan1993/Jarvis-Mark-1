@@ -7,6 +7,7 @@ import { TurnStageLine } from "@/components/orchestrator/TurnStageLine";
 import * as desk from "@/core/desk/controller";
 import { useTurnView } from "@/core/desk/useTurnView";
 import type { SectionDef } from "@/core/sections/defineSection";
+import { batonSectionChangePlan } from "@/core/desk/batonSection";
 import { loadBatonText, saveBatonText } from "@/core/desk/drafts";
 import { setDesk, useDesk, getDesk } from "@/core/stores/deskStore";
 import { useSectionState } from "@/core/stores/sectionStore";
@@ -28,21 +29,47 @@ export function BatonDock({ sections }: { sections: readonly SectionDef[] }) {
   const active = useSectionState((s) => s.active);
   const [engaged, setEngaged] = useState(false);
   const wasScrolling = useRef(scrolling);
+  const activeRef = useRef(active);
+  const composeRef = useRef(compose);
+  composeRef.current = compose;
 
   useEffect(() => {
     if (scrolling && !wasScrolling.current) setEngaged(false);
     wasScrolling.current = scrolling;
   }, [scrolling]);
 
+  // Flush previous section before loading the next (empty compose still clears that key).
   useEffect(() => {
-    if (!getDesk().compose) setDesk({ compose: loadBatonText(active) });
-    // Per-section text is restored once the section becomes active, unless something is already typed.
+    const prev = activeRef.current;
+    const plan = batonSectionChangePlan(prev, active, composeRef.current, loadBatonText(active));
+    if (plan) {
+      saveBatonText(plan.save.section, plan.save.text);
+      composeRef.current = plan.nextCompose;
+      setDesk({ compose: plan.nextCompose });
+    } else if (!getDesk().compose) {
+      setDesk({ compose: loadBatonText(active) });
+    }
+    activeRef.current = active;
   }, [active]);
 
+  // Debounce: clear the timer only after flushing the live value for this section.
   useEffect(() => {
-    const t = window.setTimeout(() => saveBatonText(active, compose), 2000);
-    return () => window.clearTimeout(t);
+    const section = active;
+    const text = compose;
+    const t = window.setTimeout(() => {
+      if (activeRef.current === section) saveBatonText(section, text);
+    }, 2000);
+    return () => {
+      window.clearTimeout(t);
+      if (activeRef.current === section) saveBatonText(section, composeRef.current);
+    };
   }, [active, compose]);
+
+  useEffect(() => {
+    const onHide = () => saveBatonText(activeRef.current, composeRef.current);
+    window.addEventListener("pagehide", onHide);
+    return () => window.removeEventListener("pagehide", onHide);
+  }, []);
 
   const sectionAllowsBaton = sections.find((s) => s.id === active)?.baton !== false;
   const hidden = hitl || !sectionAllowsBaton;

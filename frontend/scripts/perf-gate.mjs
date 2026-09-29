@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Phase 0 perf baseline — headless Chrome, no Playwright.
- * Loads ?perf=1, cycles workspace switcher 20× (2 s apart), writes JSON + screenshot.
+ * Loads ?perf=1, cycles section nav 20× (2 s apart), writes JSON + screenshot.
  */
 import { spawn } from "node:child_process";
 import fs from "node:fs";
@@ -19,7 +19,7 @@ const SWITCH_GAP_MS = 2000;
 const DEBUG_PORT = 9333;
 
 /** monitor → casual → engineering → monitor … */
-const LENS_CYCLE = ["Monitor", "Casual", "Engineering"];
+const SECTION_CYCLE = ["Monitor", "Casual", "Engineering"];
 
 const OUT_JSON = path.join(REPO_ROOT, "work", "perf", "baseline-overhaul.json");
 const ARTIFACT_DIR = path.join(FRONTEND_ROOT, ".artifacts", "phase-0");
@@ -236,10 +236,10 @@ async function openCdpPage(chromePath, url) {
   return { session, chrome, userDataDir };
 }
 
-function nextLensLabel(current) {
-  const idx = LENS_CYCLE.indexOf(current);
+function nextSectionLabel(current) {
+  const idx = SECTION_CYCLE.indexOf(current);
   const base = idx >= 0 ? idx : 0;
-  return LENS_CYCLE[(base + 1) % LENS_CYCLE.length];
+  return SECTION_CYCLE[(base + 1) % SECTION_CYCLE.length];
 }
 
 async function waitForPerfApi(session, timeoutMs = 90_000) {
@@ -252,25 +252,45 @@ async function waitForPerfApi(session, timeoutMs = 90_000) {
   throw new Error("window.__JARVIS_PERF__ not available");
 }
 
-async function getActiveLens(session) {
+async function waitForSectionNav(session, timeoutMs = 90_000) {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const { result } = await session.evaluate(
+      `(function(){
+        const nav = document.querySelector('nav[aria-label="Sections"]');
+        if (!nav || !nav.querySelector("button")) return false;
+        return !document.querySelector("[data-landing]");
+      })()`,
+      false,
+    );
+    if (result?.value) return;
+    await sleep(250);
+  }
+  throw new Error("section nav not ready (landing still up)");
+}
+
+async function getActiveSection(session) {
   const expr = `(function(){
-    const g = document.querySelector('[aria-label="HUD workspace"]');
+    const g = document.querySelector('nav[aria-label="Sections"]');
     if (!g) return null;
-    const pressed = g.querySelector('button[aria-pressed="true"]');
-    return pressed ? pressed.textContent.trim() : null;
+    const current = g.querySelector('button[aria-current="true"]');
+    if (!current) return null;
+    const t = current.querySelector("span.truncate");
+    return ((t ? t.textContent : current.textContent) || "").trim();
   })()`;
   const { result } = await session.evaluate(expr, false);
   return result?.value ?? "Monitor";
 }
 
-async function clickLens(session, label) {
+async function clickSection(session, label) {
   const expr = `(function(){
-    const g = document.querySelector('[aria-label="HUD workspace"]');
-    if (!g) throw new Error('workspace switcher missing');
-    const btn = Array.from(g.querySelectorAll('button')).find(
-      (b) => b.textContent.trim() === ${JSON.stringify(label)},
-    );
-    if (!btn) throw new Error('button ${label} missing');
+    const g = document.querySelector('nav[aria-label="Sections"]');
+    if (!g) throw new Error('section nav missing');
+    const btn = Array.from(g.querySelectorAll('button')).find((b) => {
+      const t = b.querySelector("span.truncate");
+      return ((t ? t.textContent : b.textContent) || "").trim() === ${JSON.stringify(label)};
+    });
+    if (!btn) throw new Error('section ${label} missing');
     btn.click();
     return true;
   })()`;
@@ -308,15 +328,16 @@ async function main() {
   const { session, chrome, userDataDir } = await openCdpPage(chromePath, HUD_URL);
   try {
     await waitForPerfApi(session);
-    await sleep(4000);
+    await waitForSectionNav(session);
+    await sleep(1000);
 
-    let current = await getActiveLens(session);
-    console.log(`Initial lens: ${current}`);
+    let current = await getActiveSection(session);
+    console.log(`Initial section: ${current}`);
 
     for (let i = 0; i < SWITCH_COUNT; i += 1) {
-      const target = nextLensLabel(current);
+      const target = nextSectionLabel(current);
       console.log(`Switch ${i + 1}/${SWITCH_COUNT}: ${current} → ${target}`);
-      await clickLens(session, target);
+      await clickSection(session, target);
       current = target;
       await sleep(SWITCH_GAP_MS);
     }

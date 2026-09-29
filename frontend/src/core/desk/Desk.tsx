@@ -1,7 +1,7 @@
 "use client";
 
 import "@/features";
-import { MotionConfig } from "motion/react";
+import { LayoutGroup, MotionConfig, motion, useReducedMotion } from "motion/react";
 import { Profiler, useState } from "react";
 import { Landing } from "@/core/landing/Landing";
 import { PerfOverlay } from "@/components/PerfOverlay";
@@ -20,6 +20,10 @@ import { isJarvisPerfMode, recordOrchestratorShellCommit } from "@/lib/pane/perf
 import { DeskController } from "./DeskController";
 import { goToSection } from "./controller";
 
+const CHROME_STAGGER_S = 0.08;
+const CHROME_FADE_S = 0.35;
+const CHROME_REDUCED_S = 0.2;
+
 /**
  * The desk on `/`: L0 backdrop, L2 sections (L1 substrate is hoisted in
  * JarvisRoot), L3 decor and chrome, then the modal tier.
@@ -27,26 +31,62 @@ import { goToSection } from "./controller";
 export function Desk() {
   const perf = isJarvisPerfMode();
   const [landed, setLanded] = useState(false);
+  const reduced = useReducedMotion();
+
+  const chromeFade = (index: number) => ({
+    opacity: landed ? 1 : 0,
+    transition: reduced
+      ? { duration: CHROME_REDUCED_S, delay: 0 }
+      : { duration: CHROME_FADE_S, delay: landed ? index * CHROME_STAGGER_S : 0 },
+  });
+
   const tree = (
     <MotionConfig reducedMotion="user">
-      <DeskController />
-      <ThemeSync sections={SECTIONS} />
-      <Backdrop sections={SECTIONS} />
-      <SectionStack sections={SECTIONS} onUserNavigate={goToSection} />
-      <DecorLayer sections={SECTIONS} />
-      <div
-        className="transition-opacity duration-500"
-        style={{ opacity: landed ? 1 : 0, pointerEvents: landed ? "auto" : "none" }}
-        data-chrome-root
-      >
-        <StatusCluster />
-        <SectionNav sections={SECTIONS} onNavigate={goToSection} />
-        <TaskDock />
-        <ToastLayer />
-        <BatonDock sections={SECTIONS} />
-      </div>
-      <Modals />
-      {landed ? null : <Landing onDone={() => setLanded(true)} />}
+      <LayoutGroup id="hitl-park">
+        <DeskController />
+        <ThemeSync sections={SECTIONS} />
+        <Backdrop sections={SECTIONS} />
+        <SectionStack sections={SECTIONS} onUserNavigate={goToSection} />
+        <DecorLayer sections={SECTIONS} />
+        <div data-chrome-root>
+          <motion.div
+            animate={chromeFade(0)}
+            style={{ pointerEvents: landed ? "auto" : "none" }}
+            data-chrome="status"
+          >
+            <StatusCluster />
+          </motion.div>
+          <motion.div
+            animate={chromeFade(1)}
+            style={{ pointerEvents: landed ? "auto" : "none" }}
+            data-chrome="nav"
+          >
+            <SectionNav sections={SECTIONS} onNavigate={goToSection} />
+          </motion.div>
+          <motion.div
+            animate={chromeFade(2)}
+            style={{ pointerEvents: landed ? "auto" : "none" }}
+            data-chrome="dock"
+          >
+            <TaskDock />
+          </motion.div>
+          <div
+            style={{ opacity: landed ? 1 : 0, pointerEvents: landed ? "auto" : "none" }}
+            aria-hidden={!landed}
+          >
+            <ToastLayer />
+          </div>
+          <motion.div
+            animate={chromeFade(3)}
+            style={{ pointerEvents: landed ? "auto" : "none" }}
+            data-chrome="baton"
+          >
+            <BatonDock sections={SECTIONS} />
+          </motion.div>
+        </div>
+        <Modals />
+        {landed ? null : <Landing onDone={() => setLanded(true)} />}
+      </LayoutGroup>
     </MotionConfig>
   );
 

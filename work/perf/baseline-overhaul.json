@@ -1,0 +1,267 @@
+{
+  "capturedAt": "2026-09-29T19:50:48.805Z",
+  "hudUrl": "http://127.0.0.1:3000/?perf=1",
+  "switchCount": 20,
+  "rafHistogram": {
+    "0-8": 2,
+    "8-16": 2704,
+    "16-20": 382,
+    "20-33": 180,
+    "33+": 263
+  },
+  "rafP95Ms": 33.39999999999782,
+  "longTasks": [
+    {
+      "duration": 258,
+      "startTime": 1667.5,
+      "name": "self"
+    },
+    {
+      "duration": 223,
+      "startTime": 2315.0999999940395,
+      "name": "self"
+    },
+    {
+      "duration": 111,
+      "startTime": 2683.699999988079,
+      "name": "self"
+    },
+    {
+      "duration": 86,
+      "startTime": 2795.899999976158,
+      "name": "self"
+    },
+    {
+      "duration": 118,
+      "startTime": 3091.199999988079,
+      "name": "self"
+    },
+    {
+      "duration": 51,
+      "startTime": 4920.199999988079,
+      "name": "self"
+    },
+    {
+      "duration": 101,
+      "startTime": 7649.0999999940395,
+      "name": "self"
+    },
+    {
+      "duration": 77,
+      "startTime": 10186,
+      "name": "self"
+    },
+    {
+      "duration": 64,
+      "startTime": 10402.799999982119,
+      "name": "self"
+    },
+    {
+      "duration": 57,
+      "startTime": 14563.699999988079,
+      "name": "self"
+    },
+    {
+      "duration": 51,
+      "startTime": 20317,
+      "name": "self"
+    },
+    {
+      "duration": 53,
+      "startTime": 22265.19999998808,
+      "name": "self"
+    },
+    {
+      "duration": 52,
+      "startTime": 22471.899999976158,
+      "name": "self"
+    },
+    {
+      "duration": 51,
+      "startTime": 26347.5,
+      "name": "self"
+    },
+    {
+      "duration": 50,
+      "startTime": 26468.59999999404,
+      "name": "self"
+    },
+    {
+      "duration": 64,
+      "startTime": 28510.09999999404,
+      "name": "self"
+    },
+    {
+      "duration": 52,
+      "startTime": 30877.79999998212,
+      "name": "self"
+    },
+    {
+      "duration": 62,
+      "startTime": 30932.69999998808,
+      "name": "self"
+    },
+    {
+      "duration": 56,
+      "startTime": 30996.79999998212,
+      "name": "self"
+    },
+    {
+      "duration": 67,
+      "startTime": 31055.29999998212,
+      "name": "self"
+    },
+    {
+      "duration": 79,
+      "startTime": 32390.399999976158,
+      "name": "self"
+    },
+    {
+      "duration": 53,
+      "startTime": 32486.899999976158,
+      "name": "self"
+    },
+    {
+      "duration": 60,
+      "startTime": 32545.59999999404,
+      "name": "self"
+    },
+    {
+      "duration": 62,
+      "startTime": 32607.79999998212,
+      "name": "self"
+    },
+    {
+      "duration": 58,
+      "startTime": 32671.899999976158,
+      "name": "self"
+    },
+    {
+      "duration": 65,
+      "startTime": 32732,
+      "name": "self"
+    },
+    {
+      "duration": 60,
+      "startTime": 32799.19999998808,
+      "name": "self"
+    },
+    {
+      "duration": 69,
+      "startTime": 32861.59999999404,
+      "name": "self"
+    },
+    {
+      "duration": 63,
+      "startTime": 32932.59999999404,
+      "name": "self"
+    },
+    {
+      "duration": 64,
+      "startTime": 32998.39999997616,
+      "name": "self"
+    },
+    {
+      "duration": 64,
+      "startTime": 33064.59999999404,
+      "name": "self"
+    },
+    {
+      "duration": 57,
+      "startTime": 33131.19999998808,
+      "name": "self"
+    },
+    {
+      "duration": 55,
+      "startTime": 33190.29999998212,
+      "name": "self"
+    },
+    {
+      "duration": 98,
+      "startTime": 34366.79999998212,
+      "name": "self"
+    },
+    {
+      "duration": 67,
+      "startTime": 34499.5,
+      "name": "self"
+    },
+    {
+      "duration": 121,
+      "startTime": 34570.29999998212,
+      "name": "self"
+    },
+    {
+      "duration": 58,
+      "startTime": 34694.89999997616,
+      "name": "self"
+    },
+    {
+      "duration": 66,
+      "startTime": 34756.19999998808,
+      "name": "self"
+    },
+    {
+      "duration": 66,
+      "startTime": 34824.69999998808,
+      "name": "self"
+    },
+    {
+      "duration": 59,
+      "startTime": 34893.5,
+      "name": "self"
+    },
+    {
+      "duration": 61,
+      "startTime": 34955.09999999404,
+      "name": "self"
+    },
+    {
+      "duration": 64,
+      "startTime": 35018.5,
+      "name": "self"
+    },
+    {
+      "duration": 59,
+      "startTime": 35084.79999998212,
+      "name": "self"
+    },
+    {
+      "duration": 68,
+      "startTime": 35146.79999998212,
+      "name": "self"
+    },
+    {
+      "duration": 73,
+      "startTime": 35217.09999999404,
+      "name": "self"
+    },
+    {
+      "duration": 55,
+      "startTime": 35292.69999998808,
+      "name": "self"
+    },
+    {
+      "duration": 55,
+      "startTime": 35372.89999997616,
+      "name": "self"
+    },
+    {
+      "duration": 52,
+      "startTime": 35435.79999998212,
+      "name": "self"
+    },
+    {
+      "duration": 58,
+      "startTime": 39035.19999998808,
+      "name": "self"
+    },
+    {
+      "duration": 70,
+      "startTime": 40417.39999997616,
+      "name": "self"
+    }
+  ],
+  "webglContextCount": 1,
+  "orchestratorShellCommits": 2
+}

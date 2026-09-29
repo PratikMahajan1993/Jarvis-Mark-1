@@ -17,16 +17,24 @@ describe("parkedExpiry", () => {
     expect(isParkedApprovalExpired(action, Date.parse("2026-01-01T12:00:01.000Z"))).toBe(true);
   });
 
-  it("falls back to created_at + 30 minutes", () => {
+  it("ignores created_at and clocks from parkedAt + 30 minutes", () => {
     const created = Date.parse("2026-01-01T10:00:00.000Z");
+    const parkedAt = Date.parse("2026-01-01T11:45:00.000Z");
     const action = { ...base, created_at: "2026-01-01T10:00:00.000Z" } as PendingAction;
-    expect(pendingExpiryAtMs(action)).toBe(created + DEFAULT_PARKED_TTL_MS);
-    expect(isParkedApprovalExpired(action, created + DEFAULT_PARKED_TTL_MS - 1)).toBe(false);
-    expect(isParkedApprovalExpired(action, created + DEFAULT_PARKED_TTL_MS)).toBe(true);
+    expect(pendingExpiryAtMs(action, parkedAt)).toBe(parkedAt + DEFAULT_PARKED_TTL_MS);
+    expect(pendingExpiryAtMs(action, parkedAt)).not.toBe(created + DEFAULT_PARKED_TTL_MS);
+    expect(isParkedApprovalExpired(action, parkedAt + DEFAULT_PARKED_TTL_MS - 1, parkedAt)).toBe(false);
+    expect(isParkedApprovalExpired(action, parkedAt + DEFAULT_PARKED_TTL_MS, parkedAt)).toBe(true);
   });
 
-  it("uses parkedAt when no server timestamps", () => {
+  it("uses parkedAt when no server expires_at", () => {
     const parkedAt = 1_700_000_000_000;
     expect(pendingExpiryAtMs(base, parkedAt)).toBe(parkedAt + DEFAULT_PARKED_TTL_MS);
+  });
+
+  it("explicit expires_at still wins over parkedAt", () => {
+    const parkedAt = Date.parse("2026-01-01T11:00:00.000Z");
+    const action = { ...base, expires_at: "2026-01-01T12:00:00.000Z" } as PendingAction;
+    expect(pendingExpiryAtMs(action, parkedAt)).toBe(Date.parse("2026-01-01T12:00:00.000Z"));
   });
 });

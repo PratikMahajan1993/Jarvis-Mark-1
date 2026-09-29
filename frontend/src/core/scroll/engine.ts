@@ -23,6 +23,7 @@ import {
   type OrbBlend,
 } from "./progress";
 import { markUserActivity, setPointerHeld } from "./director";
+import { isEditableTarget, isFieldTarget } from "./editableTarget";
 import { scrollProgress, scrollY, sectionHeight } from "./values";
 
 const JUMP_BASE_S = 0.9;
@@ -39,17 +40,6 @@ export type ScrollEngineOptions = {
   /** A user key press (PageUp/PageDown, Alt+n) asks for a section. */
   onUserNavigate: (sectionId: string, reason: string) => void;
 };
-
-function isEditableTarget(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false;
-  if (target.isContentEditable) return true;
-  const tag = target.tagName;
-  if (tag === "TEXTAREA" || tag === "SELECT") return true;
-  if (tag !== "INPUT") return false;
-  // Section keys never edit a single-line text field, so the (always focused) baton does not swallow them.
-  const type = (target as HTMLInputElement).type;
-  return !(type === "text" || type === "search" || type === "");
-}
 
 function inPreventedArea(event: Event): boolean {
   for (const node of event.composedPath()) {
@@ -204,11 +194,14 @@ export function startScrollEngine(
   const offRequest = sectionStore.subscribe(onRequest);
 
   const onKey = (event: KeyboardEvent) => {
-    if (event.defaultPrevented || isEditableTarget(event.target)) return;
+    if (event.defaultPrevented) return;
+    // Space: block page scroll only outside fields; baton (input[type=text]) must type.
+    // PageUp/PageDown/Alt+n still use isEditableTarget so the baton does not swallow them.
     if (event.code === "Space" && !event.shiftKey) {
-      event.preventDefault();
+      if (!isFieldTarget(event.target)) event.preventDefault();
       return;
     }
+    if (isEditableTarget(event.target)) return;
     const idx = sectionForKey(event, activeIdx, count);
     if (idx == null) return;
     event.preventDefault();

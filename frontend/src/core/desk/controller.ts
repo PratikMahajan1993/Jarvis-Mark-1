@@ -7,6 +7,7 @@ import {
 } from "@/components/orchestrator/ConnectGoogleModal";
 import type { RailConversation } from "@/components/orchestrator/ConversationRail";
 import { deckMetaFromFocus } from "@/core/sections/engineering/deckCardMeta";
+import { QUOTE_START_FROM_DROP, type DropIntent } from "@/core/sections/engineering/dropIntent";
 import type { SuggestedTask } from "@/components/orchestrator/SuggestedTasksPanel";
 import {
   initialWorkspaceFromBootstrap,
@@ -124,9 +125,11 @@ export function applyServerHint(ui: { section: string; reason: string } | null |
 }
 
 /** A user click on the section nav or switcher. Always runs. */
-export function goToSection(section: string, reason = "nav") {
+export async function goToSection(section: string, reason = "nav") {
   const from = getSection().active;
-  if (from === "engineering" && section !== "engineering") void runAutosave("leave-engineering");
+  if (from === "engineering" && section !== "engineering") {
+    await runAutosave("leave-engineering");
+  }
   requestSection(section, { source: "user", reason });
 }
 
@@ -204,7 +207,7 @@ async function loadSessionSurface(sessionId: string, opts?: { announce?: boolean
     api.session(sessionId).catch(() => null),
   ]);
   if (generation !== ctl.sessionSurfaceGen) return;
-  setPendingItems(waiting.items || []);
+  setPendingItems(waiting.items || [], sessionId);
   const first = firstUnparked(waiting.items || []);
   // Restoring a session never auto-opens the confirm mic — it is a snapshot, not a fresh reply.
   dispatchTurn(first ? { type: "AWAIT_HITL", action: first } : { type: "RESET" });
@@ -563,7 +566,7 @@ export async function decide(id: string, approved: boolean, fields?: { to: strin
     // Restore pending from the server so the HUD never strands without Authorize.
     try {
       const waiting = await api.pending(session());
-      setPendingItems(waiting.items || []);
+      setPendingItems(waiting.items || [], session());
       const restored = firstUnparked(waiting.items || []);
       dispatchTurn(restored ? { type: "AWAIT_HITL", action: restored } : { type: "RESET" });
     } catch {
@@ -881,11 +884,36 @@ export async function dropDrawing(file: File) {
     const result = await api.dropDrawing(file);
     applyResponse(result);
     void refreshDesk(result.drawing_chat?.conversation_id || getDesk().activeConversationId);
+    return result;
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Could not open that drawing";
     setDesk({ error: msg });
     showVoice(msg);
+    return null;
   }
+}
+
+/** Engineering deck drop: persist via `/api/chat/drawing`, open PDF, then local quote-vs-discuss prompt. */
+export async function dropDrawingOnEngineering(file: File): Promise<{ conversationId: string } | null> {
+  const result = await dropDrawing(file);
+  if (!result) return null;
+  const conversationId =
+    (typeof result.drawing_chat?.conversation_id === "string" && result.drawing_chat.conversation_id) ||
+    (typeof result.ui_action?.conversation_id === "string" ? result.ui_action.conversation_id : "");
+  if (!conversationId) return null;
+  routeTo("engineering", "deck-drop");
+  showVoice("Want to start a quote workflow, or only view the drawing and discuss it?");
+  return { conversationId };
+}
+
+/** Local prompt choice after an Engineering deck drop — never sends mail or quote_send. */
+export async function resolveEngineeringDropIntent(intent: DropIntent) {
+  if (intent === "quote") {
+    showVoice("Starting the quote workflow.");
+    await send(QUOTE_START_FROM_DROP);
+    return;
+  }
+  showVoice("Alright — we can talk through the drawing.");
 }
 
 export function closeDrawing() {
@@ -955,10 +983,19 @@ export function initDesk(): () => void {
   });
   const gen = ++ctl.bootGen;
   const offMode = onTurnEffect("orb-mode", (e) => postSubstrate({ type: "mode", mode: e.mode }));
-  const offScroll = onTurnEffect("scroll", (e) => {
-    requestSection(e.section, { source: "auto", reason: e.reason });
+  let pendingLeaveSave: Promise<void> | null = null;
+  const offAutosave = onTurnEffect("autosave", (e) => {
+    pendingLeaveSave = runAutosave(e.reason);
   });
-  const offAutosave = onTurnEffect("autosave", (e) => void runAutosave(e.reason));
+  const offScroll = onTurnEffect("scroll", (e) => {
+    void (async () => {
+      if (pendingLeaveSave) {
+        await pendingLeaveSave;
+        pendingLeaveSave = null;
+      }
+      requestSection(e.section, { source: "auto", reason: e.reason });
+    })();
+  });
   hydrateParked();
   hydrateWorkspace();
   setDesk({ voiceVisible: true });

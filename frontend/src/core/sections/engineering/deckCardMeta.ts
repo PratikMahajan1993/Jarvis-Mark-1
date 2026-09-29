@@ -12,7 +12,17 @@ export type DeckCardMeta = {
   verifyWarnings?: number;
   draftTotal?: string;
   thumbnailUrl?: string;
+  /** Tool-owned local file identity for idle pdf.js thumbs (X9). */
+  fileSha256?: string;
+  localName?: string;
+  mime?: string;
+  filename?: string;
 };
+
+/** Shared layoutId for card → drawing-stage morph (X9). */
+export function stageMorphLayoutId(conversationId: string): string {
+  return `eng-drawing-stage-${conversationId}`;
+}
 
 function asRecord(v: unknown): Record<string, unknown> | null {
   return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
@@ -104,17 +114,42 @@ export function deckMetaFromFocus(focus: Record<string, unknown> | undefined, _s
     revision: asString(f.revision ?? extract?.revision),
     quoteStep: normalizeQuoteStep(f.quote_step ?? f.quoteStep ?? f.pipeline_step ?? f.step),
     thumbnailUrl,
+    fileSha256: asString(f.file_sha256 ?? f.fileSha256),
+    localName: asString(f.local_name ?? f.localName),
+    mime: asString(f.mime),
+    filename: asString(f.filename),
     ...verify,
   };
 }
 
+/** Deck conversation kinds that may session-match a parked approval (X9). */
+const ENGINEERING_APPROVAL_KINDS = new Set(["drawing", "workflow", "job"]);
+
+function isEngineeringApproval(action: PendingAction): boolean {
+  const kind = (action.kind || "").toLowerCase();
+  if (ENGINEERING_APPROVAL_KINDS.has(kind)) return true;
+  const payload = action.payload || {};
+  for (const key of ["category", "conversation_kind", "conversationKind", "kind"] as const) {
+    const v = payload[key];
+    if (typeof v === "string" && ENGINEERING_APPROVAL_KINDS.has(v.toLowerCase())) return true;
+  }
+  return false;
+}
+
+/**
+ * Badge a deck card only when the parked approval matches that conversation.
+ * Prefer conversation_id; session-only match is for engineering kinds with no conversation id.
+ */
 export function pendingMatchesConversation(
   action: PendingAction,
   conv: { id: string; sessionId: string },
 ): boolean {
   const payload = action.payload || {};
   const cid = payload.conversation_id ?? payload.conversationId;
-  if (typeof cid === "string" && cid === conv.id) return true;
+  if (typeof cid === "string" && cid.trim()) {
+    return cid === conv.id;
+  }
+  if (!isEngineeringApproval(action)) return false;
   if (action.session_id && action.session_id === conv.sessionId) return true;
   const sid = payload.session_id ?? payload.sessionId;
   if (typeof sid === "string" && sid === conv.sessionId) return true;

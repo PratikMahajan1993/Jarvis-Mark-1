@@ -1,6 +1,6 @@
 # Jarvis — What Works Today (As-Built Snapshot)
 
-**Updated:** 2026-09-29  
+**Updated:** 2026-09-30  
 **Reference:** `docs/SYSTEM_TRUTH.md` (single source of truth), `docs/ROADMAP.md` (next steps)
 
 ## Product Shape
@@ -13,12 +13,13 @@
 
 ## HUD
 
-- **Single pane:** one `OrchestratorShell` hosts always-mounted `Pane` (`frontend/src/components/pane/Pane.tsx`) — no per-workspace desk trees or presence crossfade. Workspace (`casual|monitor|engineering`) maps 1:1 to lenses (`converse|watch|bench`) via `paneStore`.
-- **Substrate:** one `<canvas>` / one WebGL2 context in a worker (`frontend/src/substrate/`). Lens changes tween shader weights (Eye / Orb / pilot light); contexts not created/destroyed on switch. Idle **Watch** internal render scale **0.55** (Evil Eye dpr baseline).
-- **Bench (engineering):** drawing stage (`BenchStagePanel` / pdf.js viewer) and quote sheet (`BenchQuotePanel` / `QuoteSheet`) stay mounted at depth; lens only moves slot and depth.
-- **Talk-jump:** `talkJumpWorkspace` returns `null` unless current workspace is **monitor**. Quote/drawing words from Monitor → Engineering; same words on Casual stay Casual.
-- **HITL:** `HitlModal` — **Authorize / Reject**. On load/session switch, `loadSessionSurface` restores first pending row for that session on every workspace.
-- **Perf gate:** `npm run perf` (`scripts/perf-gate.mjs`) — headless Chrome, `?perf=1`, 20 workspace switches. Latest: `work/perf/phase-6.json`.
+- **Scrolling desk:** `app/layout.tsx` → `JarvisRoot` owns the only WebGL canvas for the tab. `/` loads `Desk` (`core/desk/Desk.tsx`) with a vertical section stack (`SectionStack`: Monitor → Casual → Engineering; feature sections slot in by `order`). Lenis + snap live in `core/scroll/`; PageUp/PageDown and Alt+1–9 jump; Space types in fields (including the baton) and is the mic when not typing.
+- **Workspace from section:** active scroll section derives HUD workspace (`casual|monitor|engineering`). Server chat and Hermes-run start may stamp `ui: {section, reason}`; the scroll director (`core/scroll/director.ts`) drops or defers automatic jumps when pinned, when a modal is open, or when the user was active recently. Engineering only yields to `explicit`.
+- **Substrate:** one particle swarm on the root canvas (`frontend/src/substrate/`, worker `OffscreenCanvas`). Section formulas morph on scroll; FSM states move formula controls only. UI posts `postSubstrate` messages — never opens a second WebGL context.
+- **Engineering:** drawing stage (pdf.js) and quote sheet when a note is focused; otherwise a stacked task deck (carousel). Baton text and engineering drafts autosave (`localStorage` + `PUT`/`POST /api/drafts/{key}`); programmatic leave awaits autosave (300 ms cap), wheel/snap fires once without freezing Lenis.
+- **Talk-jump:** quote/drawing words from Monitor → Engineering; same words on Casual stay Casual. User scroll and pin win over soft hints.
+- **HITL:** `HitlModal` — **Authorize / Reject / Later**. Parked chips live in `TaskDock`; TTL is `parkedAt`+30 min unless `expires_at`, then Authorize reopens with a needs-decision toast. On load/session switch, `loadSessionSurface` restores the first pending row for that session.
+- **Perf gate:** `npm run perf` (`scripts/perf-gate.mjs`) — headless Chrome, `?perf=1`. Latest artifact: `work/perf/phase-6.json` (still workspace-switch oriented; not rewritten for the scroll desk).
 
 ## Sessions & Data (`<repo>/data/`)
 
@@ -55,8 +56,8 @@ Hermes thread map: `data/hermes_sessions.json` (separate from playbook files). P
 
 ## Working Capabilities
 
-- Orchestrator HUD with Open notes (max 3 expanded), suggested tasks, weather chip, Authorize blast-radius card.
-- Right rail: `WeatherCard` (`shrink-0`) + scrollable `SuggestedTasksPanel`.
+- Scrolling desk HUD with Open notes (max 3 expanded), suggested tasks, weather card, Authorize blast-radius card.
+- Monitor rail: weather (`features/weather`, shrink-0) above scrollable `SuggestedTasksPanel`.
 - React Bits accents; mail board via SceneBoard inside SpotlightCard (`bodyClassName` scroll).
 - Local-fast path for mail/calendar/briefing snapshot kinds.
 - Hermes warm gateway bridge. Speech is Gemini TTS (Charon); prefetch warms `data/tts_cache/`.
@@ -70,17 +71,14 @@ Hermes thread map: `data/hermes_sessions.json` (separate from playbook files). P
 - Full Hermes browser computer-use end-to-end.
 - Capability matrix: `work/CAPABILITY_TEST_MATRIX.md`.
 
-## Scroll Overhaul (branch cursor/scroll-substrate-overhaul-401c)
+## Scroll Overhaul
 
-- Single vertical page: Monitor, Casual, Engineering sections (Lenis + snap, `core/scroll/`). PageUp/PageDown and Alt+1-9 navigate.
-- Landing gates (`core/landing/`): substrate, fonts, desk, monitor and casual (real DOM presence), engineering (section chunk + DrawingViewer + pdf.js prefetched). Min 1.4 s (0.6 s on refresh), cap 4 s.
-- Server section hints (`section_hint.py`) and scroll director (`core/scroll/director.ts`).
-- TaskDock: parked approvals and engineering tasks; parked-approval expiry toast (30 min default, `toastStore`/`ToastLayer`).
-- Engineering deck carousel with quote-step chip and parked-approval badge; baton autosave; `/api/drafts/{key}`.
-- Voice: `voice.ts` posts an analyser RMS `level` to the substrate. Space stays the mic key and never scrolls the page.
-- Feature platform: `app/core/features.py`, `/api/events` SSE, `frontend/src/sdk` (`Slot`, `defineFeature`, `defineCard`, hooks), `npm run new:feature`, `npm run api:schema`. Weather is the first feature (`frontend/src/features/weather`, Monitor rail slot).
-- Known gaps: scroll snap "lock" vs "mandatory" (owner decision pending), deck pdf thumbnails only when focus carries a URL, HITL-to-chip shared-layout morph not implemented, substrate sim cost above the 6 ms budget while blending, `lib/pane/` helpers not yet migrated.
-- `npm run perf` runs the perf gate.
+- Single vertical page: Monitor, Casual, Engineering (Lenis + snap, `core/scroll/`). Landing gates (`core/landing/`): substrate, fonts, desk, monitor/casual DOM, engineering chunk + DrawingViewer + pdf.js prefetch. Min 1.4 s (0.6 s on refresh), cap 4 s.
+- Server section hints (`section_hint.py`) and scroll director. TaskDock parked approvals + engineering-tasks chip; deck quote-step chip and conversation-scoped parked badge.
+- Drafts: baton flush on section change/`pagehide`; Engineering autosave on programmatic leave (awaited) and scroll-away (once); `pagehide` beacon as `text/plain` JSON; draft keys `^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$`, 64 KB cap.
+- Voice: `voice.ts` posts analyser RMS `level` to the substrate. Space types in fields; mic when not typing; never scrolls.
+- Feature platform scaffold: `app/core/features.py` (`publish` event-loop safe; jobs off), `/api/events` SSE, `frontend/src/sdk` (`Slot`, `defineFeature`, `defineCard`, `useSection`/`useTopic`/`useDraft`), `npm run new:feature`. Weather is the first feature (Monitor rail).
+- Known gaps left open: snap `"lock"` vs contract “mandatory” (owner decision); HITL-to-chip shared-layout morph; card-to-stage morph; pdf.js deck thumbnails + IndexedDB cache; deck `deltaX` cycle; empty deck drop target; landing Hermes line + staggered chrome; 6 ms substrate sim budget (desk measure); full feature-platform SDK (loader, scheduler, OpenAPI commit, remaining hooks); perf-gate rewrite for the scroll desk; capability-matrix ids for the overhaul.
 
 ## Runtime Notes
 

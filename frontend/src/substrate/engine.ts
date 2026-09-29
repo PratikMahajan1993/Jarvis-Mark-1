@@ -11,6 +11,9 @@ const QUALITY_NOTCHES = [
   { bloom: 0.33, simEvery: 1 },
   { bloom: 0.25, simEvery: 2 },
 ] as const;
+/** Formula-eval budget (X5). Desk blend samples sit at 9–10 ms; settled is ~5 ms. */
+const SIM_DEGRADE_MS = 6;
+const SIM_RECOVER_MS = 5.5;
 const P95_DEGRADE_MS = 20;
 const P95_RECOVER_MS = 14;
 const RECOVER_HOLD_MS = 5000;
@@ -68,6 +71,12 @@ export class SubstrateEngine {
   private contextDebounce: ReturnType<typeof setTimeout> | null = null;
   private pendingContext: "lost" | "restored" | null = null;
 
+  /** One-shot glance/pulse FX — does not touch particle count or the 6 ms degrader. */
+  private fxUntil = 0;
+  private fxMult = 1;
+  private fxCx: number | null = null;
+  private fxCy: number | null = null;
+
   constructor(postOut: (msg: SubstrateOut) => void, options: EngineOptions = {}) {
     this.postOut = postOut;
     this.baseFpsCap = options.fpsCap ?? 60;
@@ -115,6 +124,18 @@ export class SubstrateEngine {
         break;
       case "quality":
         this.applyQualityOverride(msg.scale, msg.fps);
+        break;
+      case "glance":
+        this.fxUntil = performance.now() + Math.max(0, msg.ms);
+        this.fxMult = 1.08;
+        this.fxCx = msg.x;
+        this.fxCy = msg.y;
+        break;
+      case "pulse":
+        this.fxUntil = performance.now() + (msg.kind === "warn" ? 500 : 280);
+        this.fxMult = msg.kind === "warn" ? 1.22 : 1.12;
+        this.fxCx = null;
+        this.fxCy = null;
         break;
       case "pointer":
         return;
@@ -323,8 +344,29 @@ export class SubstrateEngine {
     if (this.disposed || this.contextLost || !this.routeActive || this.hidden) return;
     if (!this.sim || !this.pass || !this.renderer) return;
     this.sim.step(1 / 60);
-    this.pass.render(this.renderer, this.sim.uniforms);
+    this.renderWithFx();
     this.maybePostSettled();
+  }
+
+  private renderWithFx() {
+    if (!this.sim || !this.pass || !this.renderer) return;
+    const u = this.sim.uniforms;
+    if (performance.now() >= this.fxUntil) {
+      this.pass.render(this.renderer, u);
+      return;
+    }
+    const savedB = u.brightness;
+    const savedC = u.center;
+    u.brightness = savedB * this.fxMult;
+    if (this.fxCx != null && this.fxCy != null) {
+      u.center = [
+        savedC[0]! + (this.fxCx - savedC[0]!) * 0.35,
+        savedC[1]! + (this.fxCy - savedC[1]!) * 0.35,
+      ];
+    }
+    this.pass.render(this.renderer, u);
+    u.brightness = savedB;
+    u.center = savedC;
   }
 
   private effectiveFpsCap(): number {
@@ -350,7 +392,7 @@ export class SubstrateEngine {
     if (!this.sim || !this.pass || !this.renderer) return;
     this.sim.step(dt);
     this.pass.advanceRotation(dt);
-    this.pass.render(this.renderer, this.sim.uniforms);
+    this.renderWithFx();
     this.simSamples.push(this.sim.lastSimMs);
     if (this.simSamples.length > 60) this.simSamples.shift();
     this.noteFrame(dt * 1000, time);
@@ -393,14 +435,19 @@ export class SubstrateEngine {
   }
 
   private maybeAdaptQuality(time: number) {
-    if (this.frameDeltas.length < 30) return;
+    if (this.frameDeltas.length < 30 || this.simSamples.length < 15) return;
     if (time - this.lastQualityChangeAt < QUALITY_COOLDOWN_MS) return;
     const p95 = percentile(this.frameDeltas, 95);
-    if (p95 > P95_DEGRADE_MS && this.qualityNotch < QUALITY_NOTCHES.length - 1) {
+    // p95 of simSamples, not the posted mean: at simEvery=2 the mean is diluted by
+    // skipped eval frames and would recover mid-blend while eval is still > 6 ms.
+    const simCost = percentile(this.simSamples, 95);
+    const overBudget = simCost > SIM_DEGRADE_MS || p95 > P95_DEGRADE_MS;
+    const underBudget = simCost < SIM_RECOVER_MS && p95 < P95_RECOVER_MS;
+    if (overBudget && this.qualityNotch < QUALITY_NOTCHES.length - 1) {
       this.setNotch(this.qualityNotch + 1, time);
       return;
     }
-    if (p95 < P95_RECOVER_MS && this.qualityNotch > 0) {
+    if (underBudget && this.qualityNotch > 0) {
       if (!this.recoverCandidateSince) this.recoverCandidateSince = time;
       if (time - this.recoverCandidateSince >= RECOVER_HOLD_MS) this.setNotch(this.qualityNotch - 1, time);
     } else {

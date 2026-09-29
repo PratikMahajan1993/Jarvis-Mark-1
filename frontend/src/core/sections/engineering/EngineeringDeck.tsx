@@ -1,11 +1,20 @@
 "use client";
 
 import { AnimatePresence, motion, useReducedMotion, type PanInfo } from "motion/react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import * as desk from "@/core/desk/controller";
 import type { RailConversation } from "@/components/orchestrator/ConversationRail";
-import { parkedApprovalForConversation } from "@/core/sections/engineering/deckCardMeta";
+import { parkedApprovalForConversation, stageMorphLayoutId } from "@/core/sections/engineering/deckCardMeta";
+import {
+  getCachedThumb,
+  needsIdlePdfThumb,
+  renderPdfPage1Thumb,
+  setCachedThumb,
+  sha256Hex,
+  whenIdle,
+} from "@/core/sections/engineering/pdfThumbCache";
 import { useTaskQueue } from "@/core/stores/taskQueueStore";
+import { api } from "@/lib/api";
 import { SPRING } from "@/lib/pane/springs";
 
 const MAX_VISIBLE = 5;
@@ -30,6 +39,73 @@ function DrawingPlaceholder() {
   );
 }
 
+/** Prefer focus thumbnail URL; else idle-render PDF page 1 into IndexedDB by sha256. */
+function DeckThumb({ item }: { item: RailConversation }) {
+  const [idleUrl, setIdleUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (item.thumbnailUrl || !needsIdlePdfThumb(item)) {
+      setIdleUrl(null);
+      return;
+    }
+    const localName = item.localName || item.filename;
+    if (!localName) return;
+
+    let cancelled = false;
+    const cancelIdle = whenIdle(() => {
+      void (async () => {
+        try {
+          let sha = (item.fileSha256 || "").trim().toLowerCase();
+          if (sha && /^[0-9a-f]{64}$/.test(sha)) {
+            const cached = await getCachedThumb(sha);
+            if (cancelled) return;
+            if (cached) {
+              setIdleUrl(cached);
+              return;
+            }
+          }
+          const response = await fetch(api.drawingUrl(localName));
+          if (!response.ok || cancelled) return;
+          const buffer = await response.arrayBuffer();
+          if (cancelled) return;
+          if (!sha || !/^[0-9a-f]{64}$/.test(sha)) {
+            sha = await sha256Hex(buffer);
+          }
+          if (cancelled) return;
+          const cached = await getCachedThumb(sha);
+          if (cached) {
+            setIdleUrl(cached);
+            return;
+          }
+          const dataUrl = await renderPdfPage1Thumb(buffer);
+          if (cancelled) return;
+          void setCachedThumb(sha, dataUrl);
+          setIdleUrl(dataUrl);
+        } catch {
+          /* leave placeholder */
+        }
+      })();
+    });
+
+    return () => {
+      cancelled = true;
+      cancelIdle();
+    };
+  }, [item.thumbnailUrl, item.fileSha256, item.localName, item.filename, item.mime, item.id]);
+
+  const src = item.thumbnailUrl || idleUrl;
+  if (!src) return <DrawingPlaceholder />;
+  return (
+    // eslint-disable-next-line @next/next/no-img-element -- deck thumb is tool-owned blob/data URL
+    <img
+      src={src}
+      alt=""
+      className="h-14 w-14 shrink-0 rounded-lg border border-[color:var(--border)] object-cover"
+      data-deck-thumb={item.thumbnailUrl ? "image" : "idle-pdf"}
+    />
+  );
+}
+
 function Card({
   item,
   depth,
@@ -37,6 +113,7 @@ function Card({
   front,
   onOpen,
   parkedTitle,
+  morphLayoutId,
 }: {
   item: RailConversation;
   depth: number;
@@ -44,6 +121,7 @@ function Card({
   front: boolean;
   onOpen: () => void;
   parkedTitle?: string;
+  morphLayoutId?: string;
 }) {
   const spread = fanned ? 46 : 14;
   const subline = [item.customer, item.drawingNumber, item.revision ? `Rev ${item.revision}` : ""]
@@ -57,6 +135,7 @@ function Card({
     <motion.button
       type="button"
       layout
+      layoutId={front ? morphLayoutId : undefined}
       drag={front ? "x" : false}
       dragSnapToOrigin
       dragElastic={0.5}
@@ -76,17 +155,7 @@ function Card({
       data-deck-card
     >
       <div className="flex gap-3">
-        {item.thumbnailUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element -- deck thumb is tool-owned blob/data URL when present
-          <img
-            src={item.thumbnailUrl}
-            alt=""
-            className="h-14 w-14 shrink-0 rounded-lg border border-[color:var(--border)] object-cover"
-            data-deck-thumb="image"
-          />
-        ) : (
-          <DrawingPlaceholder />
-        )}
+        <DeckThumb item={item} />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-1.5">
             {item.quoteStep ? (
@@ -127,11 +196,59 @@ function Card({
   );
 }
 
+function DropZone({
+  hot,
+  onHot,
+  onFile,
+  children,
+  className,
+}: {
+  hot: boolean;
+  onHot: (v: boolean) => void;
+  onFile: (file: File) => void;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div
+      className={[className, hot ? "ring-2 ring-[color:var(--accent)]/60" : ""].filter(Boolean).join(" ")}
+      data-deck-drop
+      onDragEnter={(event) => {
+        event.preventDefault();
+        onHot(true);
+      }}
+      onDragOver={(event) => {
+        event.preventDefault();
+        onHot(true);
+      }}
+      onDragLeave={() => onHot(false)}
+      onDrop={(event) => {
+        event.preventDefault();
+        onHot(false);
+        const file = event.dataTransfer.files?.[0];
+        if (file) onFile(file);
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
 /** X9: stacked-card carousel of engineering tasks. Hero when idle, a pile when a task is active. */
-export function EngineeringDeck({ items, hero }: { items: RailConversation[]; hero: boolean }) {
+export function EngineeringDeck({
+  items,
+  hero,
+  onDropOpened,
+}: {
+  items: RailConversation[];
+  hero: boolean;
+  /** After a drop opens the drawing — parent shows the quote/discuss prompt + stage highlight. */
+  onDropOpened?: (conversationId: string) => void;
+}) {
   const reduced = useReducedMotion();
   const [order, setOrder] = useState<string[]>([]);
   const [fanned, setFanned] = useState(false);
+  const [dropHot, setDropHot] = useState(false);
   const pendingItems = useTaskQueue((s) => s.items);
   const parkedIds = useTaskQueue((s) => s.parkedIds);
   const ids = useMemo(() => items.map((i) => i.id), [items]);
@@ -160,59 +277,103 @@ export function EngineeringDeck({ items, hero }: { items: RailConversation[]; he
   const byId = new Map(items.map((i) => [i.id, i]));
   const ordered = order.map((id) => byId.get(id)).filter((i): i is RailConversation => Boolean(i));
 
+  const onFile = (file: File) => {
+    void (async () => {
+      const opened = await desk.dropDrawingOnEngineering(file);
+      if (opened?.conversationId) onDropOpened?.(opened.conversationId);
+    })();
+  };
+
   if (!ordered.length) {
     return hero ? (
-      <div className="flex h-full items-center justify-center" data-deck-empty>
-        <p className="font-display text-lg text-[color:var(--fg)]/70">No engineering tasks waiting</p>
-      </div>
+      <DropZone
+        hot={dropHot}
+        onHot={setDropHot}
+        onFile={onFile}
+        className="flex h-full flex-col items-center justify-center gap-2 px-4"
+      >
+        <p className="font-display text-lg text-[color:var(--fg)]/70" data-deck-empty>
+          No engineering tasks waiting
+        </p>
+        <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-[color:var(--muted)]/70">
+          Drop a drawing here
+        </p>
+      </DropZone>
     ) : null;
   }
 
   if (reduced) {
     return (
-      <ul className="flex gap-3 overflow-x-auto" data-lenis-prevent>
-        {ordered.map((item) => (
-          <li key={item.id} className="w-56 shrink-0">
-            <button type="button" className="w-full rounded-xl border border-[color:var(--border)] p-3 text-left" onClick={() => void desk.selectConversation(item.id)}>
-              {item.title}
-            </button>
-          </li>
-        ))}
-      </ul>
+      <DropZone hot={dropHot} onHot={setDropHot} onFile={onFile} className="flex flex-col gap-3">
+        <ul className="flex gap-3 overflow-x-auto" data-lenis-prevent>
+          <AnimatePresence initial={false} mode="popLayout">
+            {ordered.map((item) => (
+              <motion.li
+                key={item.id}
+                className="w-56 shrink-0"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+              >
+                <button
+                  type="button"
+                  className="w-full rounded-xl border border-[color:var(--border)] p-3 text-left"
+                  onClick={() => void desk.selectConversation(item.id)}
+                >
+                  <div className="mb-2">
+                    <DeckThumb item={item} />
+                  </div>
+                  {item.title}
+                </button>
+              </motion.li>
+            ))}
+          </AnimatePresence>
+        </ul>
+      </DropZone>
     );
   }
 
   const visible = ordered.slice(0, MAX_VISIBLE);
+  const frontId = visible[0]?.id;
   return (
-    <div
-      className={hero ? "flex h-full items-center justify-center" : "h-full"}
-      onMouseEnter={() => setFanned(true)}
-      onMouseLeave={() => setFanned(false)}
-      data-deck={hero ? "hero" : "pile"}
+    <DropZone
+      hot={dropHot}
+      onHot={setDropHot}
+      onFile={onFile}
+      className={hero ? "flex h-full flex-col items-center justify-center" : "h-full"}
     >
-      <div className={["relative h-52", hero ? "w-[min(420px,80%)]" : "w-40"].join(" ")} style={{ perspective: 1200 }}>
-        <AnimatePresence initial={false}>
-          {visible.map((item, i) => {
-            const parked = parkedApprovalForConversation(pendingItems, parkedIds, item);
-            return (
-              <Card
-                key={item.id}
-                item={item}
-                depth={i}
-                fanned={fanned}
-                front={i === 0}
-                onOpen={() => void desk.selectConversation(item.id)}
-                parkedTitle={parked?.title}
-              />
-            );
-          })}
-        </AnimatePresence>
-        {ordered.length > MAX_VISIBLE ? (
-          <span className="absolute -top-8 right-0 rounded-full bg-black/60 px-2 py-0.5 font-mono text-[10px] text-[color:var(--muted)]">
-            +{ordered.length - MAX_VISIBLE}
-          </span>
-        ) : null}
+      <div
+        className={hero ? "flex h-full items-center justify-center" : "h-full"}
+        onMouseEnter={() => setFanned(true)}
+        onMouseLeave={() => setFanned(false)}
+        data-deck={hero ? "hero" : "pile"}
+      >
+        <div className={["relative h-52", hero ? "w-[min(420px,80%)]" : "w-40"].join(" ")} style={{ perspective: 1200 }}>
+          <AnimatePresence initial={false}>
+            {visible.map((item, i) => {
+              const parked = parkedApprovalForConversation(pendingItems, parkedIds, item);
+              return (
+                <Card
+                  key={item.id}
+                  item={item}
+                  depth={i}
+                  fanned={fanned}
+                  front={i === 0}
+                  morphLayoutId={i === 0 && frontId ? stageMorphLayoutId(frontId) : undefined}
+                  onOpen={() => void desk.selectConversation(item.id)}
+                  parkedTitle={parked?.title}
+                />
+              );
+            })}
+          </AnimatePresence>
+          {ordered.length > MAX_VISIBLE ? (
+            <span className="absolute -top-8 right-0 rounded-full bg-black/60 px-2 py-0.5 font-mono text-[10px] text-[color:var(--muted)]">
+              +{ordered.length - MAX_VISIBLE}
+            </span>
+          ) : null}
+        </div>
       </div>
-    </div>
+    </DropZone>
   );
 }

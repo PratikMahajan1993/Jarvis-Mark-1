@@ -2,6 +2,7 @@
 
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useMemo } from "react";
+import { hitlApprovalLayoutId } from "@/core/chrome/hitlLayout";
 import * as desk from "@/core/desk/controller";
 import { useDesk } from "@/core/stores/deskStore";
 import { startParkedExpiryWatcher, useTaskQueue } from "@/core/stores/taskQueueStore";
@@ -22,7 +23,12 @@ export function TaskDock() {
   const count = parked.length + (engineering.length ? 1 : 0);
 
   useEffect(() => {
-    startParkedExpiryWatcher();
+    // On client TTL: chip is removed in the store; reopen Authorize when the turn can accept it.
+    startParkedExpiryWatcher({
+      onTtlExpired: (action) => {
+        desk.resumeHitl(action);
+      },
+    });
   }, []);
 
   return (
@@ -34,25 +40,21 @@ export function TaskDock() {
       <ul className="pointer-events-auto flex flex-col items-end gap-2">
         <AnimatePresence initial={false}>
           {parked.map((action) => (
-            <motion.li
-              key={action.id}
-              layout
-              initial={{ opacity: 0, x: 24, scale: 0.9 }}
-              animate={{ opacity: 1, x: 0, scale: 1 }}
-              exit={{ opacity: 0, x: 24, scale: 0.9 }}
-              transition={SPRING.chip}
-            >
-              <button
+            <li key={action.id}>
+              <motion.button
                 type="button"
+                layoutId={hitlApprovalLayoutId(action.id)}
+                transition={SPRING.chip}
                 onClick={() => desk.resumeHitl(action)}
                 title={`${action.title}: reopen to Authorize or Reject`}
                 className="group flex max-w-[44px] items-center gap-2 overflow-hidden rounded-full border border-[color:var(--accent)]/40 bg-black/55 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.12em] text-[color:var(--accent)] backdrop-blur transition-[max-width] duration-300 hover:max-w-[240px] focus-visible:max-w-[240px]"
+                style={{ borderRadius: 9999 }}
                 data-dock-chip="approval"
               >
                 <span className="h-2 w-2 shrink-0 rounded-full bg-[color:var(--accent)]" aria-hidden />
                 <span className="truncate whitespace-nowrap">{action.title}</span>
-              </button>
-            </motion.li>
+              </motion.button>
+            </li>
           ))}
           {engineering.length ? (
             <motion.li

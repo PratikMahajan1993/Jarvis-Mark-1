@@ -18,6 +18,10 @@ export type RailConversation = {
   verifyWarnings?: number;
   draftTotal?: string;
   thumbnailUrl?: string;
+  fileSha256?: string;
+  localName?: string;
+  mime?: string;
+  filename?: string;
 };
 
 function shortTitle(title: string) {

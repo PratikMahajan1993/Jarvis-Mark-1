@@ -3,10 +3,8 @@ import type { PendingAction } from "@/lib/types";
 export const DEFAULT_PARKED_TTL_MS = 30 * 60 * 1000;
 
 type LoosePending = PendingAction & {
-  created_at?: string;
   expires_at?: string;
   expiresAt?: string;
-  createdAt?: string;
 };
 
 function parseTime(v: unknown): number | undefined {
@@ -18,7 +16,10 @@ function parseTime(v: unknown): number | undefined {
   return undefined;
 }
 
-/** Absolute expiry instant (ms) for a parked approval. */
+/**
+ * Absolute expiry instant (ms) for a parked approval.
+ * Explicit server `expires_at` wins; otherwise the clock is parkedAt + 30 min.
+ */
 export function pendingExpiryAtMs(action: PendingAction, parkedAtMs?: number): number {
   const loose = action as LoosePending;
   const payload = action.payload || {};
@@ -27,10 +28,7 @@ export function pendingExpiryAtMs(action: PendingAction, parkedAtMs?: number): n
     parseTime(payload.expires_at ?? payload.expiresAt ?? payload.expiry);
   if (explicit != null) return explicit;
 
-  const created =
-    parseTime(loose.created_at ?? loose.createdAt) ??
-    parseTime(payload.created_at ?? payload.createdAt);
-  const base = created ?? parkedAtMs ?? Date.now();
+  const base = parkedAtMs ?? Date.now();
   return base + DEFAULT_PARKED_TTL_MS;
 }
 

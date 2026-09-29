@@ -1,8 +1,11 @@
 "use client";
 
-import { LayoutGroup, motion } from "motion/react";
+import { LayoutGroup, motion, useReducedMotion } from "motion/react";
 import { useEffect, useState } from "react";
 import { EngineeringDeck, engineeringTasks } from "./EngineeringDeck";
+import { stageMorphLayoutId } from "./deckCardMeta";
+import type { DropIntent } from "./dropIntent";
+import * as desk from "@/core/desk/controller";
 import { registerServerDraft } from "@/core/desk/drafts";
 import { ConverseStrip } from "@/components/bench/ConverseStrip";
 import { DrawingStage, type StageFocusMode } from "@/components/bench/DrawingStage";
@@ -31,6 +34,37 @@ function AgentDots({ agents }: { agents: AgentNode[] }) {
   );
 }
 
+function DropIntentPrompt({ onChoose }: { onChoose: (intent: DropIntent) => void }) {
+  return (
+    <div
+      className="pointer-events-auto absolute bottom-24 left-1/2 z-[3] w-[min(420px,90%)] -translate-x-1/2 rounded-2xl border border-[color:var(--border)] bg-black/75 p-4 text-center shadow-[0_18px_40px_rgba(0,0,0,0.45)]"
+      role="dialog"
+      aria-label="Drawing drop intent"
+      data-deck-drop-prompt
+    >
+      <p className="font-display text-base text-[color:var(--fg)]">
+        Start a quote workflow, or only view the drawing and discuss it?
+      </p>
+      <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+        <button
+          type="button"
+          className="rounded-full border border-[color:var(--accent)]/50 bg-[color:var(--accent)]/15 px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-[color:var(--accent)]"
+          onClick={() => onChoose("quote")}
+        >
+          Start quote
+        </button>
+        <button
+          type="button"
+          className="rounded-full border border-[color:var(--border)] px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-[color:var(--muted)]"
+          onClick={() => onChoose("discuss")}
+        >
+          View and discuss
+        </button>
+      </div>
+    </div>
+  );
+}
+
 const AREAS: Record<StageFocusMode, { stage: string; sheet: string; strip: string }> = {
   normal: { stage: "1 / 1 / 7 / 9", sheet: "1 / 9 / 9 / 13", strip: "7 / 1 / 9 / 9" },
   stage: { stage: "1 / 1 / 7 / 12", sheet: "1 / 12 / 9 / 13", strip: "7 / 1 / 9 / 12" },
@@ -39,6 +73,7 @@ const AREAS: Record<StageFocusMode, { stage: string; sheet: string; strip: strin
 /** Engineering (order 300): the drawing stage and the quote sheet; the orb is a dim side light. */
 export default function EngineeringSection({ id }: SectionProps) {
   const active = useSectionState((s) => s.active === id);
+  const reduced = useReducedMotion();
   const scene = useDesk((s) => s.scene);
   const focus = useDesk((s) => s.conversationFocus);
   const voice = useDesk((s) => s.voice);
@@ -48,6 +83,8 @@ export default function EngineeringSection({ id }: SectionProps) {
   const sessionId = useDesk((s) => s.activeSession);
   const drawingChat = useDesk((s) => s.drawingChat);
   const [focusMode, setFocusMode] = useState<StageFocusMode>("normal");
+  const [dropHighlight, setDropHighlight] = useState(false);
+  const [dropPrompt, setDropPrompt] = useState(false);
   const areas = AREAS[focusMode];
   const conversations = useDesk((s) => s.desk);
   const tasks = engineeringTasks(conversations);
@@ -61,20 +98,44 @@ export default function EngineeringSection({ id }: SectionProps) {
     [activeConversationId, focusMode],
   );
 
-  const hasDrawing = Boolean(
-    drawingChat?.open !== false &&
-      conversationToAttachment({
-        filename: drawingChat?.filename,
-        local_name: drawingChat?.local_name,
-        local_path: drawingChat?.local_path,
-        mime: drawingChat?.mime,
-      }),
-  );
+  useEffect(() => {
+    if (!dropHighlight) return;
+    const timer = window.setTimeout(() => setDropHighlight(false), 2400);
+    return () => window.clearTimeout(timer);
+  }, [dropHighlight]);
+
+  const focusAttachment = conversationToAttachment(focus);
+  const chatAttachment =
+    drawingChat?.open === false
+      ? null
+      : conversationToAttachment({
+          filename: drawingChat?.filename,
+          local_name: drawingChat?.local_name,
+          local_path: drawingChat?.local_path,
+          mime: drawingChat?.mime,
+        });
+  const hasDrawing = Boolean(chatAttachment || focusAttachment);
 
   const noActiveTask = !hasDrawing;
+  /** Active stage task leaves the pile so shared layoutId is unique (X9 morph). */
+  const deckItems =
+    hasDrawing && activeConversationId ? tasks.filter((t) => t.id !== activeConversationId) : tasks;
+  const morphLayoutId =
+    !reduced && hasDrawing && activeConversationId ? stageMorphLayoutId(activeConversationId) : undefined;
+
+  const onDropOpened = () => {
+    setDropHighlight(true);
+    setDropPrompt(true);
+  };
+
+  const onDropIntent = (intent: DropIntent) => {
+    setDropPrompt(false);
+    void desk.resolveEngineeringDropIntent(intent);
+  };
+
   return (
     <LayoutGroup id="engineering">
-      <div className="grid h-full grid-cols-12 grid-rows-8 gap-3" data-focus={focusMode}>
+      <div className="relative grid h-full grid-cols-12 grid-rows-8 gap-3" data-focus={focusMode}>
         <motion.div layout transition={SPRING.pane} className="relative min-h-0 min-w-0" style={{ gridArea: areas.stage }}>
           <DrawingStage
             scene={scene}
@@ -83,18 +144,22 @@ export default function EngineeringSection({ id }: SectionProps) {
             active={active}
             focusMode={focusMode}
             onFocusModeChange={setFocusMode}
+            morphLayoutId={morphLayoutId}
+            highlight={dropHighlight}
           />
         </motion.div>
 
         {noActiveTask ? (
           <div className="pointer-events-auto absolute inset-x-[8%] top-[14%] z-[2] h-[46%]" data-slot="engineering.deck-empty">
-            <EngineeringDeck items={tasks} hero />
+            <EngineeringDeck items={deckItems} hero onDropOpened={onDropOpened} />
           </div>
-        ) : tasks.length ? (
+        ) : deckItems.length ? (
           <div className="absolute bottom-16 left-2 z-[2] h-52 w-40" data-slot="engineering.side">
-            <EngineeringDeck items={tasks} hero={false} />
+            <EngineeringDeck items={deckItems} hero={false} onDropOpened={onDropOpened} />
           </div>
         ) : null}
+
+        {dropPrompt ? <DropIntentPrompt onChoose={onDropIntent} /> : null}
 
         <motion.div layout transition={SPRING.pane} className="relative min-h-0 min-w-0" style={{ gridArea: areas.sheet }}>
           <QuoteSheet scene={scene} hasDrawing={hasDrawing} sessionId={sessionId} focused={focusMode === "stage"} />
