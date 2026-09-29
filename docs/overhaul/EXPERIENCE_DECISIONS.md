@@ -67,8 +67,9 @@ Each decision has an ID (`X#`). Phase 3 commits and tests cite these IDs.
 
 - **One orb, drawn only by the substrate.** Removed:
   - the Evil Eye: its shader path, noise texture, `STOCK_EYE`, `EvilEye.tsx`, and the Monitor eye specs;
-  - the `JarvisCore` DOM rings;
-  - React Bits `Particles` and `LightRays` on the desk.
+  - `JarvisCore`: its CSS halo, core and nucleus, its rotating rings and ticks, and its 2D-canvas dust loop (owner chose option a, 2026-09-29).
+  
+  React Bits `Particles` and `LightRays` are already unused on the desk. They stay vendored only.
 - **Presets** are tunable data in `substrate/presets.ts`:
 
 | Preset | Centre (x, y from top-left) | Scale | Accent | Dim | Spread | Swirl |
@@ -176,5 +177,6 @@ Each decision has an ID (`X#`). Phase 3 commits and tests cite these IDs.
 
 1. **X1:** the landing also plays on refresh, in its short 0.6 s form.
 2. **X4:** Engineering → Casual happens only on an explicit request, never on every casual utterance.
-3. **X5:** the `JarvisCore` DOM rings and the React Bits `Particles` / `LightRays` leave the desk, so the substrate orb is the only orb.
+3. ~~**X5:** `JarvisCore` leaves the desk.~~ **Confirmed 2026-09-29** (option a).
 4. **X8:** parked approvals are tracked client-side, so no database migration is needed.
+5. **X5, particle model:** whether the orb becomes a particle swarm with a shape formula per section and per state, in the style of particles.casberry.in. See the owner thread from 2026-09-29.

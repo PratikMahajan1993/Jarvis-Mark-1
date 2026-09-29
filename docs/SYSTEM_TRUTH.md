@@ -75,7 +75,7 @@ A landing overlay plays on every app open, then the owner lands on the saved (pi
 - **Four layers:** L0 backdrop (CSS, 0.3× parallax) · L1 substrate (fixed canvas) · L2 content (sections, 1×) · L3 foreground (decor 1.2–1.4×, then chrome: StatusCluster, SectionNav, TaskDock, CommandBaton). Modal / toast / landing tiers sit above. Tailwind z-tokens only.
 - **Scroll:** Lenis smooth scroll + mandatory snap; each section `100dvh`; inner scroll areas `data-lenis-prevent`. Scroll position → orb uniforms via `useScroll`/`useTransform`, blended between neighbouring presets, ≤1 worker post per frame.
 - **Lazy mount:** sections declare `lazy {mountWithin, unmountBeyond}` (Engineering `{1, 2}`, prefetched during landing). Replaces the old "all panels always mounted" rule.
-- **Evil Eye removed** entirely; `JarvisCore` DOM rings and React Bits WebGL bits leave the desk. The substrate orb is the only orb.
+- **Evil Eye removed** entirely; `JarvisCore` (CSS rings, halo, 2D dust canvas) removed. The substrate orb is the only orb.
 - **Extensibility:** features are `features/<id>/` manifests (sections, cards, approvals) plus `backend/app/features/<id>/` (routes, tools, intents, approvals, jobs), registered by one line each and built only on `@/sdk`. See `PLATFORM_DECISIONS.md`.
 
 ### 2.2 Turn FSM (Server is Truth)
