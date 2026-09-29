@@ -9,15 +9,29 @@ Persistent guidance for Cursor agents working in this repo during capability tes
 | `docs/SYSTEM_TRUTH.md` | **Single source of truth** — current state, locked decisions, architecture, all rules |
 | `docs/ROADMAP.md` | **Next steps & priorities** — phased execution plan |
 | `docs/CURRENT.md` | **As-built** — what works on the desk today |
+| `docs/overhaul/EXPERIENCE_DECISIONS.md` | Scroll-substrate HUD decisions (`X#`) — landing, sections, orb, layers, queue, deck |
+| `docs/overhaul/PLATFORM_DECISIONS.md` | Feature platform decisions (`P#`) — folders, manifests, SDK, stores, backend wiring, Phase 3 order |
 | `work/CAPABILITY_TEST_MATRIX.md` | Capability test IDs and log |
 
-## Always-On Rules
+## Rules
 
-| Rule | Role |
-|------|------|
-| `.cursor/rules/core/00-jarvis-core.mdc` | Stack, HITL, ports, HUD shape, playbooks |
-| `.cursor/rules/ops/42-dispatch.mdc` | Test-run: observe → dispatch → continue |
-| `.cursor/rules/ops/40-tests.mdc` | Offline-first tests, `live_service` marker |
+| Rule | Applies | Role |
+|------|---------|------|
+| `.cursor/rules/core/00-jarvis-core.mdc` | Always | Stack, HITL, ports, HUD shape, playbooks |
+| `.cursor/rules/frontend/22-scroll-substrate.mdc` | `frontend/src/**` | Root-hoisted substrate, 4-tier layers, scroll/orb pipeline, feature templates |
+| `.cursor/rules/ops/42-dispatch.mdc` | On request | Test-run protocol; subagents only when the user asks |
+
+## HUD Architecture (Scroll Substrate)
+
+One page, not three lenses. A landing overlay preloads the desk, then the owner lands on the saved or ambient section of a vertically scrolling page: **Monitor → Casual → Engineering** (feature sections slot in by `order`).
+
+- **Hoisting:** `app/layout.tsx` → `JarvisRoot` owns the only WebGL context (`frontend/src/substrate/`, worker `OffscreenCanvas`) for the tab's lifetime. It never remounts on route change.
+- **Layers:** L0 backdrop · L1 substrate · L2 sections/cards · L3 decor + chrome (StatusCluster, SectionNav, TaskDock, CommandBaton); modal/toast/landing tiers above. Tailwind z-tokens only.
+- **Orb:** one persistent orb; section presets blend with scroll; FSM states morph shape only (HITL also centres it). Evil Eye is gone.
+- **State:** `orchestratorFsm.ts` is a pure reducer + `effectsFor`; stores under `frontend/src/core/stores/` run effects; `core/scroll/director.ts` owns every programmatic scroll.
+- **Adding things:** a feature is `frontend/src/features/<id>/feature.ts` (+ `backend/app/features/<id>/`) registered with one line, importing Jarvis code only via `@/sdk`. Start with `npm run new:feature <id>`. Templates: `.cursor/rules/frontend/22-scroll-substrate.mdc` §6–9. **Never edit `core/`, `substrate/`, the FSM or the root layout to ship a feature.**
+
+Until overhaul Phase 3 merges, the running HUD is the single-pane `OrchestratorShell` described in `docs/CURRENT.md`.
 
 ## Skills (Auto-Routed by Description)
 
@@ -41,7 +55,7 @@ The user specifies the `subagent_type` and `model` at dispatch time — no defau
 
 | Agent | Owns | Needs Desk Machine? |
 |-------|------|---------------------|
-| `jarvis-uiux` | Layout, React Bits, weather/tasks panels, visual polish | No for rendering/layout/scroll/card-state — cloud worker can build/serve HUD and verify headlessly. Yes only when check depends on live Hermes content. |
+| `jarvis-uiux` | Sections, cards, layers, React Bits, visual polish | No for rendering/layout/scroll/card-state — cloud worker can build/serve HUD and verify headlessly. Yes only when check depends on live Hermes content. |
 | `jarvis-voice` | Gemini TTS, `/api/tts`, Charon playback, silence on quota | Yes — needs the Gemini speech key and a speaker |
 | `jarvis-workflows` | Mail, HITL, RFQ/quote, calendar, Hermes/snapshot tools | Yes for live mail/Hermes; no for logic + `backend/tests` |
 | `jarvis-builder` | General agreed implementation / restarts / verify | Only for restarts and live verification against Hermes/Gmail |
@@ -64,16 +78,9 @@ backend/
   13-turn-ledger.mdc          # Server turn ledger (gated, default off)
 domain/
   30-quote-playbook.mdc       # Quote workflow: provenance, MHR, proof, HITL
-  31-gcode-optimiser.mdc      # G-code: draft, verify, never transmit
-  32-master-data.mdc          # Temporal lookups, aliases, demo attestation
-  33-knowledge-rag.mdc        # Three planes, ingest bans, embeddings
-  34-drawing-vision.mdc       # Two gates: consent + quota, local-first
 frontend/
-  20-hud-shell.mdc            # FSM reducer, ledger vs workspace, reconciliation
-  21-react-bits.mdc           # Accents placement, headless testing
-  22-frontend-uiux.mdc        # Single pane, lenses, substrate, depth, motion
+  22-scroll-substrate.mdc     # Substrate hoisting, 4-tier layers, scroll/orb, feature templates
 ops/
-  40-tests.mdc                # live_service marker, offline-first, regressions
   42-dispatch.mdc             # Roster, placement, kickoff, test protocol
 ```
 
