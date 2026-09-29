@@ -50,6 +50,8 @@ import {
 } from "@/core/stores/deskStore";
 import { setModalProbe } from "@/core/scroll/director";
 import { getSection, hydrateWorkspace, requestSection, setWorkspace } from "@/core/stores/sectionStore";
+import { isDeskNoticeVoice } from "@/core/desk/sectionVoice";
+import { notifyDrawingClosed, pushNotification } from "@/core/stores/notificationStore";
 import { firstUnparked, getParkedIds, hydrateParked, markParked, removePending, setPendingItems, unmarkParked, upsertPending } from "@/core/stores/taskQueueStore";
 import { dispatchTurn, getTurn, onTurnEffect, setTurnLogSession } from "@/core/stores/turnStore";
 import { runAutosave } from "./autosave";
@@ -164,7 +166,9 @@ function clearAgents() {
 }
 
 export function showVoice(text: string) {
-  const next = (text || "").trim() || IDLE_VOICE;
+  const trimmed = (text || "").trim();
+  // Desk notices belong on the bell overlay, never on Monitor / Casual / Engineering captions.
+  const next = !trimmed || isDeskNoticeVoice(trimmed) ? IDLE_VOICE : trimmed;
   setDesk({ voiceVisible: false });
   window.setTimeout(() => setDesk({ voice: next, voiceVisible: true }), 180);
 }
@@ -176,6 +180,7 @@ function clearVoice() {
 
 function speakLine(line: string) {
   showVoice(line);
+  if (isDeskNoticeVoice(line)) return;
   ctl.speakGen += 1;
   const gen = ctl.speakGen;
   const started = dispatchTurn({ type: "SPEAK_START", text: line });
@@ -373,8 +378,10 @@ export function applyResponse(
   applyServerHint(result.ui);
   const view = result.drawing_chat;
   if (view && typeof view === "object") {
-    if (view.open === false) setDesk({ drawingChat: null });
-    else if (view.filename || view.local_name) {
+    if (view.open === false) {
+      setDesk({ drawingChat: null });
+      notifyDrawingClosed();
+    } else if (view.filename || view.local_name) {
       setDesk({ drawingChat: view });
       if (view.session_id) setSession(view.session_id);
       if (view.conversation_id) setDesk({ activeConversationId: view.conversation_id });
@@ -382,8 +389,13 @@ export function applyResponse(
   }
 
   const nextAction = firstUnparked(result.pending || []);
-  const display = (result.reply || result.speak || "").trim() || IDLE_VOICE;
-  const tts = (result.speak || result.reply || "").trim();
+  const rawDisplay = (result.reply || result.speak || "").trim() || IDLE_VOICE;
+  const display = isDeskNoticeVoice(rawDisplay) ? IDLE_VOICE : rawDisplay;
+  const ttsRaw = (result.speak || result.reply || "").trim();
+  const tts = isDeskNoticeVoice(ttsRaw) ? "" : ttsRaw;
+  if (isDeskNoticeVoice(rawDisplay) || isDeskNoticeVoice(ttsRaw)) {
+    notifyDrawingClosed();
+  }
   const nextScene = sceneHasBoardContent(result.scene) ? result.scene! : EMPTY_SCENE;
   const boardOwnsHud = sceneHasBoardContent(nextScene) || nextAction?.kind === "email_compose";
   if (boardOwnsHud && getSection().workspace !== "engineering") {
@@ -590,6 +602,14 @@ export function parkHitl(): PendingAction | null {
   markParked(action.id);
   liveLog("hitl", { phase: "park", action_kind: action.kind, action_id: action.id }, { sessionId: session() });
   showVoice(IDLE_VOICE);
+  pushNotification({
+    id: `hitl-${action.id}`,
+    title: action.title || "Authorization needed",
+    body: action.summary,
+    priority: "high",
+    kind: "hitl",
+    actionId: action.id,
+  });
   return action;
 }
 
@@ -919,8 +939,11 @@ export async function resolveEngineeringDropIntent(intent: DropIntent) {
 export function closeDrawing() {
   const chat = getDesk().drawingChat;
   const sessionId = chat?.session_id || session();
-  setDesk({ drawingChat: null });
-  speakLine("Drawing closed.");
+  if (chat) {
+    setDesk({ drawingChat: null });
+    notifyDrawingClosed();
+    showVoice(IDLE_VOICE);
+  }
   void api.closeDrawing(sessionId).catch(() => null);
 }
 

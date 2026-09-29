@@ -1,6 +1,7 @@
 "use client";
 
 import GradientText from "@/components/react-bits/GradientText";
+import { Notifications } from "@/core/chrome/Notifications";
 import { useTurnView } from "@/core/desk/useTurnView";
 import { setDesk, useDesk } from "@/core/stores/deskStore";
 import { togglePinned, useSectionState } from "@/core/stores/sectionStore";
@@ -44,7 +45,7 @@ export function StatusCluster() {
           <span className="text-[color:var(--fg)]/90">{focusTitle}</span>
         </p>
       </div>
-      <div className={["pointer-events-auto flex items-center gap-2", hitl ? "opacity-45" : ""].join(" ")}>
+      <div className="pointer-events-auto flex items-center gap-2">
         <button
           type="button"
           aria-pressed={pinned}
@@ -56,14 +57,19 @@ export function StatusCluster() {
             pinned
               ? "border-[color:var(--accent)]/45 bg-[color:var(--accent)]/12 text-[color:var(--accent)]"
               : "border-[color:var(--border)] bg-black/40 text-[color:var(--muted)] hover:border-[color:var(--accent)]/25 hover:text-[color:var(--accent)]/85",
+            hitl ? "opacity-45" : "",
           ].join(" ")}
         >
           <PinIcon pinned={pinned} />
         </button>
+        <Notifications />
         <button
           type="button"
           onClick={() => setDesk({ prefsOpen: true })}
-          className="rounded-full border border-[color:var(--border)] bg-black/40 px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-[color:var(--muted)] transition hover:border-[color:var(--accent)]/40 hover:text-[color:var(--accent)]"
+          className={[
+            "rounded-full border border-[color:var(--border)] bg-black/40 px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-[color:var(--muted)] transition hover:border-[color:var(--accent)]/40 hover:text-[color:var(--accent)]",
+            hitl ? "opacity-45" : "",
+          ].join(" ")}
           title="Preferences: Gmail, voice and connectors"
         >
           Prefs

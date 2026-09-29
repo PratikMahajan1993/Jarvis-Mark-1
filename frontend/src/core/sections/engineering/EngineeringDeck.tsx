@@ -341,15 +341,18 @@ export function EngineeringDeck({
       hot={dropHot}
       onHot={setDropHot}
       onFile={onFile}
-      className={hero ? "flex h-full flex-col items-center justify-center" : "h-full"}
+      className={hero ? "flex h-full w-full flex-col items-center justify-end" : "h-full"}
     >
       <div
-        className={hero ? "flex h-full items-center justify-center" : "h-full"}
+        className={hero ? "flex w-full items-end justify-center pb-1" : "h-full"}
         onMouseEnter={() => setFanned(true)}
         onMouseLeave={() => setFanned(false)}
         data-deck={hero ? "hero" : "pile"}
       >
-        <div className={["relative h-52", hero ? "w-[min(420px,80%)]" : "w-40"].join(" ")} style={{ perspective: 1200 }}>
+        <div
+          className={["relative h-52 shrink-0", hero ? "w-full max-w-[420px]" : "w-40"].join(" ")}
+          style={{ perspective: 1200 }}
+        >
           <AnimatePresence initial={false}>
             {visible.map((item, i) => {
               const parked = parkedApprovalForConversation(pendingItems, parkedIds, item);

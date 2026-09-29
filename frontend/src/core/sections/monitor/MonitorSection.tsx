@@ -4,6 +4,7 @@ import { ActivityStream } from "@/components/orchestrator/ActivityStream";
 import { AgentOrbit } from "@/components/orchestrator/monitor/AgentOrbit";
 import { SuggestedTasksPanel } from "@/components/orchestrator/SuggestedTasksPanel";
 import { Slot } from "@/sdk";
+import { sectionVoiceLine } from "@/core/desk/sectionVoice";
 import * as desk from "@/core/desk/controller";
 import { useTurnView } from "@/core/desk/useTurnView";
 import type { SectionProps } from "@/core/sections/defineSection";
@@ -19,7 +20,8 @@ export function MonitorSection(_props: SectionProps) {
   const suggested = useDesk((s) => s.suggested);
   const agents = useDesk((s) => s.agents);
   const activity = useDesk((s) => s.activity);
-  const line = (voiceVisible && voice ? voice : focusTitle).slice(0, 120);
+  const caption = sectionVoiceLine(voiceVisible && voice ? voice : "", focusTitle);
+  const line = (caption || focusTitle).slice(0, 120);
 
   return (
     <div className="grid h-full grid-cols-12 grid-rows-8 gap-3">

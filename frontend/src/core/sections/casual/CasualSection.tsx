@@ -8,6 +8,7 @@ import { Orchestra } from "@/components/orchestrator/Orchestra";
 import { SuggestedTasksPanel } from "@/components/orchestrator/SuggestedTasksPanel";
 import { WeatherCard } from "@/components/orchestrator/WeatherCard";
 import * as desk from "@/core/desk/controller";
+import { sectionVoiceLine } from "@/core/desk/sectionVoice";
 import { useTurnView } from "@/core/desk/useTurnView";
 import type { SectionProps } from "@/core/sections/defineSection";
 import {
@@ -28,7 +29,7 @@ function CasualVoiceLine() {
   const showCenterVoice = voiceVisible && !boardOwnsCenter;
 
   // While a run is live, keep the tool or spoken line. Never fall back to idle.
-  const spoken = (showCenterVoice && voice && voice !== IDLE_VOICE ? voice : "").trim();
+  const spoken = (showCenterVoice && voice && voice !== IDLE_VOICE ? sectionVoiceLine(voice, "") : "").trim();
   const liveLine = (spoken || runStatus || "Orchestrating…").trim();
   const line =
     (thinking ? liveLine : spoken || (boardOwnsCenter ? "On the board" : IDLE_VOICE)).trim() || IDLE_VOICE;

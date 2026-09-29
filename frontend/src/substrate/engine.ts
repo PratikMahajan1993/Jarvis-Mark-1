@@ -262,6 +262,8 @@ export class SubstrateEngine {
       renderer = new Renderer({
         canvas: canvas as HTMLCanvasElement,
         alpha: true,
+        // Default framebuffer has no depth. SwarmPass must not depth-test: ogl's
+        // clear mask follows this flag, so a depth attachment would never be cleared.
         depth: false,
         antialias: false,
         premultipliedAlpha: true,

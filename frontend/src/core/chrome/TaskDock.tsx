@@ -1,35 +1,23 @@
 "use client";
 
 import { AnimatePresence, motion } from "motion/react";
-import { useEffect, useMemo } from "react";
-import { hitlApprovalLayoutId } from "@/core/chrome/hitlLayout";
+import { useMemo } from "react";
 import * as desk from "@/core/desk/controller";
 import { useDesk } from "@/core/stores/deskStore";
-import { startParkedExpiryWatcher, useTaskQueue } from "@/core/stores/taskQueueStore";
 import { SPRING } from "@/lib/pane/springs";
 
 const ENGINEERING_KINDS = new Set(["drawing", "workflow", "job"]);
 
 /**
- * L3 right edge (X8): parked approvals as chips, plus one engineering-tasks chip.
- * A chip only reopens the full Authorize / Reject modal; it can never decide.
+ * L3 right edge (X8): engineering-tasks chip. Parked HITL lives in Notifications.
  */
 export function TaskDock() {
-  const items = useTaskQueue((s) => s.items);
-  const parkedIds = useTaskQueue((s) => s.parkedIds);
-  const parked = useMemo(() => items.filter((a) => parkedIds.includes(a.id)), [items, parkedIds]);
   const conversations = useDesk((s) => s.desk);
-  const engineering = conversations.filter((c) => ENGINEERING_KINDS.has((c.kindLabel || "").toLowerCase()));
-  const count = parked.length + (engineering.length ? 1 : 0);
-
-  useEffect(() => {
-    // On client TTL: chip is removed in the store; reopen Authorize when the turn can accept it.
-    startParkedExpiryWatcher({
-      onTtlExpired: (action) => {
-        desk.resumeHitl(action);
-      },
-    });
-  }, []);
+  const engineering = useMemo(
+    () => conversations.filter((c) => ENGINEERING_KINDS.has((c.kindLabel || "").toLowerCase())),
+    [conversations],
+  );
+  const count = engineering.length ? 1 : 0;
 
   return (
     <aside
@@ -39,23 +27,6 @@ export function TaskDock() {
     >
       <ul className="pointer-events-auto flex flex-col items-end gap-2">
         <AnimatePresence initial={false}>
-          {parked.map((action) => (
-            <li key={action.id}>
-              <motion.button
-                type="button"
-                layoutId={hitlApprovalLayoutId(action.id)}
-                transition={SPRING.chip}
-                onClick={() => desk.resumeHitl(action)}
-                title={`${action.title}: reopen to Authorize or Reject`}
-                className="group flex max-w-[44px] items-center gap-2 overflow-hidden rounded-full border border-[color:var(--accent)]/40 bg-black/55 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.12em] text-[color:var(--accent)] backdrop-blur transition-[max-width] duration-300 hover:max-w-[240px] focus-visible:max-w-[240px]"
-                style={{ borderRadius: 9999 }}
-                data-dock-chip="approval"
-              >
-                <span className="h-2 w-2 shrink-0 rounded-full bg-[color:var(--accent)]" aria-hidden />
-                <span className="truncate whitespace-nowrap">{action.title}</span>
-              </motion.button>
-            </li>
-          ))}
           {engineering.length ? (
             <motion.li
               key="engineering-tasks"

@@ -153,8 +153,11 @@ export class SwarmPass {
         uBrightness: { value: 1 },
       },
       cullFace: false,
-      depthTest: true,
-      depthWrite: true,
+      // The canvas is created with depth:false, so ogl never clears DEPTH_BUFFER_BIT.
+      // Depth-testing the swarm against that stale buffer hides most of the volume
+      // (back hemisphere, Cortex inner shell) on every section.
+      depthTest: false,
+      depthWrite: false,
     });
     const mesh = new Mesh(gl, { geometry: this.geometry, program: this.program });
     mesh.frustumCulled = false;
@@ -185,7 +188,7 @@ export class SwarmPass {
     this.blurMesh = new Mesh(gl, { geometry: triangle, program: this.blurProgram });
     this.compositeMesh = new Mesh(gl, { geometry: triangle, program: this.compositeProgram });
 
-    this.rtScene = new RenderTarget(gl, { width: 1, height: 1, depth: true });
+    this.rtScene = new RenderTarget(gl, { width: 1, height: 1, depth: false });
     this.rtHalfA = new RenderTarget(gl, { width: 1, height: 1, depth: false });
     this.rtHalfB = new RenderTarget(gl, { width: 1, height: 1, depth: false });
     this.rtQuarterA = new RenderTarget(gl, { width: 1, height: 1, depth: false });

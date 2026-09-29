@@ -14,6 +14,7 @@ import type { AgentNode } from "@/lib/orchestrator";
 import { SPRING } from "@/lib/pane/springs";
 import { conversationToAttachment } from "@/lib/viewerMatch";
 import type { SectionProps } from "@/core/sections/defineSection";
+import { sectionVoiceLine } from "@/core/desk/sectionVoice";
 import { useDesk } from "@/core/stores/deskStore";
 import { useSectionState } from "@/core/stores/sectionStore";
 
@@ -70,6 +71,12 @@ const AREAS: Record<StageFocusMode, { stage: string; sheet: string; strip: strin
   stage: { stage: "1 / 1 / 7 / 12", sheet: "1 / 12 / 9 / 13", strip: "7 / 1 / 9 / 12" },
 };
 
+/** Idle: the bench keeps the stage; the task deck sits under it, above the baton. */
+const IDLE_AREAS: Record<StageFocusMode, { stage: string; sheet: string; strip: string; deck: string }> = {
+  normal: { stage: "1 / 1 / 6 / 9", deck: "6 / 1 / 8 / 9", sheet: "1 / 9 / 9 / 13", strip: "8 / 1 / 9 / 9" },
+  stage: { stage: "1 / 1 / 6 / 12", deck: "6 / 1 / 8 / 12", sheet: "1 / 12 / 9 / 13", strip: "8 / 1 / 9 / 12" },
+};
+
 /** Engineering (order 300): the drawing stage and the quote sheet; the orb is a dim side light. */
 export default function EngineeringSection({ id }: SectionProps) {
   const active = useSectionState((s) => s.active === id);
@@ -85,7 +92,6 @@ export default function EngineeringSection({ id }: SectionProps) {
   const [focusMode, setFocusMode] = useState<StageFocusMode>("normal");
   const [dropHighlight, setDropHighlight] = useState(false);
   const [dropPrompt, setDropPrompt] = useState(false);
-  const areas = AREAS[focusMode];
   const conversations = useDesk((s) => s.desk);
   const tasks = engineeringTasks(conversations);
   const activeConversationId = useDesk((s) => s.activeConversationId);
@@ -115,8 +121,8 @@ export default function EngineeringSection({ id }: SectionProps) {
           mime: drawingChat?.mime,
         });
   const hasDrawing = Boolean(chatAttachment || focusAttachment);
-
   const noActiveTask = !hasDrawing;
+  const areas = noActiveTask ? IDLE_AREAS[focusMode] : AREAS[focusMode];
   /** Active stage task leaves the pile so shared layoutId is unique (X9 morph). */
   const deckItems =
     hasDrawing && activeConversationId ? tasks.filter((t) => t.id !== activeConversationId) : tasks;
@@ -150,7 +156,11 @@ export default function EngineeringSection({ id }: SectionProps) {
         </motion.div>
 
         {noActiveTask ? (
-          <div className="pointer-events-auto absolute inset-x-[8%] top-[14%] z-[2] h-[46%]" data-slot="engineering.deck-empty">
+          <div
+            className="pointer-events-auto relative z-[2] min-h-0 min-w-0 overflow-visible"
+            style={{ gridArea: IDLE_AREAS[focusMode].deck }}
+            data-slot="engineering.deck-empty"
+          >
             <EngineeringDeck items={deckItems} hero onDropOpened={onDropOpened} />
           </div>
         ) : deckItems.length ? (
@@ -169,7 +179,7 @@ export default function EngineeringSection({ id }: SectionProps) {
           <div className="flex h-full min-h-0 items-center gap-4">
             <AgentDots agents={agents} />
             <div className="min-w-0 flex-1">
-              <ConverseStrip line={voiceVisible ? voice : focusTitle} />
+              <ConverseStrip line={sectionVoiceLine(voiceVisible ? voice : "", focusTitle)} />
             </div>
           </div>
         </motion.div>
