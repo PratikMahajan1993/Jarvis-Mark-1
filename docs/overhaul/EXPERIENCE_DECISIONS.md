@@ -215,6 +215,6 @@ The decisions above are still the contract. `docs/CURRENT.md` is the only open-g
 
 - **X1 landing** first frame is server HTML (`LandingFirstFrame`): status line and hairline, before the desk bundle. The desk itself still loads with `ssr: false`. Hermes is named on the status line and does not gate exit. Chrome fade is staggered 80 ms (`Desk.tsx`).
 - **X2 snap** in code is Lenis type `"lock"` (`core/scroll/engine.ts`: one gesture moves one section). This section still says "mandatory". Leave the type until the owner changes this sentence.
-- **X9 `deltaX`:** arrow keys cycle the deck. Horizontal trackpad `deltaX` is not wired.
+- **X9 `deltaX`:** arrow keys and a horizontal trackpad swipe cycle the deck (`deckWheel.ts`). A swipe counts only when horizontal movement is larger than vertical.
 
 In the tree, and not gaps: empty-deck drop target, pdf.js thumbnails in IndexedDB, card-to-stage `layoutId`, HITL-to-chip `layoutId`.

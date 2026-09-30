@@ -109,6 +109,7 @@ No local speech process. Jarvis calls Gemini with voice **Charon** and the brows
 4. Run API + HUD → Preferences → **Connect Gmail** (must complete on the desk machine).
 5. Token saved to `data/google_token.json` (never commit).
 6. If Gmail was connected before Calendar scope existed → **Add Calendar** and re-consent.
+7. A second shop Google account (staff sheets) is separate: Preferences → **Connect another Google account**. Token: `data/google_token_staff.json`. Bind production tabs at `/masterdata` → **Shop logs**. Those tabs are read-only.
 
 ### 4e. Optional research keys
 
@@ -125,6 +126,7 @@ No local speech process. Jarvis calls Gemini with voice **Charon** and the brows
 | `.env` | Always — edit URLs if machine differs |
 | `data/jarvis.db` | Keep conversations, mail state, jobs |
 | `data/google_token.json` | Same OAuth client ID on new machine |
+| `data/google_token_staff.json` | Staff Google account, if connected |
 | `data/memory/` | Keep RAG recall |
 | `data/hermes_sessions.json` | Keep Hermes thread map |
 | `data/canvas/`, `data/inbox/`, `exports/` | If you use them |

@@ -64,7 +64,9 @@ Hermes thread map: `data/hermes_sessions.json` (separate from playbook files). P
 - Hermes warm gateway bridge. Speech is Gemini TTS (Charon); prefetch warms `data/tts_cache/`.
 - Turn log: auto-appended to `work/LIVE_TEST.md` + JSONL + `GET /api/turns/recent`.
 - Local memory upsert/search/forget; quote path through verify + HITL send.
-- Master data on by default (`masterdata_enabled`). Editor at `/masterdata`. A demo/seed rate is stored and is not sendable until `attested_by` is set and the value differs from the shipped seed.
+- Master data on by default (`masterdata_enabled`). Editor at `/masterdata` (Customers, Products, Machines, Materials, Suppliers, MHR floors, Outsource vendors, Shop logs). A product is name, number, customer, unit, and a stock-monitored flag. A demo/seed rate is stored and is not sendable until `attested_by` is set and the value differs from the shipped seed. Once any non-demo customer is active, startup does not insert Deepak, Rajesh, Priya Mehta, or Apex Components again.
+- Replacing a master-data row with a different name leaves the closed row’s name as it was. Replacing it and keeping the same name stores that label in `recorded_name` (or `recorded_grade` / `recorded_product_number`). Lists show the recorded label. The unique key on the closed row may still carry a `[superseded …]` suffix so the new row can keep the name.
+- Shop logs are read-only. Bind them on `/masterdata` → Shop logs (account, spreadsheet link, exact tab, header names for date, machine, job, qty, downtime). The shop Google token is `data/google_token.json`. A second staff account is `data/google_token_staff.json`, connected from Preferences → **Connect another Google account**. Jarvis copies the named tab locally. Current state is rows whose date column is today. Empty cells stay missing. Two sheets that disagree are both reported. The morning brief refreshes them. The Monitor card is `features/sheet-listen`. `TELEGRAM_OWNER_USER_IDS` gates rate attestation from Telegram only.
 
 ## Still Deepen with Real Office Use
 
@@ -82,7 +84,7 @@ Shipped detail that the HUD bullets do not repeat:
 - Landing gates (`core/landing/`): substrate, fonts, desk, Monitor DOM, Casual DOM, engineering chunk + DrawingViewer + pdf.js prefetch. Min 1.4 s (0.6 s on same-tab refresh), cap 4 s. The status line can say “Checking Hermes”; Hermes never blocks exit. Chrome fades in staggered 80 ms (`Desk.tsx`, `CHROME_STAGGER_S`).
 - Drafts: baton flush on section change and `pagehide`; Engineering autosave on programmatic leave (awaited, 300 ms cap) and once on scroll-away; `pagehide` beacon is `text/plain` JSON; draft keys `^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$`, 64 KB cap.
 - Voice: `voice.ts` posts analyser RMS `level` to the substrate. Space types in fields, including the baton; the mic runs when not typing; Space never scrolls.
-- Deck: pdf.js page-1 thumbnails cached in IndexedDB (`pdfThumbCache.ts`); empty deck is a drop target; card-to-stage and HITL-to-chip use shared `layoutId`. Arrow keys cycle the deck.
+- Deck: pdf.js page-1 thumbnails cached in IndexedDB (`pdfThumbCache.ts`); empty deck is a drop target; card-to-stage and HITL-to-chip use shared `layoutId`. Arrow keys and a horizontal trackpad swipe cycle the deck (`deckWheel.ts`). A vertical or diagonal swipe still scrolls the page.
 - Feature platform: `backend/app/core/features.py` (event-loop-safe `publish`, `GET /api/features`, `GET /api/events`). SDK hooks are the exports in `frontend/src/sdk/index.ts`, including `useJarvisSend`, `useOrb`, and `useFeatureQuery`. OpenAPI types are committed at `frontend/src/lib/api/schema.gen.ts`. `npm run new:feature` writes the feature and registers `frontend/src/features/index.ts` and `backend/app/features/__init__.py`. Weather is the first feature (`frontend/src/features/weather`); its backend module is `features_weather.py`, not `backend/app/features/weather/`.
 - Substrate degrader keys off worker `simMs` (bloom first, then a slower sim).
 - Landing first frame is server HTML (`LandingFirstFrame` in `app/page.tsx`): “Waking substrate” and a hairline, painted before the desk bundle runs. The client overlay removes that node when it mounts.
@@ -91,7 +93,6 @@ Shipped detail that the HUD bullets do not repeat:
 Still open:
 
 - Lenis snap type is `"lock"` (`core/scroll/engine.ts`: one gesture, one section). Contract X2 says “mandatory”. Do not change the type until the owner picks; both are recorded on purpose.
-- Horizontal trackpad `deltaX` does not cycle the deck. Arrow keys do.
 - Feature job runner (`backend/app/core/scheduler.py`) is not started from API lifespan. Jobs stay off until a feature registers one and startup calls `start`.
 
 ## Runtime Notes

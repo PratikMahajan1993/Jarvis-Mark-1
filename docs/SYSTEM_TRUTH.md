@@ -527,6 +527,8 @@ Fails closed on: unresolved modal state; motion outside travels; rapid below cle
 | 2026-09-30 | Scroll desk is the running HUD. `OrchestratorShell` is removed. Casual quote/drawing hints go to Engineering | `docs/CURRENT.md`, X4 |
 | 2026-09-30 | Master Data UI is `/masterdata`; `masterdata_enabled` defaults on | `backend/app/config.py` |
 | 2026-09-30 | Snap type `"lock"` vs contract “mandatory” stays an owner decision | `docs/CURRENT.md` Contract Delta |
+| 2026-09-30 | Shop logs are read-only production tabs on up to two Google accounts. Today’s rows are current state. Empty cells stay missing | `docs/CURRENT.md` |
+| 2026-09-30 | Demo customer names are not re-seeded after the owner has saved a real customer | `backend/app/masterdata/seed_master_data.py` |
 
 Rows that name Vision Workbook or `work/*` are the decision’s origin. The text in this file is the rule. `work/ARCHITECTURE_POINTS.md`, `work/UI_UX_POINTS.md`, and `work/APP_FEATURES.md` are decision logs, not status.
 
