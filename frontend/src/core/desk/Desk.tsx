@@ -15,7 +15,7 @@ import { ThemeSync } from "@/core/chrome/ThemeSync";
 import { Backdrop } from "@/core/layers/Backdrop";
 import { DecorLayer } from "@/core/layers/Decor";
 import { SectionStack } from "@/core/sections/SectionStack";
-import { SECTIONS } from "@/core/sections/registry";
+import { getDeskSections } from "@/core/sections/registry";
 import { isJarvisPerfMode, recordOrchestratorShellCommit } from "@/lib/pane/perf";
 import { DeskController } from "./DeskController";
 import { goToSection } from "./controller";
@@ -32,6 +32,7 @@ export function Desk() {
   const perf = isJarvisPerfMode();
   const [landed, setLanded] = useState(false);
   const reduced = useReducedMotion();
+  const sections = getDeskSections();
 
   const chromeFade = (index: number) => ({
     opacity: landed ? 1 : 0,
@@ -44,10 +45,10 @@ export function Desk() {
     <MotionConfig reducedMotion="user">
       <LayoutGroup id="hitl-park">
         <DeskController />
-        <ThemeSync sections={SECTIONS} />
-        <Backdrop sections={SECTIONS} />
-        <SectionStack sections={SECTIONS} onUserNavigate={goToSection} />
-        <DecorLayer sections={SECTIONS} />
+        <ThemeSync sections={sections} />
+        <Backdrop sections={sections} />
+        <SectionStack sections={sections} onUserNavigate={goToSection} />
+        <DecorLayer sections={sections} />
         <div data-chrome-root>
           <motion.div
             animate={chromeFade(0)}
@@ -61,7 +62,7 @@ export function Desk() {
             style={{ pointerEvents: landed ? "auto" : "none" }}
             data-chrome="nav"
           >
-            <SectionNav sections={SECTIONS} onNavigate={goToSection} />
+            <SectionNav sections={sections} onNavigate={goToSection} />
           </motion.div>
           <motion.div
             animate={chromeFade(2)}
@@ -81,7 +82,7 @@ export function Desk() {
             style={{ pointerEvents: landed ? "auto" : "none" }}
             data-chrome="baton"
           >
-            <BatonDock sections={SECTIONS} />
+            <BatonDock sections={sections} />
           </motion.div>
         </div>
         <Modals />

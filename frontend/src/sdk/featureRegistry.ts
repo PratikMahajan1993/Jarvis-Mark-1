@@ -1,15 +1,14 @@
-import type { ComponentType } from "react";
-import type { SlotId } from "@/core/sections/defineSection";
-import { setFeatureFlagDefault } from "./featureFlags";
+import { createElement, type ComponentType } from "react";
+import {
+  CORE_SLOTS,
+  isSlotId,
+  type SectionDef,
+  type SectionProps,
+  type SlotId,
+} from "@/core/sections/defineSection";
+import { isFeatureEnabled, setFeatureFlagDefault } from "./featureFlags";
 
-const KNOWN_SLOTS: ReadonlySet<string> = new Set([
-  "monitor.main",
-  "monitor.rail",
-  "casual.left",
-  "casual.right",
-  "engineering.side",
-  "engineering.deck-empty",
-]);
+const KNOWN_SLOTS: Set<string> = new Set(CORE_SLOTS);
 
 export type CardDef = {
   id: string;
@@ -24,6 +23,7 @@ export type FeatureDef = {
   id: string;
   title?: string;
   flag?: { default: boolean };
+  sections?: SectionDef[];
   cards?: CardDef[];
 };
 
@@ -31,6 +31,16 @@ type RegisteredCard = CardDef & { featureId: string; order: number };
 
 const _features: FeatureDef[] = [];
 const _cards: RegisteredCard[] = [];
+const _sections: SectionDef[] = [];
+
+function gateSection(featureId: string, section: SectionDef): SectionDef {
+  const Component = section.component;
+  function GatedSection(props: SectionProps) {
+    if (!isFeatureEnabled(featureId)) return null;
+    return createElement(Component, props);
+  }
+  return { ...section, component: GatedSection };
+}
 
 function fail(message: string): never {
   throw new Error(`[features] ${message}`);
@@ -74,10 +84,29 @@ export function defineFeature(def: FeatureDef): FeatureDef {
   }
   if (def.flag) setFeatureFlagDefault(def.id, def.flag.default);
   _features.push({ id: def.id, title: def.title, flag: def.flag });
+  for (const section of def.sections ?? []) {
+    if (_sections.some((existing) => existing.id === section.id)) {
+      warnOrThrow(`duplicate section id "${section.id}"`);
+      continue;
+    }
+    for (const slot of section.slots) {
+      if (!isSlotId(slot)) {
+        warnOrThrow(`section "${section.id}" uses invalid slot "${slot}"`);
+        continue;
+      }
+      KNOWN_SLOTS.add(slot);
+    }
+    _sections.push(gateSection(def.id, section));
+  }
   for (const card of def.cards ?? []) {
     defineCard(card, def.id);
   }
   return def;
+}
+
+/** Feature sections, in registration order. The desk merges these with the core three. */
+export function registeredSections(): readonly SectionDef[] {
+  return _sections;
 }
 
 export function getCardsForSlot(slot: SlotId): RegisteredCard[] {

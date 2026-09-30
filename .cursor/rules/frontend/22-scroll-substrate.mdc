@@ -6,7 +6,7 @@ alwaysApply: false
 
 # Scroll Substrate
 
-Decisions: `docs/overhaul/EXPERIENCE_DECISIONS.md` (`X#`), `docs/overhaul/PLATFORM_DECISIONS.md` (`P#`). The as-built delta at the end of each, and `docs/CURRENT.md`, records open differences (snap type, scheduler off at boot). Do not close those in a feature PR. Otherwise the contracts win on conflict; fix this rule in the same PR.
+Decisions: `docs/overhaul/EXPERIENCE_DECISIONS.md` (`X#`), `docs/overhaul/PLATFORM_DECISIONS.md` (`P#`). The as-built delta at the end of each, and `docs/CURRENT.md`, records the open snap-type difference. Do not change Lenis snap type in a feature PR. Otherwise the contracts win on conflict; fix this rule in the same PR.
 
 ## Locked base
 
@@ -20,7 +20,9 @@ Use Tailwind z-tokens only — never a raw `z-index`: `z-backdrop` L0 · `z-subs
 
 ## SDK today
 
-`defineFeature`, `defineCard`, `Slot`, `useSection`, `useTopic`, `useDraft`, `useTaskQueue`, `useWeatherLine`, `useJarvisState`, `useJarvisSend`, `useSpeak`, `useOrb`, `requestApproval`, `useFeatureQuery`, `useFeatureMutation`, `useActiveSession`, `useFeatureFlag`, `useToast`, `useReducedMotion`, `api`.
+`defineFeature`, `defineSection`, `defineCard`, `Slot`, `useSection`, `useTopic`, `useDraft`, `useTaskQueue`, `useWeatherLine`, `useJarvisState`, `useJarvisSend`, `useSpeak`, `useOrb`, `requestApproval`, `useFeatureQuery`, `useFeatureMutation`, `useActiveSession`, `useFeatureFlag`, `useToast`, `useReducedMotion`, `api`, `featureSectionOrb`, `FEATURE_SECTION_THEME`.
+
+A feature section is `sections` on `defineFeature`. The desk merges it by `order`. Scaffold it with `npm run new:feature <id> --section`. A migration stub is ` --migration <slug>`. A job registered with `--job` runs when the API process starts.
 
 ```ts
 defineFeature({

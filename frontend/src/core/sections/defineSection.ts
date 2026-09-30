@@ -3,13 +3,23 @@ import type { HudWorkspace } from "@/components/orchestrator/hudWorkspace";
 import type { OrbSpec } from "@/substrate/protocol";
 import type { LazyMount } from "@/core/scroll/progress";
 
-export type SlotId =
-  | "monitor.main"
-  | "monitor.rail"
-  | "casual.left"
-  | "casual.right"
-  | "engineering.side"
-  | "engineering.deck-empty";
+/** Core slots plus `<feature>.<name>` slots declared by a feature section. */
+export type SlotId = string;
+
+export const CORE_SLOTS = [
+  "monitor.main",
+  "monitor.rail",
+  "casual.left",
+  "casual.right",
+  "engineering.side",
+  "engineering.deck-empty",
+] as const;
+
+const SLOT_PATTERN = /^[a-z][a-z0-9]*([.-][a-z0-9]+)+$/;
+
+export function isSlotId(value: string): boolean {
+  return SLOT_PATTERN.test(value);
+}
 
 export type ThemeTokens = {
   bg: string;

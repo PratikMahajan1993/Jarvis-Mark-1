@@ -284,4 +284,5 @@ P13 has landed on the working tree. `docs/CURRENT.md` lists what is still open. 
 
 - OpenAPI types are committed at `frontend/src/lib/api/schema.gen.ts`. `GET /api/features` and `GET /api/events` exist. SDK hooks are the exports in `frontend/src/sdk/index.ts`. `npm run new:feature` registers both indexes.
 - Weather's backend module is `backend/app/features_weather.py`, imported by `backend/app/features/__init__.py`. New features from the scaffold go in `backend/app/features/<id>/`.
-- `backend/app/core/scheduler.py` is not started from API lifespan. Jobs stay off until a feature registers one and startup calls `start`.
+- `backend/app/core/scheduler.py` starts from the API lifespan and runs jobs registered on loaded features.
+- `npm run new:feature <id> --section` writes a section and the desk merges it by `order`. `--migration <slug>` writes the next numbered SQL file.

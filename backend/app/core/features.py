@@ -115,7 +115,7 @@ def publish(topic: str, data: Any) -> None:
     _enqueue()
 
 
-# Jobs stay off until a feature registers one — do not start run_jobs from lifespan.
+# Jobs collected here are started by the API lifespan via core.scheduler.
 async def run_jobs(stop: asyncio.Event) -> None:
     async def loop(job: Job) -> None:
         while not stop.is_set():
@@ -132,7 +132,7 @@ async def run_jobs(stop: asyncio.Event) -> None:
 
 
 def load_features(app: FastAPI, feature_list: list[Feature] | None = None) -> None:
-    """Mount feature routers at /api/<id> and register manifests. Jobs stay off."""
+    """Mount feature routers at /api/<id> and register manifests. Lifespan starts jobs."""
     global _loaded
     for feat in feature_list or []:
         register_feature(feat)

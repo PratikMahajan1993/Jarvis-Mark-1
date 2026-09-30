@@ -77,8 +77,16 @@ async def lifespan(app: FastAPI):
     from .memory.ingest_queue import start_ingest_workers, stop_ingest_workers
 
     await start_ingest_workers()
-    yield
-    await stop_ingest_workers()
+    from .core import scheduler as job_scheduler
+    from .core.features import features as loaded_features
+
+    feature_jobs = [job for feat in loaded_features() for job in feat.jobs]
+    await job_scheduler.start(feature_jobs)
+    try:
+        yield
+    finally:
+        await job_scheduler.stop()
+        await stop_ingest_workers()
     if _reaper_stop is not None:
         _reaper_stop.set()
     if _reaper_thread is not None:

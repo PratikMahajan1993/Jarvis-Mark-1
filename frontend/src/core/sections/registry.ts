@@ -1,6 +1,7 @@
 "use client";
 
 import { lazy } from "react";
+import { registeredSections } from "@/sdk/featureRegistry";
 import { defineSection, validateSections, type SectionDef } from "./defineSection";
 import { CasualSection } from "./casual/CasualSection";
 import { MonitorSection } from "./monitor/MonitorSection";
@@ -58,11 +59,11 @@ const engineering = defineSection({
   component: lazy(loadEngineering),
 });
 
-/** Every section on `/`, sorted by `order`. Feature sections join here in step 9. */
-export const SECTIONS: readonly SectionDef[] = validateSections([monitor, casual, engineering]);
-
-export const SECTION_IDS: readonly string[] = SECTIONS.map((s) => s.id);
+/** Core sections plus every feature section, sorted by `order`. Called on render so plug-in sections have registered. */
+export function getDeskSections(): readonly SectionDef[] {
+  return validateSections([monitor, casual, engineering, ...registeredSections()]);
+}
 
 export function sectionById(id: string): SectionDef | undefined {
-  return SECTIONS.find((s) => s.id === id);
+  return getDeskSections().find((s) => s.id === id);
 }

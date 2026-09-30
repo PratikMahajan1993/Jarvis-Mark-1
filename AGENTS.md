@@ -38,6 +38,7 @@ This scroll desk is the running HUD. `OrchestratorShell` and `HudShell` are gone
 | Skill | Use When |
 |-------|----------|
 | `jarvis-architecture` | Any structural / stack / workflow change |
+| `jarvis-feature-interview` | Adding a feature, a phased feature interview, or an implementation plan from `docs/JARVIS_MANIFESTO.md` |
 | `jarvis-quote-playbook` | Quote/RFQ workflow, shop-quote skill, `quote_verify`, Engineering desk |
 | `jarvis-react-bits` | Adding or fixing React Bits surfaces |
 | `jarvis-capability-test` | Running matrix IDs A1…O* and S1… |

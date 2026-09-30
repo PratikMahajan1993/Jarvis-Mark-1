@@ -1,6 +1,7 @@
 import {
   existsSync,
   mkdirSync,
+  readdirSync,
   readFileSync,
   writeFileSync,
 } from "node:fs";
@@ -14,7 +15,7 @@ const repoRoot = join(frontendRoot, "..");
 const name = process.argv[2];
 if (!name || !/^[a-z][a-z0-9-]*$/.test(name)) {
   console.error(
-    "usage: npm run new:feature <kebab-name> [--section] [--card <slot>] [--approval <kind>] [--tool <name>] [--intent] [--job <name>]",
+    "usage: npm run new:feature <kebab-name> [--section] [--card <slot>] [--approval <kind>] [--tool <name>] [--intent] [--job <name>] [--migration <slug>]",
   );
   process.exit(1);
 }
@@ -60,8 +61,55 @@ const cardSlot = opt("--card");
 const approvalKind = opt("--approval");
 const toolName = opt("--tool");
 const jobName = opt("--job");
+const migrationSlug = opt("--migration");
 const wantSection = flag("--section");
 const wantIntent = flag("--intent");
+
+if (args.includes("--migration") && (typeof migrationSlug !== "string" || !/^[a-z][a-z0-9_]*$/.test(migrationSlug))) {
+  console.error("--migration needs a slug like init or quote_fields");
+  process.exit(1);
+}
+
+function collectOrders(dir, into) {
+  if (!existsSync(dir)) return;
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) collectOrders(path, into);
+    else if (entry.name.endsWith(".ts") || entry.name.endsWith(".tsx")) {
+      const text = readFileSync(path, "utf8");
+      for (const match of text.matchAll(/\border:\s*(\d+)/g)) {
+        const value = Number(match[1]);
+        if (value >= 100) into.add(value);
+      }
+    }
+  }
+}
+
+function nextSectionOrder() {
+  const taken = new Set([100, 200, 300]);
+  collectOrders(join(frontendRoot, "src", "features"), taken);
+  const registry = join(frontendRoot, "src", "core", "sections", "registry.ts");
+  if (existsSync(registry)) {
+    const text = readFileSync(registry, "utf8");
+    for (const match of text.matchAll(/\border:\s*(\d+)/g)) {
+      const value = Number(match[1]);
+      if (value >= 100) taken.add(value);
+    }
+  }
+  let max = 300;
+  for (const value of taken) if (value >= 100 && value > max) max = value;
+  return max + 100;
+}
+
+function nextMigrationNumber() {
+  const dir = join(repoRoot, "backend", "migrations");
+  let max = 0;
+  for (const entry of readdirSync(dir)) {
+    const match = /^(\d+)_/.exec(entry);
+    if (match) max = Math.max(max, Number(match[1]));
+  }
+  return { number: max + 1, padded: String(max + 1).padStart(4, "0"), previous: String(max).padStart(4, "0") };
+}
 
 if (cardSlot) {
   writeFileSync(
@@ -70,32 +118,53 @@ if (cardSlot) {
   );
 }
 
-writeFileSync(
-  join(dir, "feature.ts"),
-  cardSlot
-    ? `import { defineFeature } from "@/sdk";
-import { ${pascal}Card } from "./${pascal}Card";
+const sectionOrder = wantSection ? nextSectionOrder() : null;
+const sectionSlot = `${name}.main`;
 
-defineFeature({
-  id: "${name}",
-  title: "${pascal}",
-  cards: [
-    { id: "${name}.main", slot: "${cardSlot}", order: 50, size: "md", component: ${pascal}Card },
-  ],
-});
-`
-    : `import { defineFeature } from "@/sdk";
+if (wantSection) {
+  writeFileSync(
+    join(dir, `${pascal}Section.tsx`),
+    `"use client";\n\nimport { Slot, type SectionProps } from "@/sdk";\n\nexport function ${pascal}Section(_props: SectionProps) {\n  return (\n    <div className="flex h-full min-h-0 flex-col gap-3">\n      <Slot id="${sectionSlot}" />\n    </div>\n  );\n}\n`,
+  );
+}
 
-defineFeature({
-  id: "${name}",
-  title: "${pascal}",
-});
-`,
-);
+const featureImports = [`import { defineFeature } from "@/sdk";`];
+if (wantSection) {
+  featureImports[0] = `import { defineFeature, defineSection, FEATURE_SECTION_THEME, featureSectionOrb } from "@/sdk";`;
+  featureImports.push(`import { ${pascal}Section } from "./${pascal}Section";`);
+}
+if (cardSlot) featureImports.push(`import { ${pascal}Card } from "./${pascal}Card";`);
+
+const featureBody = [`defineFeature({`, `  id: "${name}",`, `  title: "${pascal}",`];
+if (wantSection) {
+  featureBody.push(`  sections: [`);
+  featureBody.push(`    defineSection({`);
+  featureBody.push(`      id: "${name}",`);
+  featureBody.push(`      order: ${sectionOrder},`);
+  featureBody.push(`      label: "${pascal}",`);
+  featureBody.push(`      orb: featureSectionOrb(),`);
+  featureBody.push(`      theme: FEATURE_SECTION_THEME,`);
+  featureBody.push(`      lazy: { mountWithin: 1, unmountBeyond: 2 },`);
+  featureBody.push(`      slots: ["${sectionSlot}"],`);
+  featureBody.push(`      component: ${pascal}Section,`);
+  featureBody.push(`    }),`);
+  featureBody.push(`  ],`);
+}
+if (cardSlot) {
+  featureBody.push(`  cards: [`);
+  featureBody.push(
+    `    { id: "${name}.main", slot: "${cardSlot}", order: 50, size: "md", component: ${pascal}Card },`,
+  );
+  featureBody.push(`  ],`);
+}
+featureBody.push(`});`, ``);
+
+writeFileSync(join(dir, "feature.ts"), `${featureImports.join("\n")}\n\n${featureBody.join("\n")}\n`);
 
 writeFileSync(
   join(dir, "feature.test.ts"),
-  `import { validateFeatureList } from "@/sdk";
+  `import { describe, expect, it } from "vitest";
+import { validateFeatureList } from "@/sdk";
 
 describe("${name} feature id", () => {
   it("is a valid kebab id", () => {
@@ -188,8 +257,19 @@ writeFileSync(
   writeFileSync(beInit, text);
 }
 
-if (wantSection) {
-  console.log("note: --section stub only; wire a SectionDef when ready");
+if (migrationSlug) {
+  const next = nextMigrationNumber();
+  const migrationPath = join(
+    repoRoot,
+    "backend",
+    "migrations",
+    `${next.padded}_${snake}_${migrationSlug}.sql`,
+  );
+  writeFileSync(
+    migrationPath,
+    `-- Description: ${name} ${migrationSlug}\n-- Dependencies: ${next.previous}\n--\n-- The migration runner splits on ';' and executes each statement. Do not wrap\n-- the file in BEGIN/COMMIT — a connection may already be inside a transaction,\n-- and SQLite commits DDL implicitly. Keep the script forward-only and idempotent\n-- (INSERT OR IGNORE, or ALTER that tolerates a duplicate column).\n\n-- idempotent inserts/updates go here\n`,
+  );
+  console.log(`migration ${next.padded}_${snake}_${migrationSlug}.sql`);
 }
 
 console.log(`created feature "${name}" and registered in frontend + backend indexes`);
