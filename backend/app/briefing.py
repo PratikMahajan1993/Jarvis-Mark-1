@@ -174,12 +174,20 @@ def _shop_facts() -> dict:
 
     snap = efficiency_snapshot()
     oee = snap.get("oee_percent")
+    listen: dict = {}
+    try:
+        from .sheet_listen import briefing_facts
+
+        listen = briefing_facts()
+    except Exception:
+        listen = {}
     return {
         "shop_oee": oee if isinstance(oee, (int, float)) else None,
         "shop_reason": snap.get("reason"),
         "shop_bottlenecks": snap.get("bottlenecks") or [],
         "shop_url": snap.get("url") or "",
         "shop_sheet": snap.get("sheet") or "",
+        **listen,
     }
 
 
@@ -279,6 +287,14 @@ def fallback_briefing_speak(facts: dict) -> str:
         ]
         if labels:
             parts.append("Watch " + ", ".join(labels[:3]) + ".")
+    try:
+        from .sheet_listen import briefing_speak_extra
+
+        extra = briefing_speak_extra(facts).strip()
+        if extra:
+            parts.append(extra)
+    except Exception:
+        pass
     return " ".join(parts)
 
 

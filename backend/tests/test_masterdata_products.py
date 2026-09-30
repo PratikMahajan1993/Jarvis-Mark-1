@@ -74,6 +74,7 @@ def test_create_product_and_supersede():
         )
         old = conn.execute("SELECT * FROM products WHERE id = ?", (created["id"],)).fetchone()
         successor = conn.execute("SELECT * FROM products WHERE id = ?", (new_id,)).fetchone()
+    assert old["product_number"] == "PN-100"
     assert old["status"] == "superseded"
     assert old["effective_to"]
     assert old["superseded_by"] == new_id

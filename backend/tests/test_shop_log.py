@@ -227,18 +227,20 @@ def test_briefing_speak_omits_missing_oee():
 def test_has_sheets_status(monkeypatch):
     from app.connectors import google_auth
 
-    monkeypatch.setattr(google_auth, "token_scopes", lambda: [google_auth.SPREADSHEETS])
+    monkeypatch.setattr(google_auth, "token_scopes", lambda *a, **k: [google_auth.SPREADSHEETS])
     assert google_auth.has_sheets() is True
-    monkeypatch.setattr(google_auth, "token_scopes", lambda: [google_auth.GMAIL_SEND])
+    monkeypatch.setattr(google_auth, "token_scopes", lambda *a, **k: [google_auth.GMAIL_SEND])
     assert google_auth.has_sheets() is False
     monkeypatch.setattr(google_auth, "configured", lambda: True)
-    monkeypatch.setattr(google_auth, "connected", lambda: True)
-    monkeypatch.setattr(google_auth, "has_calendar", lambda: True)
-    monkeypatch.setattr(google_auth, "has_calendar_list", lambda: False)
-    monkeypatch.setattr(google_auth, "has_sheets", lambda: False)
+    monkeypatch.setattr(google_auth, "connected", lambda *a, **k: True)
+    monkeypatch.setattr(google_auth, "has_calendar", lambda *a, **k: True)
+    monkeypatch.setattr(google_auth, "has_calendar_list", lambda *a, **k: False)
+    monkeypatch.setattr(google_auth, "has_sheets", lambda *a, **k: False)
     status = google_auth.status()
     assert "sheets" in status
     assert status["sheets"] is False
+    assert "accounts" in status
+    assert "staff" in status["accounts"]
 
 
 def test_google_error_maps_disabled_api():

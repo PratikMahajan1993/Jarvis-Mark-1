@@ -66,17 +66,7 @@ def _insert(conn: sqlite3.Connection, sql: str, params: tuple) -> int:
     return 1 if cur.rowcount else 0
 
 
-def seed_master_data(conn: sqlite3.Connection) -> dict[str, int]:
-    """Insert shop seed rows. Safe to call again; existing ids are left untouched."""
-    counts = {
-        "customers": 0,
-        "machines": 0,
-        "materials": 0,
-        "suppliers": 0,
-        "mhr": 0,
-        "rm_quotes": 0,
-        "outsource_vendors": 0,
-    }
+def _seed_demo_customers(conn: sqlite3.Connection, counts: dict[str, int]) -> None:
     for name in _CUSTOMERS:
         cid = _stable_id("cust", name)
         counts["customers"] += _insert(
@@ -113,6 +103,31 @@ def seed_master_data(conn: sqlite3.Connection) -> dict[str, int]:
             """,
             (cid,),
         )
+
+
+def seed_master_data(conn: sqlite3.Connection) -> dict[str, int]:
+    """Insert shop seed rows. Safe to call again; existing ids are left untouched."""
+    counts = {
+        "customers": 0,
+        "machines": 0,
+        "materials": 0,
+        "suppliers": 0,
+        "mhr": 0,
+        "rm_quotes": 0,
+        "outsource_vendors": 0,
+    }
+    # Once the owner has saved a real customer, do not put the demo names back.
+    owner_customer = conn.execute(
+        """
+        SELECT 1 FROM customers
+        WHERE COALESCE(status, 'active') != 'superseded'
+          AND effective_to IS NULL
+          AND name NOT IN ('Deepak', 'Rajesh', 'Priya Mehta', 'Apex Components Pvt Ltd')
+        LIMIT 1
+        """
+    ).fetchone()
+    if owner_customer is None:
+        _seed_demo_customers(conn, counts)
 
     for name, machine_type, axes in _MACHINES:
         mid = _stable_id("mach", machine_type)

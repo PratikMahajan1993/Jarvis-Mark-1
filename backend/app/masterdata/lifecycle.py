@@ -40,6 +40,60 @@ def _row(conn: sqlite3.Connection, table: str, row_id: str) -> sqlite3.Row:
     return found
 
 
+def _strip_superseded(value: str) -> str:
+    marker = " [superseded "
+    idx = value.find(marker)
+    return value[:idx] if idx > 1 else value
+
+
+def _release_unique_label(
+    conn: sqlite3.Connection,
+    table: str,
+    column: str,
+    recorded_column: str,
+    old_value: str,
+    new_value: str,
+    old_id: str,
+) -> None:
+    """Keep the shop's label. Rewrite the unique key only when the new row reuses it."""
+    clean = _strip_superseded(old_value)
+    if new_value != clean:
+        if clean != old_value:
+            conn.execute(
+                f"UPDATE {table} SET {recorded_column} = ? WHERE id = ? AND ({recorded_column} IS NULL OR {recorded_column} = '')",
+                (clean, old_id),
+            )
+        return
+    conn.execute(
+        f"UPDATE {table} SET {recorded_column} = ? WHERE id = ?",
+        (clean, old_id),
+    )
+    conn.execute(
+        f"UPDATE {table} SET {column} = ? WHERE id = ?",
+        (f"{clean} [superseded {old_id}]", old_id),
+    )
+
+
+def _reject_active_duplicate(
+    conn: sqlite3.Connection,
+    table: str,
+    column: str,
+    value: str,
+    old_id: str,
+) -> None:
+    """Active names stay unique. The row being replaced may keep the same label."""
+    if table in {"customers", "products"}:
+        active = "effective_to IS NULL AND COALESCE(status, '') != 'superseded'"
+    else:
+        active = "effective_to IS NULL"
+    clash = conn.execute(
+        f"SELECT id FROM {table} WHERE {column} = ? AND id != ? AND {active}",
+        (value, old_id),
+    ).fetchone()
+    if clash is not None:
+        raise LifecycleError(f"An active {table[:-1] if table.endswith('s') else table} already uses that name.")
+
+
 def _end_date(conn: sqlite3.Connection, table: str, row_id: str, day: str, successor: str) -> None:
     if table in {"customers", "machines", "products"}:
         conn.execute(
@@ -68,11 +122,9 @@ def supersede_customer(conn: sqlite3.Connection, old_id: str, new_customer_data:
         raise LifecycleError("Customer name is required.")
     day = _today()
     new_id = _new_id("cust")
-    # Free UNIQUE(name) without destroying the old row's other fields.
-    conn.execute(
-        "UPDATE customers SET name = ? WHERE id = ?",
-        (f"{old['name']} [superseded {old_id}]", old_id),
-    )
+    _release_unique_label(conn, "customers", "name", "recorded_name", str(old["name"]), name, old_id)
+    _reject_active_duplicate(conn, "customers", "name", name, old_id)
+    _end_date(conn, "customers", old_id, day, new_id)
     conn.execute(
         """
         INSERT INTO customers (id, name, gstin, currency, status, effective_from)
@@ -86,7 +138,6 @@ def supersede_customer(conn: sqlite3.Connection, old_id: str, new_customer_data:
             day,
         ),
     )
-    _end_date(conn, "customers", old_id, day, new_id)
     terms = conn.execute("SELECT * FROM customer_terms WHERE customer_id = ?", (old_id,)).fetchone()
     scope = (new_customer_data.get("default_scope") or (terms["default_scope"] if terms else "ask") or "ask")
     if scope not in {"labour", "with_material", "ask"}:
@@ -171,10 +222,9 @@ def supersede_material(conn: sqlite3.Connection, old_id: str, new_material_data:
         raise LifecycleError("Material grade is required.")
     day = _today()
     new_id = _new_id("mat")
-    conn.execute(
-        "UPDATE materials SET grade = ? WHERE id = ?",
-        (f"{old['grade']} [superseded {old_id}]", old_id),
-    )
+    _release_unique_label(conn, "materials", "grade", "recorded_grade", str(old["grade"]), grade, old_id)
+    _reject_active_duplicate(conn, "materials", "grade", grade, old_id)
+    _end_date(conn, "materials", old_id, day, new_id)
     form = (new_material_data.get("form") or old["form"] or "bar").strip()
     family = (new_material_data.get("family") or old["family"] or "").strip()
     conn.execute(
@@ -197,7 +247,6 @@ def supersede_material(conn: sqlite3.Connection, old_id: str, new_material_data:
             day,
         ),
     )
-    _end_date(conn, "materials", old_id, day, new_id)
     _audit(conn, f"supersede material {old_id} -> {new_id}")
     return new_id
 
@@ -221,11 +270,8 @@ def supersede_product(conn: sqlite3.Connection, old_id: str, new_product_data: d
         monitor_stock = int(old["monitor_stock"] or 0)
     day = _today()
     new_id = _new_id("prod")
-    # Free unique active product_number without destroying the old row.
-    conn.execute(
-        "UPDATE products SET product_number = ? WHERE id = ?",
-        (f"{old['product_number']} [superseded {old_id}]", old_id),
-    )
+    _reject_active_duplicate(conn, "products", "product_number", product_number, old_id)
+    _end_date(conn, "products", old_id, day, new_id)
     material_id = new_product_data.get("material_id", old["material_id"])
     if material_id == "":
         material_id = None
@@ -238,7 +284,6 @@ def supersede_product(conn: sqlite3.Connection, old_id: str, new_product_data: d
         """,
         (new_id, product_number, name, customer_id, uom, monitor_stock, material_id, day),
     )
-    _end_date(conn, "products", old_id, day, new_id)
     _audit(conn, f"supersede product {old_id} -> {new_id}")
     return new_id
 
@@ -250,10 +295,9 @@ def supersede_supplier(conn: sqlite3.Connection, old_id: str, new_supplier_data:
         raise LifecycleError("Supplier name is required.")
     day = _today()
     new_id = _new_id("sup")
-    conn.execute(
-        "UPDATE suppliers SET name = ? WHERE id = ?",
-        (f"{old['name']} [superseded {old_id}]", old_id),
-    )
+    _release_unique_label(conn, "suppliers", "name", "recorded_name", str(old["name"]), name, old_id)
+    _reject_active_duplicate(conn, "suppliers", "name", name, old_id)
+    _end_date(conn, "suppliers", old_id, day, new_id)
     conn.execute(
         """
         INSERT INTO suppliers (id, name, contact, lead_days, effective_from)
@@ -267,7 +311,6 @@ def supersede_supplier(conn: sqlite3.Connection, old_id: str, new_supplier_data:
             day,
         ),
     )
-    _end_date(conn, "suppliers", old_id, day, new_id)
     _audit(conn, f"supersede supplier {old_id} -> {new_id}")
     return new_id
 
@@ -280,10 +323,9 @@ def supersede_outsource_vendor(conn: sqlite3.Connection, old_id: str, new_vendor
         raise LifecycleError("Vendor name and processes are required.")
     day = _today()
     new_id = _new_id("osv")
-    conn.execute(
-        "UPDATE outsource_vendors SET name = ? WHERE id = ?",
-        (f"{old['name']} [superseded {old_id}]", old_id),
-    )
+    _release_unique_label(conn, "outsource_vendors", "name", "recorded_name", str(old["name"]), name, old_id)
+    _reject_active_duplicate(conn, "outsource_vendors", "name", name, old_id)
+    _end_date(conn, "outsource_vendors", old_id, day, new_id)
     conn.execute(
         """
         INSERT INTO outsource_vendors (id, name, processes, lead_days, effective_from)
@@ -297,7 +339,6 @@ def supersede_outsource_vendor(conn: sqlite3.Connection, old_id: str, new_vendor
             day,
         ),
     )
-    _end_date(conn, "outsource_vendors", old_id, day, new_id)
     _audit(conn, f"supersede outsource vendor {old_id} -> {new_id}")
     return new_id
 

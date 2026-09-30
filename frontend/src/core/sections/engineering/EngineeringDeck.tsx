@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import * as desk from "@/core/desk/controller";
 import type { RailConversation } from "@/components/orchestrator/ConversationRail";
 import { parkedApprovalForConversation, stageMorphLayoutId } from "@/core/sections/engineering/deckCardMeta";
+import { deckWheelAction } from "@/core/sections/engineering/deckWheel";
 import {
   getCachedThumb,
   needsIdlePdfThumb,
@@ -18,6 +19,7 @@ import { api } from "@/lib/api";
 import { SPRING } from "@/lib/pane/springs";
 
 const MAX_VISIBLE = 5;
+const WHEEL_COOLDOWN_MS = 280;
 const TASK_KINDS = new Set(["drawing", "workflow", "job"]);
 
 export function engineeringTasks(items: RailConversation[]): RailConversation[] {
@@ -266,11 +268,29 @@ export function EngineeringDeck({
       if (e.key === "ArrowRight") cycle();
       else if (e.key === "ArrowLeft") back();
     };
+    let lastWheel = 0;
+    const onWheel = (event: WheelEvent) => {
+      const onDeck = event.composedPath().some((node) => node instanceof HTMLElement && node.hasAttribute("data-deck-drop"));
+      if (!onDeck) return;
+      const el = event.target as HTMLElement | null;
+      if (el?.closest("input,textarea,[contenteditable]")) return;
+      const action = deckWheelAction(event.deltaX, event.deltaY);
+      if (!action) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const now = performance.now();
+      if (now - lastWheel < WHEEL_COOLDOWN_MS) return;
+      lastWheel = now;
+      if (action === "next") cycle();
+      else back();
+    };
     document.addEventListener("deck:cycle", cycle);
     window.addEventListener("keydown", onKey);
+    window.addEventListener("wheel", onWheel, { capture: true, passive: false });
     return () => {
       document.removeEventListener("deck:cycle", cycle);
       window.removeEventListener("keydown", onKey);
+      window.removeEventListener("wheel", onWheel, { capture: true });
     };
   }, []);
 

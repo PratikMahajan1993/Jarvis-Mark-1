@@ -14,6 +14,10 @@ function GoogleConnect() {
     calendar_list?: boolean;
     sheets?: boolean;
     account: string;
+    accounts?: {
+      shop?: { connected?: boolean; sheets?: boolean };
+      staff?: { connected?: boolean; sheets?: boolean };
+    };
   } | null>(null);
 
   useEffect(() => {
@@ -25,6 +29,8 @@ function GoogleConnect() {
   const calendarOn = Boolean(status.calendar);
   const allCalendars = Boolean(status.calendar_list);
   const sheetsOn = Boolean(status.sheets);
+  const staff = status.accounts?.staff;
+  const staffConnected = Boolean(staff?.connected);
   const extras = [
     calendarOn ? "Calendar on" : status.connected ? "Calendar needs reconnect" : "",
     status.connected && calendarOn && !allCalendars ? "primary only" : "",
@@ -41,13 +47,21 @@ function GoogleConnect() {
             ? "Not connected — connect to use live Gmail, Calendar, Drive, and Sheets."
             : "Add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to .env on the API machine."}
       </p>
+      <p className="mt-2 text-sm text-[color:var(--muted)]">
+        Staff account:{" "}
+        {staffConnected
+          ? `connected${staff?.sheets ? " · Sheets on" : " · Sheets needs reconnect"}`
+          : status.configured
+            ? "not connected — use for listened shop logs owned by staff."
+            : "unavailable until OAuth is configured."}
+      </p>
       <div className="mt-3 flex flex-wrap gap-2">
         {status.configured && !status.connected ? (
           <button
             type="button"
             className="rounded-full border border-[color:var(--accent)]/40 bg-[color:var(--accent)]/10 px-4 py-1.5 font-mono text-[11px] uppercase tracking-[0.12em] text-[color:var(--accent)] transition hover:bg-[color:var(--accent)]/20"
             onClick={() => {
-              window.location.href = api.googleAuthUrl();
+              window.location.href = api.googleAuthUrl("shop");
             }}
           >
             Connect Gmail
@@ -58,7 +72,7 @@ function GoogleConnect() {
             type="button"
             className="rounded-full border border-[color:var(--accent)]/40 bg-[color:var(--accent)]/10 px-4 py-1.5 font-mono text-[11px] uppercase tracking-[0.12em] text-[color:var(--accent)] transition hover:bg-[color:var(--accent)]/20"
             onClick={() => {
-              window.location.href = api.googleAuthUrl();
+              window.location.href = api.googleAuthUrl("shop");
             }}
           >
             Add Calendar
@@ -69,7 +83,7 @@ function GoogleConnect() {
             type="button"
             className="rounded-full border border-[color:var(--border)] px-4 py-1.5 font-mono text-[11px] uppercase tracking-[0.12em] text-[color:var(--muted)] transition hover:border-[color:var(--accent)]/30 hover:text-[color:var(--accent)]"
             onClick={() => {
-              window.location.href = api.googleAuthUrl();
+              window.location.href = api.googleAuthUrl("shop");
             }}
           >
             Allow all calendars
@@ -80,10 +94,21 @@ function GoogleConnect() {
             type="button"
             className="rounded-full border border-[color:var(--accent)]/40 bg-[color:var(--accent)]/10 px-4 py-1.5 font-mono text-[11px] uppercase tracking-[0.12em] text-[color:var(--accent)] transition hover:bg-[color:var(--accent)]/20"
             onClick={() => {
-              window.location.href = api.googleAuthUrl();
+              window.location.href = api.googleAuthUrl("shop");
             }}
           >
             Add Sheets
+          </button>
+        ) : null}
+        {status.configured ? (
+          <button
+            type="button"
+            className="rounded-full border border-[color:var(--accent)]/40 bg-[color:var(--accent)]/10 px-4 py-1.5 font-mono text-[11px] uppercase tracking-[0.12em] text-[color:var(--accent)] transition hover:bg-[color:var(--accent)]/20"
+            onClick={() => {
+              window.location.href = api.googleAuthUrl("staff");
+            }}
+          >
+            {staffConnected ? "Reconnect staff Google" : "Connect another Google account"}
           </button>
         ) : null}
       </div>

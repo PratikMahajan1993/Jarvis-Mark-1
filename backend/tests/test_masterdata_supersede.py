@@ -40,7 +40,7 @@ def test_supersede_customer_end_dates_old_row():
         audit = conn.execute(
             "SELECT tool, status FROM audit WHERE tool = 'supersede' ORDER BY id DESC LIMIT 1"
         ).fetchone()
-    assert "superseded" in retired["name"]
+    assert retired["name"] == "Deepak"
     assert retired["status"] == "superseded"
     assert retired["effective_to"]
     assert retired["superseded_by"] == new_id
@@ -82,3 +82,26 @@ def test_supersede_rate_preserves_attestation():
     assert new["min_mhr_minor"] == 91_000
     assert new["shipped_seed_value_minor"] == 50_000
     assert new["effective_to"] is None
+
+
+def test_same_name_replace_keeps_original_label():
+    from app import db
+    from app.masterdata.lifecycle import supersede_customer
+    from app.masterdata.writes import create_customer
+
+    with db.connect() as conn:
+        created = create_customer(conn, {"name": "Label Keep Co", "nda": "no"}, notify=False)
+        new_id = supersede_customer(conn, created["id"], {"name": "Label Keep Co", "default_scope": "ask"})
+        retired = conn.execute("SELECT * FROM customers WHERE id = ?", (created["id"],)).fetchone()
+        successor = conn.execute("SELECT * FROM customers WHERE id = ?", (new_id,)).fetchone()
+        shown = conn.execute(
+            """
+            SELECT COALESCE(NULLIF(recorded_name, ''), name) AS shown
+            FROM customers WHERE id = ?
+            """,
+            (created["id"],),
+        ).fetchone()
+    assert retired["recorded_name"] == "Label Keep Co"
+    assert "superseded" in retired["name"]
+    assert successor["name"] == "Label Keep Co"
+    assert shown["shown"] == "Label Keep Co"

@@ -1,8 +1,9 @@
 import "./weather/feature";
 import "./masterdata/feature";
+import "./sheet-listen/feature";
 import { validateFeatureList } from "@/sdk/featureRegistry";
 
-export const FEATURES = ["weather", "masterdata"] as const;
+export const FEATURES = ["weather", "masterdata", "sheet-listen"] as const;
 
 const check = validateFeatureList(FEATURES);
 if (!check.ok) {

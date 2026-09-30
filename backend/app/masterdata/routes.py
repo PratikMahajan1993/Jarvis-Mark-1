@@ -78,7 +78,19 @@ def _minor(value: Any) -> int | None:
 
 
 def _rows(conn, sql: str, params: tuple = ()) -> list[dict[str, Any]]:
-    return [dict(row) for row in conn.execute(sql, params).fetchall()]
+    items: list[dict[str, Any]] = []
+    for row in conn.execute(sql, params).fetchall():
+        item = dict(row)
+        for column, recorded in (
+            ("name", "recorded_name"),
+            ("grade", "recorded_grade"),
+            ("product_number", "recorded_product_number"),
+        ):
+            label = str(item.get(recorded) or "").strip()
+            if label:
+                item[column] = label
+        items.append(item)
+    return items
 
 
 def _require(fields: dict[str, Any], *keys: str) -> None:
@@ -740,6 +752,60 @@ def as_of(kind: str, key: str, as_of: str) -> dict[str, Any]:
     if found is None:
         raise HTTPException(status_code=409, detail="BLOCKER: no row is effective on that date")
     return {"ok": True, "row": found}
+
+
+@router.get("/google-accounts")
+def masterdata_google_accounts() -> dict[str, Any]:
+    from ..sheet_listen import list_google_accounts
+
+    return {"ok": True, "items": list_google_accounts()}
+
+
+@router.get("/listened-sheets")
+def list_listened_sheets() -> dict[str, Any]:
+    from ..sheet_listen import list_listened_sheets as _list
+
+    return {"ok": True, "items": _list(include_retired=True)}
+
+
+@router.post("/listened-sheets")
+def create_listened_sheet(body: EntityBody) -> dict[str, Any]:
+    from ..sheet_listen import ListenError, create_listened_sheet as _create
+
+    try:
+        return _create(body.fields)
+    except ListenError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.patch("/listened-sheets/{row_id}")
+def patch_listened_sheet(row_id: str, body: EntityBody) -> dict[str, Any]:
+    from ..sheet_listen import ListenError, update_listened_sheet
+
+    try:
+        return update_listened_sheet(row_id, body.fields)
+    except ListenError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/listened-sheets/{row_id}/retire")
+def retire_listened_sheet(row_id: str) -> dict[str, Any]:
+    from ..sheet_listen import ListenError, retire_listened_sheet as _retire
+
+    try:
+        return _retire(row_id)
+    except ListenError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/listened-sheets/{row_id}/refresh")
+def refresh_listened_sheet(row_id: str) -> dict[str, Any]:
+    from ..sheet_listen import ListenError, refresh_listened_sheet as _refresh
+
+    try:
+        return _refresh(row_id)
+    except ListenError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.delete("/{entity}/{row_id}")

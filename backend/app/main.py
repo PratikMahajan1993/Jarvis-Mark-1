@@ -465,9 +465,9 @@ def api_google_status() -> dict:
 
 
 @app.get("/api/google/auth")
-def api_google_auth() -> RedirectResponse:
+def api_google_auth(account: str = "shop") -> RedirectResponse:
     try:
-        return RedirectResponse(google_auth.auth_url())
+        return RedirectResponse(google_auth.auth_url(account=account))
     except Exception as exc:
         raise HTTPException(400, str(exc)) from exc
 
@@ -475,14 +475,16 @@ def api_google_auth() -> RedirectResponse:
 @app.get("/api/google/callback")
 def api_google_callback(code: str = "", state: str = "") -> RedirectResponse:
     try:
-        google_auth.finish_auth(code, state)
+        label = google_auth.finish_auth(code, state)
     except Exception as exc:
         raise HTTPException(400, str(exc)) from exc
-    try:
-        kick_mail_bulk(days=100, force=True)
-    except Exception:
-        pass
-    return RedirectResponse(f"{settings.hud_url}/?gmail=1")
+    if label == "shop":
+        try:
+            kick_mail_bulk(days=100, force=True)
+        except Exception:
+            pass
+        return RedirectResponse(f"{settings.hud_url}/?gmail=1")
+    return RedirectResponse(f"{settings.hud_url}/?google_account={label}")
 
 
 class MailSyncRequest(BaseModel):

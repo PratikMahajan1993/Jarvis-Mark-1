@@ -10,10 +10,20 @@ import { MachineTable } from "./MachineTable";
 import { MaterialTable } from "./MaterialTable";
 import { OutsourceVendorTable } from "./OutsourceVendorTable";
 import { ProductTable } from "./ProductTable";
+import { ShopLogsTable } from "./ShopLogsTable";
 import { SupplierTable } from "./SupplierTable";
 import { useMasterdataChangedToast } from "./shared";
 
-const TABS = ["Customers", "Products", "Machines", "Materials", "Suppliers", "MHR Floors", "Outsource Vendors"] as const;
+const TABS = [
+  "Customers",
+  "Products",
+  "Machines",
+  "Materials",
+  "Suppliers",
+  "MHR Floors",
+  "Outsource Vendors",
+  "Shop logs",
+] as const;
 
 export function MasterDataScreen() {
   const [tab, setTab] = useState<(typeof TABS)[number]>("Customers");
@@ -24,7 +34,8 @@ export function MasterDataScreen() {
         <p className="text-xs uppercase tracking-[0.2em] text-cyan">Master data</p>
         <h1 className="font-display text-3xl">Shop records</h1>
         <p className="mt-2 max-w-2xl text-sm text-white/60">
-          Customers, products, machines, materials, suppliers, hour floors, and outsource vendors. Replace a row to supersede it. Nothing here is hard-deleted.
+          Customers, products, machines, materials, suppliers, hour floors, outsource vendors, and listened shop logs.
+          Replace a row to supersede it. Nothing here is hard-deleted.
         </p>
       </header>
       <nav className="mb-6 flex flex-wrap gap-2">
@@ -46,6 +57,7 @@ export function MasterDataScreen() {
       {tab === "Suppliers" ? <SupplierTable /> : null}
       {tab === "MHR Floors" ? <MHRFloorTable /> : null}
       {tab === "Outsource Vendors" ? <OutsourceVendorTable /> : null}
+      {tab === "Shop logs" ? <ShopLogsTable /> : null}
       <ToastLayer />
     </main>
   );

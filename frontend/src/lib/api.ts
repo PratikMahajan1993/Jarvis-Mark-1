@@ -332,8 +332,22 @@ export const api = {
   session: (sessionId = "default") =>
     json<Partial<ChatResponse>>(`/api/session?session_id=${sessionId}`),
   nextThought: (sessionId = "default") => json<ChatResponse>(`/api/thought?session_id=${sessionId}`),
-  googleStatus: () => json<{ configured: boolean; connected: boolean; calendar: boolean; calendar_list: boolean; sheets?: boolean; account: string; task_to: string }>("/api/google/status"),
-  googleAuthUrl: () => `${apiBase()}/api/google/auth`,
+  googleStatus: () =>
+    json<{
+      configured: boolean;
+      connected: boolean;
+      calendar: boolean;
+      calendar_list: boolean;
+      sheets?: boolean;
+      account: string;
+      task_to: string;
+      accounts?: {
+        shop?: { connected?: boolean; sheets?: boolean; calendar?: boolean; label?: string };
+        staff?: { connected?: boolean; sheets?: boolean; calendar?: boolean; label?: string };
+      };
+    }>("/api/google/status"),
+  googleAuthUrl: (account: "shop" | "staff" = "shop") =>
+    `${apiBase()}/api/google/auth?account=${encodeURIComponent(account)}`,
   watch: (sessionId = "default") =>
     json<{ watching: boolean; ready: boolean; status?: string; speak?: string; key?: string; scene?: ChatResponse["scene"] }>(
       `/api/watch?session_id=${sessionId}`,
@@ -500,4 +514,17 @@ export const api = {
       customers: Array<{ id: string; name: string }>;
       products?: Array<{ id: string; product_number: string; name: string }>;
     }>("/api/masterdata/options"),
+  masterdataGoogleAccounts: () =>
+    json<{ ok: boolean; items: Array<Record<string, unknown>> }>("/api/masterdata/google-accounts"),
+  masterdataRetireListenedSheet: (id: string) =>
+    json<{ ok: boolean; id: string }>(`/api/masterdata/listened-sheets/${encodeURIComponent(id)}/retire`, {
+      method: "POST",
+    }),
+  masterdataRefreshListenedSheet: (id: string) =>
+    json<Record<string, unknown>>(`/api/masterdata/listened-sheets/${encodeURIComponent(id)}/refresh`, {
+      method: "POST",
+    }),
+  sheetListenStatus: () => json<Record<string, unknown>>("/api/sheet-listen/status"),
+  sheetListenRefresh: () =>
+    json<Record<string, unknown>>("/api/sheet-listen/refresh", { method: "POST" }),
 };

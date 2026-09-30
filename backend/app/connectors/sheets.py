@@ -55,21 +55,21 @@ def spreadsheet_id_from(text: str) -> str:
     return ""
 
 
-def _service():
-    return google_auth.google_service("sheets", "v4")
+def _service(account: str | None = None):
+    return google_auth.google_service("sheets", "v4", account=account)
 
 
-def _drive():
-    return google_auth.google_service("drive", "v3")
+def _drive(account: str | None = None):
+    return google_auth.google_service("drive", "v3", account=account)
 
 
 def spreadsheet_url(spreadsheet_id: str) -> str:
     return f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}/edit"
 
 
-def list_sheets(spreadsheet_id: str) -> list[str]:
+def list_sheets(spreadsheet_id: str, account: str | None = None) -> list[str]:
     meta = (
-        _service()
+        _service(account)
         .spreadsheets()
         .get(spreadsheetId=spreadsheet_id, fields="sheets.properties.title")
         .execute()
@@ -119,14 +119,14 @@ def _record_from_row(headers: list[str], values: list[Any]) -> dict[str, Any]:
     return record
 
 
-def read_sheet(spreadsheet_id: str, sheet_name: str) -> dict[str, Any]:
-    names = list_sheets(spreadsheet_id)
+def read_sheet(spreadsheet_id: str, sheet_name: str, account: str | None = None) -> dict[str, Any]:
+    names = list_sheets(spreadsheet_id, account=account)
     if sheet_name not in names:
         available = ", ".join(names) if names else "(none)"
         raise SheetNotFoundError(f"Sheet {sheet_name!r} not found. Available: {available}")
     quoted = "'" + sheet_name.replace("'", "''") + "'"
     result = (
-        _service()
+        _service(account)
         .spreadsheets()
         .values()
         .get(spreadsheetId=spreadsheet_id, range=quoted, majorDimension="ROWS")
