@@ -1,6 +1,6 @@
 # Implementation map
 
-Updated 2 October 2026. This is a code navigation guide, not a design contract or a report of live verification. The frontend uses the branch's committed implementation; the recent UI proposal is retained for review and has not been accepted as a completed implementation.
+Updated 2 October 2026. This is a code navigation guide, not a design contract or a report of live verification. Libraries and file locations below are the current implementation. They may change.
 
 ## Frontend
 
@@ -36,6 +36,6 @@ The application queues consequential external actions for approval. A parked app
 
 Use [behavioral checks](../work/CAPABILITY_TEST_MATRIX.md) for functional verification. Frontend scripts are listed in package.json; pytest configuration is at the repository root.
 
-[UI discovery](uiux-discovery/README.md) records an inspection snapshot. [Phase 1 documents](../work/references/jarvis-ui-phase-1/SPECIFICATION.md) contain the recent design proposal, decisions, inventory, and execution workflow. Their presence does not establish that implementation or acceptance checks have passed.
+[UI discovery](uiux-discovery/README.md) is an inspection snapshot. It is not a design contract.
 
 Live Hermes, Google accounts, speech playback, and GPU performance have not been verified by this documentation update.

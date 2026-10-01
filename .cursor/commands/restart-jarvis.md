@@ -2,6 +2,6 @@
 description: Restart the Jarvis HUD, API, Hermes gateway, and Ollama
 ---
 
-Restart the Jarvis desk. Do not edit product code.
+Restart the Jarvis desk for this checkout.
 
-Follow `.cursor/commands/start-jarvis.md`. That command already stops a running desk and starts it again.
+Follow `.cursor/commands/start-jarvis.md`.
