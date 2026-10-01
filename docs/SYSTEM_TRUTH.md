@@ -1,8 +1,8 @@
 # Jarvis — System Truth (Single Source of Truth)
 
 **Generated:** 2026-09-25  
-**Updated:** 2026-10-02  
-**Status:** Single source of truth for current state and locked decisions. Replaces `docs/CURRENT.md` (now folded in). Forward-looking work is `docs/ROADMAP.md`. This document supersedes all prior `work/` and `docs/` files.
+**Updated:** 2026-09-30  
+**Status:** Consolidated from all living notes, architecture manifests, capability matrices, and as-built docs. This document replaces all prior work/ and docs/ files.
 
 ---
 
@@ -57,9 +57,7 @@ Hermes shop turns use `POST /v1/runs` and the event stream (tool lines and text 
 
 ## 2. HUD Architecture (Locked 2026-09-29 — Scroll Substrate)
 
-> **Status:** this is the running desk. `app/layout.tsx` mounts `JarvisRoot`; `/` mounts `Desk`. `OrchestratorShell` and `HudShell` are gone. Decisions of record: `docs/overhaul/EXPERIENCE_DECISIONS.md` (`X#`) and `docs/overhaul/PLATFORM_DECISIONS.md` (`P#`). Where the code still differs from those contracts, the as-built note in §15 below wins. Operating rule: `.cursor/rules/frontend/22-scroll-substrate.mdc`.
->
-> **As-built caveat (X2 vs. reality):** X2 said "PageUp, PageDown and Space move sections." The running desk uses Space as the mic when not typing, and types into fields (including the baton) when typing. PageUp/PageDown and Alt+1–9 still jump sections. The contract text in X2 is stale on Space; this line wins.
+> **Status:** this is the running desk. `app/layout.tsx` mounts `JarvisRoot`; `/` mounts `Desk`. `OrchestratorShell` and `HudShell` are gone. Decisions of record: `docs/overhaul/EXPERIENCE_DECISIONS.md` (`X#`) and `docs/overhaul/PLATFORM_DECISIONS.md` (`P#`). Where the code still differs from those contracts, `docs/CURRENT.md` (Contract Delta) wins as the as-built note. Operating rule: `.cursor/rules/frontend/22-scroll-substrate.mdc`.
 
 ### 2.1 One Page, Vertical Sections, One Persistent Orb
 
@@ -216,8 +214,8 @@ Hint contract: `ChatRequest.section` (current) → `ChatResponse.ui = { section,
 - Floors in `machine_hour_rates` with `effective_from`/`effective_to`, read **as-of** quote date
 - **Quoted rate ≥ floor** — above floor is owner's call; below = BLOCKER
 - **Missing data = failure, not skip** — no machine, no rate, machine absent from table, expired rate → BLOCKER
-- **RM basis > 30 days = BLOCKER** at send (supplier quote, invoice, or estimate alike). The owner can clear that block by recording an override on the quote: the customer's **exact master-data name** plus the **age string shown by Jarvis** (`30`, the actual age, or `none` when the price is missing). Short names or aliases do not satisfy it.
-- Outsource age = WARN only (shown on the PDF; never blocks)
+- **RM basis > 30 days = BLOCKER** at send (supplier quote, invoice, or estimate alike)
+- Outsource age = WARN only
 
 ### 4.6 Proof (`quote_verify`)
 
@@ -229,7 +227,7 @@ Hint contract: `ChatRequest.section` (current) → `ChatResponse.ui = { section,
 
 - Proof runs against stored `quote_revision`, not chat memory
 - Verified PDF bound by sha256; `quote_send` re-hashes and refuses on drift
-- Any BLOCKER ⇒ `stop: true`; counting failures is not a severity model
+- >2 BLOCKER failures → `stop: true`
 - Corrections go to playbook `notes.md` via `quote_playbook_note`, then broken step re-runs
 
 ### 4.7 Quote Send (HITL)
@@ -296,6 +294,7 @@ Hint contract: `ChatRequest.section` (current) → `ChatResponse.ui = { section,
 
 - **Ledger mirror, entity cards, vectors**: SQLite + LanceDB under `<repo>/data/memory/`
 - **No cloud memory service** — no hosted vector DBs, no sync to third-party memory APIs
+- **Honcho stripped entirely** (locked 2026-09-22)
 
 ### 6.3 Drawing Identity & Recall
 
@@ -448,9 +447,17 @@ Fails closed on: unresolved modal state; motion outside travels; rapid below cle
 
 ---
 
-## 13. Agent Roster
+## 13. Agent Roster & Skills
 
-There are no Jarvis-specific subagents in `.cursor/agents/`. The coordinator implements and reviews code directly. Dispatch a Cursor subagent only when the user explicitly requests one — see `AGENTS.md`.
+| Agent | Owns | Needs Desk Machine? |
+|-------|------|---------------------|
+| `jarvis-uiux` | Layout, React Bits, weather/tasks panels, visual polish | No (cloud-verifiable rendering/layout/scroll/card-state) |
+| `jarvis-voice` | Gemini TTS, `/api/tts`, Charon playback, silence on quota | Yes — needs the Gemini speech key and a speaker |
+| `jarvis-workflows` | Mail, HITL, RFQ/quote, calendar, Hermes/snapshot tools | Yes for live mail/Hermes; no for logic + `backend/tests` |
+| `jarvis-builder` | General agreed implementation / restarts / verify | Only for restarts and live verification |
+
+**UI/UX Rule:** Always reuse `jarvis-uiux` for visual work — do not invent ad-hoc UI agents  
+**Placement Policy:** Cloud workers can build/serve HUD and drive headless Chrome (`--enable-unsafe-swiftshader` for WebGL); what they cannot reach: Hermes, the Gemini speech key’s live audio, real Google OAuth, GPU-representative Ollama, physical mic/speaker
 
 ---
 
@@ -458,14 +465,15 @@ There are no Jarvis-specific subagents in `.cursor/agents/`. The coordinator imp
 
 | File | Role |
 |------|------|
+| `docs/CURRENT.md` | As-built snapshot and the only open-gap list |
 | `docs/SYSTEM_TRUTH.md` | **This file** — single source of truth |
 | `docs/ROADMAP.md` | Next steps & priorities |
 | `AGENTS.md` | Agent & skill map |
 | `.cursor/rules/core/00-jarvis-core.mdc` | Always-on core rules |
-| `.cursor/rules/backend/10-api-python.mdc` | Module ownership, config, imports, timeouts |
-| `.cursor/rules/backend/12-data-schema.mdc` | Migrations, money, units, UTC, provenance |
-| `.cursor/rules/domain/30-quote-playbook.mdc` | Quote workflow non-negotiables |
-| `.cursor/rules/frontend/22-scroll-substrate.mdc` | Substrate hoisting, layers, scroll/orb |
+| `.cursor/rules/backend/*.mdc` | Backend module rules |
+| `.cursor/rules/domain/30-quote-playbook.mdc` | Quote workflow rule. G-code, vision, master data, and knowledge rules live in this document, not in extra `.mdc` files |
+| `.cursor/rules/frontend/22-scroll-substrate.mdc` | Substrate hoisting, layer tiers, feature templates. React Bits guidance is the `jarvis-react-bits` skill |
+| `.cursor/rules/ops/42-dispatch.mdc` | Tests and dispatch |
 | `work/CAPABILITY_TEST_MATRIX.md` | Capability test IDs and log |
 | `backend/app/hermes/playbooks/quote/` | Shop-quote playbook source |
 | `backend/app/quote.py` | Quote implementation |
@@ -477,8 +485,6 @@ There are no Jarvis-specific subagents in `.cursor/agents/`. The coordinator imp
 | `docs/overhaul/EXPERIENCE_DECISIONS.md` | Scroll-substrate UX decisions (`X#`) |
 | `docs/overhaul/PLATFORM_DECISIONS.md` | Feature platform / SDK / stores decisions (`P#`) |
 | `frontend/src/substrate/` | Single WebGL swarm, formulas, protocol |
-
-G-code, vision, master-data, and knowledge rules live in this document, not in extra `.mdc` files. Turn ledger is gated off (`turn_ledger_enabled`, default `false`); details live in `docs/ROADMAP.md` Phase 7 when it becomes load-bearing.
 
 ---
 
@@ -517,44 +523,16 @@ G-code, vision, master-data, and knowledge rules live in this document, not in e
 | 2026-09-29 | HITL park → TaskDock draft chip; Engineering saved-task deck | X8, X9 |
 | 2026-09-29 | Orb = casberry-style particle swarm; formulas per section (Casual Cortex Dinamico, Monitor ASCI System, Engineering CHAT GPT) run verbatim in the worker | X5, `docs/overhaul/ORB_FORMULAS.md` |
 | 2026-09-29 | Feature platform: manifests + `@/sdk`, TanStack Query, `/api/events`, OpenAPI types, scaffold, Vitest | `docs/overhaul/PLATFORM_DECISIONS.md` |
-| 2026-09-29 | Coordinator implements directly; no mandatory subagent hand-off | `AGENTS.md` |
-| 2026-09-30 | Scroll desk is the running HUD. `OrchestratorShell` is removed. Casual quote/drawing hints go to Engineering | This doc §2, X4 |
+| 2026-09-29 | Coordinator implements directly; no mandatory subagent hand-off | `.cursor/rules/ops/42-dispatch.mdc` |
+| 2026-09-30 | Scroll desk is the running HUD. `OrchestratorShell` is removed. Casual quote/drawing hints go to Engineering | `docs/CURRENT.md`, X4 |
 | 2026-09-30 | Master Data UI is `/masterdata`; `masterdata_enabled` defaults on | `backend/app/config.py` |
-| 2026-09-30 | Snap type `"lock"` vs contract “mandatory” stays an owner decision | This doc §2.1 |
-| 2026-09-30 | Shop logs are read-only production tabs on up to two Google accounts. Today’s rows are current state. Empty cells stay missing | This doc §6 |
+| 2026-09-30 | Snap type `"lock"` vs contract “mandatory” stays an owner decision | `docs/CURRENT.md` Contract Delta |
+| 2026-09-30 | Shop logs are read-only production tabs on up to two Google accounts. Today’s rows are current state. Empty cells stay missing | `docs/CURRENT.md` |
 | 2026-09-30 | Demo customer names are not re-seeded after the owner has saved a real customer | `backend/app/masterdata/seed_master_data.py` |
-| 2026-10-02 | Space-key behavior: types in fields, mic when not typing, never scrolls. X2 wording stale | This doc §2.1 |
-| 2026-10-02 | Stale RM basis (> 30 days) blocks at send; owner override requires exact customer name + age string | This doc §4.5 |
-| 2026-10-02 | Snap type is `"lock"` (was open vs X2 "mandatory"); decided, delta closed | This doc §16 |
-| 2026-10-02 | Coordinator may dispatch subagents for zero-ambiguity execution without asking | `AGENTS.md` |
-| 2026-10-02 | HITL scoped to actions that commit the business; exploratory/draft work does not need HITL | `.cursor/rules/core/00-jarvis-core.mdc` |
-| 2026-10-02 | Feature-only constraint on `core/`/`substrate/` removed; desk itself evolves directly in those folders | `.cursor/rules/frontend/22-scroll-substrate.mdc` |
-| 2026-10-02 | Manifesto + `MANIFESTO_CORE.md` deleted; product intent is `docs/ROADMAP.md` | — |
 
-Rows that name Vision Workbook or `work/*` are the decision’s origin. The text in this file is the rule. `work/ARCHITECTURE_POINTS.md`, `work/UI_UX_POINTS.md`, and `work/APP_FEATURES.md` are decision logs, not status. Rows marked **superseded** are historical footnotes — do not treat them as current constraints.
+Rows that name Vision Workbook or `work/*` are the decision’s origin. The text in this file is the rule. `work/ARCHITECTURE_POINTS.md`, `work/UI_UX_POINTS.md`, and `work/APP_FEATURES.md` are decision logs, not status.
 
 ---
 
-## 16. As-Built Snapshot
-
-Absorbed from `docs/CURRENT.md` (deleted 2026-10-02). Anything here is implementation detail, not a decision — when this section and §1–§15 disagree, §1–§15 win and this section should be edited to match.
-
-**HUD as it runs today:**
-- Landing gates (`core/landing/`): substrate, fonts, desk, Monitor DOM, Casual DOM, engineering chunk + DrawingViewer + pdf.js prefetch. Min 1.4 s (0.6 s on same-tab refresh), cap 4 s. Hermes never blocks exit. Chrome fades in staggered 80 ms.
-- Drafts: baton flushes on section change and `pagehide`; Engineering autosaves on programmatic leave (awaited, 300 ms cap). Draft keys `^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$`, 64 KB cap.
-- Voice: `voice.ts` posts analyser RMS `level` to the substrate. Space types in fields (including the baton), is the mic when not typing, and never scrolls.
-- Deck: pdf.js page-1 thumbnails cached in IndexedDB; empty deck is a drop target. Arrow keys and horizontal trackpad swipe cycle the deck; vertical or diagonal swipe still scrolls the page.
-- Feature platform: `backend/app/core/features.py` (`publish`, `GET /api/features`, `GET /api/events`); SDK hooks in `frontend/src/sdk/index.ts`; OpenAPI types at `frontend/src/lib/api/schema.gen.ts`. `npm run new:feature <id>` registers both indexes; `--section`, `--migration <slug>`, `--job <name>` produce the matching stubs. Weather's backend module is `backend/app/features_weather.py` (not `features/weather/`).
-- Substrate degrader keys off worker `simMs` (bloom first, then a slower sim).
-- Landing first frame is server HTML (`LandingFirstFrame` in `app/page.tsx`), replaced when the client overlay mounts.
-
-**Open deltas vs. X#/P#:**
-- None open. Snap type is `"lock"` (`core/scroll/engine.ts`); X2 originally said "mandatory" — the desk runs `"lock"` on purpose, decided 2026-10-02.
-
-**Runtime:**
-- HUD at `http://127.0.0.1:3000`; API at `http://127.0.0.1:8000/api/health`; Hermes at `:8642`; speech via `POST /api/tts`.
-- Data: `<repo>/data/`; exports: `<repo>/exports/`. Install: `docs/INSTALL.md`. Agents: `AGENTS.md`.
-
----
-
-**End of System Truth.** Next work is `docs/ROADMAP.md`. The point-in-time review of merge `7742e79` is `archive/2026-09-30-scroll-review/SCROLL_OVERHAUL_REVIEW.md`. Older plans are in `archive/2026-09-29-doc-cleanup/` and `archive/2026-09-14-pre-replan/`.
+**End of System Truth.**  
+As-built status is `docs/CURRENT.md`. Next work is `docs/ROADMAP.md`. The point-in-time review of merge `7742e79` is `archive/2026-09-30-scroll-review/SCROLL_OVERHAUL_REVIEW.md`. Older plans are in `archive/2026-09-29-doc-cleanup/` and `archive/2026-09-14-pre-replan/`.

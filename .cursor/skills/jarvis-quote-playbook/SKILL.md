@@ -14,7 +14,7 @@ description: >
 
 - `docs/CURRENT.md` — as-built quote bullets
 - Playbook source: `backend/app/hermes/playbooks/quote/SKILL.md` (skill name **shop-quote**)
-- Codex architecture: `jarvis-architecture` skill + `reference.md` quote table
+- Cursor architecture: `jarvis-architecture` skill + `reference.md` quote table
 
 ## Where things live
 

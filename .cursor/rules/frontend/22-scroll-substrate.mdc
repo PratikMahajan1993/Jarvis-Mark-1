@@ -1,27 +1,46 @@
 ---
-description: Scroll-substrate HUD — root-hoisted WebGL, layer tokens, scroll/orb rules, and feature constraints.
+description: Scroll-substrate HUD — root-hoisted WebGL, layer tokens, scroll/orb rules, and the feature SDK that exists today.
 globs: frontend/src/**
 alwaysApply: false
 ---
 
 # Scroll Substrate
 
-Decisions: `docs/overhaul/EXPERIENCE_DECISIONS.md` (`X#`), `docs/overhaul/PLATFORM_DECISIONS.md` (`P#`); the as-built delta lives in `docs/SYSTEM_TRUTH.md`. Contracts win on conflict; fix this rule in the same PR.
+Decisions: `docs/overhaul/EXPERIENCE_DECISIONS.md` (`X#`), `docs/overhaul/PLATFORM_DECISIONS.md` (`P#`). The as-built delta at the end of each, and `docs/CURRENT.md`, records the open snap-type difference. Do not change Lenis snap type in a feature PR. Otherwise the contracts win on conflict; fix this rule in the same PR.
 
-## Hard constraints (break-if-violated)
+## Locked base
 
-- `JarvisRoot` (in `app/layout.tsx`) owns the only WebGL context for the tab. Never open a second `getContext("webgl" | "webgl2")` on `/`.
-- Lenis + the scroll director own page scroll. Components never install their own `scroll` / `wheel` listeners, and never call `window.scrollTo` or `scrollIntoView`.
-- Tailwind z-tokens only (`z-backdrop`, `z-substrate`, `z-content`, `z-decor`, `z-chrome`, `z-modal`, `z-toast`, `z-landing`). No raw `z-index`. No `position: fixed` outside L3 chrome.
+Do not edit `core/`, `substrate/`, `lib/orchestratorFsm.ts`, or `app/layout.tsx` to ship a feature. Features live in `features/<id>/`, import Jarvis only via `@/sdk`, register with one line in `features/index.ts`.
 
-## Features (new plugin work)
+`JarvisRoot` owns the only WebGL context for the tab (one canvas → worker OffscreenCanvas). Never open a second `getContext("webgl"|"webgl2")` on `/`. Lenis + the scroll director own page scroll — features never add scroll/wheel listeners or call `window.scrollTo` / `scrollIntoView`.
 
-- New *product features* exposed as plugins live in `frontend/src/features/<id>/` + `backend/app/features/<id>/`, import via `@/sdk` only, and register in `features/index.ts`. Scaffold with `npm run new:feature <id>`. See `docs/overhaul/PLATFORM_DECISIONS.md` for SDK shapes.
-- Evolving the desk itself — sections, chrome, FSM, scroll engine, substrate — goes directly in `core/` / `substrate/` and follows the contracts in `EXPERIENCE_DECISIONS.md` (`X#`) / `PLATFORM_DECISIONS.md` (`P#`). Do not stuff desk changes into a feature folder to bypass review.
+## Layers
+
+Use Tailwind z-tokens only — never a raw `z-index`: `z-backdrop` L0 · `z-substrate` L1 · `z-content` L2 · `z-decor` / `z-chrome` L3 · `z-modal` · `z-toast` · `z-landing`.
+
+## SDK today
+
+`defineFeature`, `defineSection`, `defineCard`, `Slot`, `useSection`, `useTopic`, `useDraft`, `useTaskQueue`, `useWeatherLine`, `useJarvisState`, `useJarvisSend`, `useSpeak`, `useOrb`, `requestApproval`, `useFeatureQuery`, `useFeatureMutation`, `useActiveSession`, `useFeatureFlag`, `useToast`, `useReducedMotion`, `api`, `featureSectionOrb`, `FEATURE_SECTION_THEME`.
+
+A feature section is `sections` on `defineFeature`. The desk merges it by `order`. Scaffold it with `npm run new:feature <id> --section`. A migration stub is ` --migration <slug>`. A job registered with `--job` runs when the API process starts.
+
+```ts
+defineFeature({
+  id: "toolwear",
+  title: "Tool wear",
+  cards: [{
+    id: "toolwear.recent", slot: "monitor.rail", order: 40, size: "md",
+    component: lazy(() => import("./RecentInsertsCard")),
+  }],
+});
+```
+
+Place cards with `<Slot id="monitor.rail" />`. Use `useTopic` for SSE; `useDraft` for local baton text.
 
 ## Hard don'ts
 
-- Second WebGL context, feature-owned `requestAnimationFrame` loops, feature scroll/wheel listeners
+- Second WebGL context, feature `requestAnimationFrame` loops, or feature scroll/wheel listeners
+- Raw `z-index` or `position: fixed` outside L3 chrome
 - Inventing prices, rates, or dimensions with no tool/master-data source
 - External/destructive acts without HITL Authorize (mail, calendar write, quote send, sheet write)
 - Treating a parked approval as authorized
