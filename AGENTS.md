@@ -1,28 +1,31 @@
-# Jarvis — Codex workspace guidance
+# Jarvis
 
-Jarvis is an office assistant for a precision machining business. This checkout is the UI redesign workspace.
+Jarvis is an office assistant for a precision machining company. These instructions apply in every checkout.
 
-## Working here
+## Freedom
 
-- Work in this checkout and preserve existing user edits. Do not operate on another checkout or restart shared services unless the task calls for it.
-- Use the owner's current request and accepted design decisions to determine scope. Resolve routine design and engineering choices autonomously.
-- The frontend is open to substantial redesign: layout, navigation, typography, visual language, components, renderer, scroll behavior, state organization, root layout, and dependencies may change within the requested scope.
-- Inspect only the code and documentation relevant to the task. Existing implementation describes what is there; it does not prescribe what the design must become.
-- Keep the recent UI documents and reference assets. Apply their decisions when the owner asks to continue that design; keeping a document does not make it a permanent constraint on every future task.
-- Use subagents only when the owner explicitly requests them.
+Decide how to build. Within the task you were given:
 
-## Functional protections
+- Choose the architecture, data flow, libraries, and dependencies when a better approach is justified.
+- Redesign the interface: layout, navigation, typography, motion, components, scroll, rendering, and information architecture.
+- Refactor or replace weak code. Existing structure is evidence of what is there, not a requirement to keep it.
+- Use the browser, visual inspection, external tools, and external skills.
+- Dispatch subagents when they speed up investigation or implementation. Keep the product judgment for the task you were given.
+- Make ordinary technical choices without a planning document, an interview, or an extra approval step.
 
-Preserve user data, drafts, conversation identity, working integrations, and approval semantics during UI changes. Do not bypass backend confirmation or quote verification. Do not trigger external sends to demonstrate a visual state. Label fixtures and do not present them as live data. Keep credentials, tokens, databases, customer files, and exports out of commits.
+`docs/CURRENT.md` is a map of the code. `docs/uiux-discovery/` is an inspection snapshot. `work/CAPABILITY_TEST_MATRIX.md` is a list of behaviors worth checking. None of them freezes the design.
 
-## Useful entry points
+## Protections
 
-- Setup: README.md and docs/INSTALL.md.
-- Implementation map: docs/CURRENT.md; inspect code for current behavior.
-- Business requirements: docs/PRODUCT_BRIEF.md.
-- UI work: work/references/jarvis-ui-phase-1/ and work/references/JARVIS_UI_PHASE_1_PROMPT.md.
-- Behavioral checks: work/CAPABILITY_TEST_MATRIX.md.
+- Prices, dates, dimensions, rates, mail, and calendar facts come from tools or stored records. If the source is missing, ask or leave the fact missing.
+- Outbound mail, calendar writes, quote send, sheet writes, CNC promotion, and broad memory wipes wait for the owner to authorize them. A queued or parked action has not been done. Do not claim success until execution records the outcome.
+- Do not bypass quote verification. Do not transmit a program to a machine, a control, or a DNC link.
+- Preserve user data, drafts, conversation identity, and approval outcomes when the interface changes.
+- Do not perform an external send just to show a screen. Label fixtures as fixtures.
+- Do not commit `.env`, tokens, databases, customer files, or `exports/`.
 
-## Verification
+Business intent is `docs/PRODUCT_BRIEF.md`. It does not dictate frontend structure. Schema changes follow `docs/MIGRATION_STANDARDS.md`.
 
-Use checks appropriate to the changed behavior. Frontend scripts in frontend/package.json include typecheck, lint, test, and build. Backend checks run from the repo root with python -m pytest -m "not live_service". Verify visual work in the browser, including relevant input, responsive, and accessibility states. Report what passed, failed, and needs live services or physical hardware.
+## Checks
+
+Verify the behavior you changed. Frontend scripts are in `frontend/package.json`. From the repo root, backend checks are `python -m pytest -m "not live_service"`. When the interface changes, look at it in a browser, including the states that change can break. Report what passed, what failed, and what still needs live services or hardware.

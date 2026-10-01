@@ -6,7 +6,7 @@
 - **API:** [http://127.0.0.1:8000](http://127.0.0.1:8000) (FastAPI + SQLite). Prefer `--host 127.0.0.1` — binding `0.0.0.0:8000` can leave a second ghost listener alongside an existing process.
 - **Brain:** Hermes gateway first (`hermes_enabled` defaults on). Gemini when `GEMINI_API_KEY` is set (`LLM_PROVIDER=auto`), otherwise Ollama (`OLLAMA_MODEL`). “Task for Gemini” mail is a separate tool, not the desk brain.
 
-As-built snapshot: [docs/CURRENT.md](docs/CURRENT.md). Cursor agents, skills, and rules: [AGENTS.md](AGENTS.md).
+As-built snapshot: [docs/CURRENT.md](docs/CURRENT.md). Agent guidance: [AGENTS.md](AGENTS.md).
 
 ## Requirements
 
@@ -18,7 +18,7 @@ As-built snapshot: [docs/CURRENT.md](docs/CURRENT.md). Cursor agents, skills, an
 ## Setup
 
 ```powershell
-cd D:\Cursor\Jarvis
+cd <this-checkout>
 copy .env.example .env
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
@@ -90,4 +90,4 @@ If Hermes and the fallback model are offline, work tools still run where configu
 - **Drive / Gemini:** need Connect Gmail. A file ask finds the Drive copy or uploads the local one, then Authorize sends **Task for Gemini**. Gemini tasks email `GEMINI_TASK_TO` (defaults to same account).
 - `TAVILY_API_KEY` or `BRAVE_API_KEY` for cloud research; otherwise DuckDuckGo.
 
-See [docs/CURRENT.md](docs/CURRENT.md) for what works today. **New machine or migration:** [docs/INSTALL.md](docs/INSTALL.md). Capability tests: [work/CAPABILITY_TEST_MATRIX.md](work/CAPABILITY_TEST_MATRIX.md). Cursor agents/skills/rules: [AGENTS.md](AGENTS.md).
+See [docs/CURRENT.md](docs/CURRENT.md) for a map of the code. **New machine or migration:** [docs/INSTALL.md](docs/INSTALL.md). Capability checks: [work/CAPABILITY_TEST_MATRIX.md](work/CAPABILITY_TEST_MATRIX.md). Agent guidance: [AGENTS.md](AGENTS.md).

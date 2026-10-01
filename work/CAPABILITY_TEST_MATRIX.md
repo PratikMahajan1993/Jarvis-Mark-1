@@ -1,12 +1,8 @@
 # Jarvis — Capability & Workflow Test Matrix
 
-**Updated:** 2026-09-30 (scroll-substrate HUD on `overhaul`)  
-**Method:** Test one use case at a time → note pass/fail + latency → dispatch fix → continue.  
-**Status:** Active matrix for the running scroll desk.  
-**Prerequisite:** One page (`JarvisRoot` + `Desk` at `:3000`). Vertical sections **Monitor → Casual → Engineering** (feature sections slot in by `order`). Lenis snap type **`lock`**. Two state layers that must never collapse:
-- `HudWorkspace`: Casual | Monitor | Engineering — **derived from the active scroll section**
-- Turn FSM (`orchestratorFsm.ts`): IDLE | LISTENING | THINKING | SPEAKING | AWAITING_HITL | EXECUTING  
-**Source of Truth:** `docs/SYSTEM_TRUTH.md` · as-built: `docs/CURRENT.md` · contracts: `docs/overhaul/EXPERIENCE_DECISIONS.md`
+**Updated:** 2026-10-02  
+**What this is:** a catalog of behaviors worth checking. It is not an architecture or layout contract. Section order, scroll, rendering, and libraries may change. Judge a row by the business outcome it names, not by the screen arrangement in an older build.  
+**Business requirements:** `docs/PRODUCT_BRIEF.md`. Code map: `docs/CURRENT.md`.
 
 ---
 
@@ -18,17 +14,9 @@
 | **offline** | Runnable with `pytest -m "not live_service"` (partial coverage — still re-test live) |
 | **retired** | Case kept for history; skip this pass (one-line why in the row) |
 
-### Agent-Assisted Run Protocol
-While you test in the HUD, tell the coordinator your observations (ID + what you saw). The coordinator will:
-1. Read `work/LAST_TURNS.md` (auto-updated last 20 chat/confirm turns) for what Jarvis said/did.
-2. Log the result into the run log (auto-appended by API to `work/LIVE_TEST.md` + JSONL).
-3. Delegate to a **background worker** (`jarvis-uiux` / `jarvis-voice` / `jarvis-workflows` / `jarvis-builder`) so testing can continue.
-4. Summarize the fix when the worker reports back; re-test that ID if you want.
+### How to use a row
 
-Every kickoff to a worker must be self-contained: goal, repro, files in scope, acceptance check.
-
-### Where a Fix Can Run
-Cloud workers lack Hermes (`:8642`), live Gemini speech, real Google OAuth, GPU-representative Ollama, and physical mic/speaker — checks needing those stay **desk**. Cloud *can* build/serve the HUD and drive headless Chrome (`--enable-unsafe-swiftshader` for the substrate swarm). Section **E** (HUD/FSM) and **P** (sections/orb/pin) are mostly **cloud** except server `ui` hints that need a brain. Section **S** (landing/snap/dock/deck) is mostly **cloud**. Section **K** (voice) is mostly **desk**. Semantic router logic is **cloud** + **offline**; live orchestra highlight is **desk**.
+Check one case, note pass or fail, and fix it in whatever way the code actually needs. A background helper is optional. Live Hermes, Google sign-in, speech playback, and a physical mic or speaker are needed only for cases tagged **desk**. Layout and scroll can be checked in a browser, including headless Chrome.
 
 ---
 

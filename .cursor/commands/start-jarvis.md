@@ -2,12 +2,10 @@
 description: Start the Jarvis HUD, API, Hermes gateway, and Ollama
 ---
 
-Do not inspect what is already running. Do not read other files. Do not edit product code.
-
-Immediately run this one command from `d:\Cursor\Jarvis`:
+Run this from the repository root of the checkout you are in:
 
 `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-jarvis.ps1`
 
-The script restarts the API, the HUD, the Hermes gateway, and Ollama. If one of them is already up, the script stops that listener and starts it again. Do not start Voicebox.
+If that script points at a different checkout, start the API and the HUD for this checkout instead. See `docs/INSTALL.md`. Do not start a second listener on a port that is already serving this app.
 
-When the script prints its line, tell the user to open http://localhost:3000. Do not probe ports or health unless the script exits with an error.
+When the app is up, tell the user to open http://localhost:3000. If startup fails, read the error and check the ports.

@@ -1,6 +1,6 @@
 # Observations and questions
 
-Inspection snapshot from 1 October 2026. These questions preserve discovery; consult the recent decision record before repeating answered questions.
+Inspection snapshot from 1 October 2026. These notes are not a gate. Design and implementation may proceed without answering them.
 
 ## Functional requirements
 
@@ -20,7 +20,7 @@ Parked approvals were reached through Notifications; TaskDock provided an Engine
 - The desk’s persistent chrome and orb compete for visual attention with dense Engineering quote/drawing controls; this is a hypothesis to validate with the owner and users, not a usability finding.
 - Separate `/canvas` and `/masterdata` routes are not represented as sections in SectionNav; their discoverability from the desk should be checked in the running UI.
 
-## Questions before design begins
+## Open questions
 
 1. Who are the main user roles and which tasks should dominate their first visit: monitoring, conversation, or quote work?
 2. Should `/canvas` and `/masterdata` be discoverable from the desk chrome, and who uses each regularly?

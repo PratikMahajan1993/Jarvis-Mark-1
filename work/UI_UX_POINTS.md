@@ -1,8 +1,6 @@
 # UI/UX points (decision log)
 
-Owner decisions only. **What the desk does today is `docs/CURRENT.md`.** The experience contract is `docs/overhaul/EXPERIENCE_DECISIONS.md` (X1–X13). Do not add as-built checklists here.
-
-React Bits accents are the `jarvis-react-bits` skill. There is no `21-react-bits.mdc` rule.
+Historical notes. They do not constrain layout, motion, scroll, or visual language. Current guidance is `AGENTS.md`.
 
 ## Log
 

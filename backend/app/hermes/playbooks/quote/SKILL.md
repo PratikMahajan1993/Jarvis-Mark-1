@@ -56,9 +56,9 @@ Customer email (draft for send tool): short formal body, **total quoted cost in 
 | Topic | Rule |
 | --- | --- |
 | Labour vs material | Some customers are labour-only by default; for others buying our own RM is compulsory. A line in the mail or the customer saying "with material" overrides the default. Pass that as `scope` on `jarvis_quote_build`. If neither the customer record nor this order states scope, the tool returns `need: scope` — **ask** "Labour-only or with material?" and do not price. |
-| MHR floor | Each machine type has a **minimum** MHR in `files/mhr-demo.md` (DEMO). Do not quote below it; quoted rate may be higher. Floor ≠ final price. Later: master data — **do not build master data now**. |
+| MHR floor | Do not quote below the applicable machine-hour floor. A higher rate is allowed. When master data is enabled, live floors come from that store; `files/mhr-demo.md` is a demo table, not shop truth. |
 | Outsource | Outsource an operation or whole component when: no suitable machine, customer asked, capacity, or process not in-house (heat treat, plating, grinding, etc.). Record which case. Never invent outsource price. |
-| Before send | Every price line must be present. Missing RM supplier quote → estimate allowed only from historical transactions or market trend, marked estimate with source named. **Delivery time does not hold the quote.** Customer spelling: ask if unsure; empty `client-names.md` does not block proof. |
+| Before send | Every price line must be present. Missing RM supplier quote → estimate allowed only from historical transactions or market trend, marked estimate with source named. Do not invent a delivery date. `quote.py` proof is authoritative if it blocks send. Customer spelling: ask if unsure. |
 | Never underquote | Past misses: price corrected after send, assumed material, forgotten outsource, material on labour-only customer. Do not go below minimum MHR, omit required RM/outsource cost, or add material cost on labour-only orders. |
 
 ## Proof and send

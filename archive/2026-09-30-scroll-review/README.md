@@ -1,3 +1,3 @@
 # Archived 2026-09-30
 
-`SCROLL_OVERHAUL_REVIEW.md` reviews merge `7742e79` only. Fixes landed after that review. Current desk status is `docs/CURRENT.md`.
+Historical review of one merge. Do not follow it as a design or architecture contract. Current guidance is `AGENTS.md`.

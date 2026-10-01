@@ -1,14 +1,12 @@
 # App features (decision log)
 
-What the owner wants Jarvis to keep doing. **What is built is `docs/CURRENT.md`.** Do not add as-built checklists here.
+Historical notes, plus the business protections below. They do not require a feature scaffold, a plugin boundary, or a fixed note limit.
 
-## Standing choices
+## Still in force
 
-- One Hermes brain. Tools own mail, calendar, files, and every number.
-- Jobs are Hermes playbooks. The first shipped job is shop-quote.
-- Authorize / Reject before mail send, Task for Gemini, calendar writes, quote send, and broad memory wipe. Later parks an approval. A chip cannot Authorize or Reject.
-- New capabilities ship as features (`frontend/src/features/<id>/` and `backend/app/features/<id>/`), importing Jarvis only via `@/sdk`. Do not add a feature by editing scroll, the canvas, the shell, or the turn state machine.
-- Open notes stay capped at 3 expanded.
+- Tools own mail, calendar, files, and shop numbers.
+- Authorize before mail send, calendar writes, quote send, sheet writes, and broad memory wipe. Parking an approval does not authorize it.
+- One shop planner is enough. A second planner is not required.
 
 ## Log
 
