@@ -12,81 +12,35 @@ description: >
 
 ## Read first
 
-- `docs/CURRENT.md` — as-built quote bullets
+- `docs/SYSTEM_TRUTH.md` — §3 HITL, §4 Quote Workflow (locked rules, MHR floor, proof, override gates)
+- `.cursor/rules/domain/30-quote-playbook.mdc` — break-if-wrong constraints
 - Playbook source: `backend/app/hermes/playbooks/quote/SKILL.md` (skill name **shop-quote**)
-- Codex architecture: `jarvis-architecture` skill + `reference.md` quote table
+- Cursor architecture: `jarvis-architecture` skill
 
-## Where things live
+## Debug procedure
 
-| What | Path |
-| ---- | ---- |
-| Playbook source (repo) | `backend/app/hermes/playbooks/quote/` — `SKILL.md`, `notes.md`, `files/`, `examples/` |
-| Installed copy | `{hermes home}/skills/shop/quote` — `HERMES_HOME` env or `~/.hermes`; copied by `ensure_playbooks_installed()` in `hermes/bridge.py` on API startup |
-| Tool logic | `backend/app/quote.py`, `backend/app/tools/registry.py` |
-| MCP surface | `backend/app/hermes/mcp_server.py` — `jarvis_quote_*` |
-| Start routing | `backend/app/intent.py` — `is_quote_start()` |
-| Hermes + fallback | `backend/app/agent.py` — `_hermes_reply`; on error/timeout (`hermes_timeout_sec`, default 30) speaks locally: *“Which drawing should I quote — an inbox attachment, a file on the desk, or a photo?”* |
-| Router | `backend/app/semantic_router.py` — quote start → `tool_ops`, `DAT.03` (even if “drawing” would be vision) |
-| Tests | `backend/tests/test_quote_playbook.py`, `test_semantic_router.py` |
-| DEMO MHR table | `files/mhr-demo.md` — **demo floors only**, not shop truth |
+1. Run the offline tests first — do not start with the live desk:
+   ```
+   python -m pytest backend/tests/test_quote_playbook.py backend/tests/test_semantic_router.py -q
+   ```
+2. If a live repro is needed: API `:8000`, Hermes `:8642` warm. Say "start quote workflow" and watch for either Hermes output or the 30 s timeout fallback line: *"Which drawing — inbox attachment, file on desk, or photo?"*
+3. Check `work/LAST_TURNS.md` (or `GET /api/turns/recent`) for the last ≤ 20 exchanges before judging speak/board/pending.
 
-Session data: SQLite `data/jarvis.db` — `messages`, `memories` (quote facts), `pending_actions` (HITL). Hermes thread ids: `data/hermes_sessions.json`. Playbook files are **not** the chat log.
+## Common failure shapes
 
-## MCP / registry tools
-
-- `jarvis_quote_analyze_drawing` — after a path exists; vision helper, not step 1
-- `jarvis_quote_build` — optional `scope`, `rm_source`, `rm_source_note`, `rm_price`, `machine`, `machining_rate`
-- `jarvis_quote_pdf`
-- `jarvis_quote_verify` — proof before send
-- `jarvis_quote_send` — queues **Authorize** only; refuses when verify `stop: true`
-- `jarvis_quote_playbook_note` — owner corrections → `notes.md`
-
-Brain must **not** invent raw material prices, MHR floors, or outsource numbers. Never underquote.
-
-## Real order (after drawing path exists)
-
-1. Labour-only vs buy raw material (customer default; mail/verbal overrides; else ask).
-2. Supplier quote or labeled estimate from history/market trend.
-3. Strategy (ops, outsource, machines, tooling).
-4. Machining cost at or above minimum MHR for chosen machine.
-5. Short formal quotation email — total in bold, PDF attached; **send waits for Authorize**.
-
-## Proof & send
-
-- Always run `jarvis_quote_verify` before claiming ready to send.
-- Any BLOCKER check → `stop: true`; `quote_send` will not queue. WARN never stops, regardless of count.
-- WARN-only results may still queue Authorize with warnings.
-- Delivery time does **not** block send.
-
-## No drawing path
-
-- Ask where the drawing lives (inbox attachment, desk file, photo).
-- **Do not** call `reason_rfq` — that path queues holding email + calendar deadline and assumes the sheet was not seen.
-- `is_quote_start` must **not** return the `rfq_reason` intent path.
-
-## Good first turn
-
-1. User says “start quote workflow” (or similar) → router `tool_ops` / DAT.03.
-2. Hermes loads **shop-quote** via `skill_view` and follows playbook.
-3. If no path yet, ask for drawing location — do not invent a sheet or analyze nothing.
-
-## HUD workspace
-
-- Quote-start and drawing words stamp `ui.section = engineering` (`section_hint.py`). `applyServerHint` (`core/desk/controller.ts`) moves the desk there from Monitor and from Casual.
-- Engineering leaves only on an explicit request (`reason: explicit`).
-- Pending calendar/mail/quote modal on page open = **restored HITL** from `loadSessionSurface`, not a new request.
+- **Hermes timeout → fallback fires.** Check Hermes is up (`GET :8642/health`); do not raise the timeout without measuring.
+- **`stop: true` on verify.** Read the BLOCKER list off the verify response. Do not paper over it in `quote.py`.
+- **`quote_send` queues but never sends.** Expected — HITL requires a manual Authorize. A queued card with `stop: false` is the *correct* end state of a tool call.
+- **No drawing path.** Do **not** call `reason_rfq` from a quote start. The fallback line is the right end state.
+- **Demo rates treated as live.** With `masterdata_enabled` on, floors come from `machine_hour_rates`, not `files/mhr-demo.md`. An unattested seed value is a BLOCKER, not a fallback.
 
 ## Do not
 
-- Add a separate “quote agent” or paste the whole playbook into `SOUL.md` (SOUL points at shop-quote; playbook stays in skills tree).
-- Treat `mhr-demo.md` as live shop rates. With `masterdata_enabled` (default on), floors come from `machine_hour_rates`. The editor is `/masterdata`.
+- Add a separate "quote agent" or paste the whole playbook into `SOUL.md`.
 - Call `reason_rfq` for quote **starts** without a drawing in focus.
 - Commit secrets, `.env`, or customer emails in docs or notes.
+- Invent raw-material prices, MHR floors, or outsource numbers in the brain.
 
 ## Verify
 
-```text
-python -m pytest backend/tests/test_quote_playbook.py backend/tests/test_semantic_router.py -q
-```
-
-Live: Hermes `:8642` warm, API `:8000`, say “start quote workflow” — expect Hermes or 30s timeout then the fixed drawing-path question.
+Offline pytest above. Live: warm Hermes, API :8000, say "start quote workflow" — expect Hermes or the 30 s timeout then the fixed drawing-path question.

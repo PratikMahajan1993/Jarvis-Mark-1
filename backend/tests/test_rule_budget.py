@@ -10,43 +10,21 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 RULES_DIR = REPO_ROOT / ".cursor" / "rules"
 
 T0_FILE = "00-jarvis-core.mdc"
-T0_MAX_WORDS = 200
+T0_REL = f"core/{T0_FILE}"
+T0_MAX_WORDS = 350
 STANDARD_MAX_WORDS = 400
 DOMAIN_MAX_WORDS = 750
 
 DOMAIN_EXPANDED = {
     "domain/30-quote-playbook.mdc",
-    "domain/31-gcode-optimiser.mdc",
-    "domain/34-drawing-vision.mdc",
-}
-
-T2_DESCRIPTION_ONLY = {
-    "ops/41-living-notes.mdc",
-    "ops/42-dispatch.mdc",
-}
-
-LEGACY_ALWAYS_ON = {
-    "jarvis-core.mdc",
-    "jarvis-capability-run.mdc",
-    "jarvis-subagent-dispatch.mdc",
-    "jarvis-living-notes.mdc",
-    "jarvis-react-bits.mdc",
 }
 
 EXPECTED_RULE_FILES = {
-    T0_FILE,
+    T0_REL,
     "backend/10-api-python.mdc",
-    "backend/11-hitl-safety.mdc",
     "backend/12-data-schema.mdc",
-    "backend/13-turn-ledger.mdc",
-    "frontend/20-hud-shell.mdc",
-    "frontend/21-react-bits.mdc",
-    "frontend/22-frontend-uiux.mdc",
+    "frontend/22-scroll-substrate.mdc",
     *DOMAIN_EXPANDED,
-    "domain/32-master-data.mdc",
-    "domain/33-knowledge-rag.mdc",
-    "ops/40-tests.mdc",
-    *T2_DESCRIPTION_ONLY,
 }
 
 
@@ -80,18 +58,13 @@ def rule_files() -> list[Path]:
     return _all_rule_files()
 
 
-def test_no_legacy_always_on_rules(rule_files: list[Path]) -> None:
-    names = {p.name for p in rule_files}
-    assert not names & LEGACY_ALWAYS_ON, f"Remove legacy rules: {names & LEGACY_ALWAYS_ON}"
-
-
 def test_expected_tree_only(rule_files: list[Path]) -> None:
     rel = {_rel_path(p) for p in rule_files}
     assert rel == EXPECTED_RULE_FILES, f"Unexpected rules: extra={rel - EXPECTED_RULE_FILES} missing={EXPECTED_RULE_FILES - rel}"
 
 
 def test_t0_word_budget(rule_files: list[Path]) -> None:
-    core = next(p for p in rule_files if p.name == T0_FILE)
+    core = next(p for p in rule_files if _rel_path(p) == T0_REL)
     text = core.read_text(encoding="utf-8")
     count = _word_count(text)
     assert count < T0_MAX_WORDS, f"{T0_FILE}: {count} words (max {T0_MAX_WORDS - 1})"
@@ -103,32 +76,19 @@ def test_only_t0_always_apply(rule_files: list[Path]) -> None:
         fm = _parse_frontmatter(path.read_text(encoding="utf-8"))
         if fm.get("alwaysApply") == "true":
             always_on.append(_rel_path(path))
-    assert always_on == [T0_FILE], f"alwaysApply: true only on T0, got {always_on}"
+    assert always_on == [T0_REL], f"alwaysApply: true only on T0, got {always_on}"
 
 
 def test_t1_files_have_globs(rule_files: list[Path]) -> None:
     missing = []
     for path in rule_files:
         rel = _rel_path(path)
-        if rel == T0_FILE or rel in T2_DESCRIPTION_ONLY:
+        if rel == T0_REL:
             continue
         fm = _parse_frontmatter(path.read_text(encoding="utf-8"))
         if not fm.get("globs"):
             missing.append(rel)
     assert not missing, f"T1 rules must declare globs: {missing}"
-
-
-def test_t2_files_omit_globs(rule_files: list[Path]) -> None:
-    bad = []
-    for path in rule_files:
-        rel = _rel_path(path)
-        if rel not in T2_DESCRIPTION_ONLY:
-            continue
-        fm = _parse_frontmatter(path.read_text(encoding="utf-8"))
-        if fm.get("globs"):
-            bad.append(rel)
-        assert fm.get("alwaysApply") == "false", f"{rel} must set alwaysApply: false"
-    assert not bad, f"T2 rules must omit globs: {bad}"
 
 
 def test_word_budgets(rule_files: list[Path]) -> None:

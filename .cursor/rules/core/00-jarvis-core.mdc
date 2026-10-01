@@ -30,12 +30,10 @@ alwaysApply: true
 
 ## Hard Rules
 - **Tools own** mail, calendar, files, and **every number**. Model never invents prices, rates, dimensions, mail, or calendar facts. No source → ask.
-- **Authorize (HITL) before any external/destructive act:** send mail, calendar write, quote send, sheet write, CNC promote, broad memory wipe. Queue it; never claim it was done.
+- **Authorize (HITL) before any action that commits the business or destroys data:** outbound mail, calendar write, quote send, sheet write, CNC promote, broad memory wipe. Queue it; never claim it was done. (Read-only fetches, dev tooling, and connector reads do not need HITL. For exploratory code, drafts, and mock-ups, treat these as guidance — ask before doing something that might commit, not after refusing.)
 - **Never commit:** `.env`, `data/`, `exports/`, tokens, customer drawings.
 
 ## Reference Docs
 - `docs/SYSTEM_TRUTH.md` — single source of truth (current state + locked decisions)
 - `docs/ROADMAP.md` — next steps & priorities
-- `docs/CURRENT.md` — as-built snapshot
-- `docs/overhaul/EXPERIENCE_DECISIONS.md`, `docs/overhaul/PLATFORM_DECISIONS.md` — scroll-substrate overhaul contract
 - `AGENTS.md` — agent & skill map

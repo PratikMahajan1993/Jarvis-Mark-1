@@ -45,7 +45,6 @@ paths: frontend/**/*.{tsx,ts,css}
 
 ## Checklist before done
 
-- [ ] No Magnet on CommandBaton / flex-centering parents
-- [ ] No ElectricBorder except HITL
+- [ ] Match the existing surface language. `CommandBaton` and other flex-centred parents deliberately avoid Magnet; HITL is the existing ElectricBorder surface. If a *new* surface genuinely calls for one, that's a conversation, not a violation.
 - [ ] Browser check: scroll + spotlight + weather text fully visible
 - [ ] Match existing component props (see [catalog.md](catalog.md))
