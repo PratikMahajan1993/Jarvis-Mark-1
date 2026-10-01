@@ -27,6 +27,7 @@ import { ProofStrip } from "./ProofStrip";
 import { RMTracker } from "./RMTracker";
 import { SheetRow } from "./SheetRow";
 import { pinsFromRows } from "./CalloutPins";
+import { benchStepTab, type QuoteBenchStepId } from "@/core/sections/engineering/quoteBench";
 
 type SheetTab = "sheet" | "strategy" | "vision" | "knowledge" | "shop";
 
@@ -98,6 +99,7 @@ export function QuoteSheet({
   hasDrawing = true,
   sessionId = "default",
   focused = false,
+  benchStep,
 }: {
   scene: Scene;
   entityType?: string;
@@ -107,6 +109,7 @@ export function QuoteSheet({
   sessionId?: string;
   /** The drawing stage has focus; the sheet parks as a narrow tab. */
   focused?: boolean;
+  benchStep?: QuoteBenchStepId;
 }) {
   const [tab, setTab] = useState<SheetTab>("sheet");
   const [findNote, setFindNote] = useState("");
@@ -116,6 +119,10 @@ export function QuoteSheet({
   const [liveVerify, setLiveVerify] = useState<QuoteVerifyResult | null>(null);
 
   const doc = useMemo(() => resolveDocument(scene), [scene]);
+
+  useEffect(() => {
+    if (benchStep) setTab(benchStepTab(benchStep));
+  }, [benchStep]);
 
   useEffect(() => {
     let cancelled = false;
@@ -197,7 +204,7 @@ export function QuoteSheet({
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden p-2" data-quote-sheet>
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-2" data-quote-sheet>
       <header className="shrink-0 border-b border-[color:var(--border)]/50 pb-2">
         <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-[color:var(--muted)]/70">
           {doc.meta.rfqId} · {doc.meta.customer}

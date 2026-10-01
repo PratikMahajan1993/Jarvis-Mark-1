@@ -1,0 +1,25 @@
+---
+name: "source-command-stop-jarvis"
+description: "Stop the Jarvis HUD, API, Hermes gateway, and Ollama"
+---
+
+# source-command-stop-jarvis
+
+Use this skill when the user asks to run the migrated source command `stop-jarvis`.
+
+## Command Template
+
+Stop the Jarvis desk on this machine. Do not edit product code.
+
+Stop only these listeners, and only when the process command line matches:
+
+| Port | Stop when the command line is |
+| --- | --- |
+| 3000 | Next.js dev server under `d:\Codex\Jarvis\frontend` |
+| 8000 | `uvicorn app.main:app` from the Jarvis repo |
+| 8642 | `hermes_cli.main gateway run` |
+| 11434 | `ollama.exe serve` or the Ollama tray app that owns it |
+
+Kill the process tree for each match. Do not kill unrelated Node, Python, or Codex processes.
+
+Wait a moment, then check those four ports. Do not stop Voicebox. Report which processes you stopped and any port that is still listening.

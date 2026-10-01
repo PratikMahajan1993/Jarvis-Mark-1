@@ -94,6 +94,416 @@ def _parse_numeric(value: Any) -> float | None:
         return None
 
 
+DRAWING_CELL_KEYS = ("revision", "quantity", "material", "heat_treat", "finish", "gdt")
+HARD_DRAWING_CELLS = frozenset({"revision", "quantity", "material"})
+ASSUMPTION_DRAWING_CELLS = frozenset({"heat_treat", "finish", "gdt"})
+DRAWING_CELL_STATES = frozenset({"empty", "proposed", "confirmed", "assumption"})
+
+
+def _blank_drawing_cells() -> dict[str, dict[str, str]]:
+    return {key: {"state": "empty", "value": ""} for key in DRAWING_CELL_KEYS}
+
+
+def _normalize_drawing_cell(raw: Any) -> dict[str, str]:
+    if not isinstance(raw, dict):
+        return {"state": "empty", "value": ""}
+    state = str(raw.get("state") or "empty").strip().lower()
+    if state not in DRAWING_CELL_STATES:
+        state = "empty"
+    value = str(raw.get("value") or "").strip()
+    if state in HARD_DRAWING_CELLS and state == "assumption":
+        state = "proposed"
+    if state == "empty":
+        value = ""
+    return {"state": state, "value": value}
+
+
+def _drawing_cells_coerced(cells: dict[str, Any] | None) -> dict[str, dict[str, str]] | None:
+    if cells is None:
+        return None
+    out = _blank_drawing_cells()
+    for key in DRAWING_CELL_KEYS:
+        out[key] = _normalize_drawing_cell(cells.get(key))
+    return out
+
+
+def revision_id_for_quote_session(session_id: str) -> str:
+    from .masterdata.quotes import revision_id_from_session
+
+    return revision_id_from_session(session_id)
+
+
+def init_drawing_cells(session_id: str) -> dict[str, Any]:
+    """Initialize empty drawing cells on the session's quote revision."""
+    from .masterdata.quotes import load_drawing_cells, revision_id_from_session, save_drawing_cells
+
+    revision_id = revision_id_from_session(session_id)
+    if not revision_id:
+        return {"ok": False, "error": "no quote revision on session"}
+    with db.connect() as conn:
+        existing = load_drawing_cells(conn, revision_id)
+        if existing is not None:
+            return {"ok": True, "cells": _drawing_cells_coerced(existing), "revision_id": revision_id}
+        cells = _blank_drawing_cells()
+        save_drawing_cells(conn, revision_id, cells)
+    return {"ok": True, "cells": cells, "revision_id": revision_id}
+
+
+def _load_session_drawing_cells(session_id: str) -> dict[str, dict[str, str]] | None:
+    if not settings.masterdata_enabled:
+        return None
+    from .masterdata.quotes import load_drawing_cells, revision_id_from_session
+
+    revision_id = revision_id_from_session(session_id)
+    if not revision_id:
+        return None
+    with db.connect() as conn:
+        raw = load_drawing_cells(conn, revision_id)
+    return _drawing_cells_coerced(raw) if raw is not None else None
+
+
+def _save_session_drawing_cells(session_id: str, cells: dict[str, dict[str, str]]) -> bool:
+    from .masterdata.quotes import revision_id_from_session, save_drawing_cells
+
+    revision_id = revision_id_from_session(session_id)
+    if not revision_id:
+        return False
+    with db.connect() as conn:
+        save_drawing_cells(conn, revision_id, cells)
+    return True
+
+
+def _mutate_drawing_cell(
+    session_id: str,
+    cell: str,
+    *,
+    value: str | None = None,
+    mode: str,
+) -> dict[str, Any]:
+    key = (cell or "").strip().lower()
+    if key not in DRAWING_CELL_KEYS:
+        return {"ok": False, "error": f"unknown drawing cell {cell!r}"}
+    init = init_drawing_cells(session_id)
+    if not init.get("ok"):
+        return init
+    cells = dict(init["cells"])
+    current = cells[key]
+    text = (value if value is not None else current["value"]).strip()
+    if mode == "vision_propose":
+        if current["state"] != "empty":
+            return {"ok": False, "error": f"{key} is not empty — vision may not overwrite"}
+        if not text:
+            return {"ok": False, "error": "vision may not fill an empty cell without a value"}
+        cells[key] = {"state": "proposed", "value": text}
+    elif mode == "correction":
+        if not text:
+            cells[key] = {"state": "empty", "value": ""}
+        else:
+            cells[key] = {"state": "proposed", "value": text}
+    elif mode == "confirm":
+        if not text and not current["value"]:
+            return {"ok": False, "error": f"{key} has no value to confirm"}
+        cells[key] = {"state": "confirmed", "value": text or current["value"]}
+    elif mode == "assumption":
+        if key in HARD_DRAWING_CELLS:
+            return {"ok": False, "error": f"{key} cannot be tagged as assumption"}
+        if not text and not current["value"]:
+            return {"ok": False, "error": f"{key} needs a value before assumption tag"}
+        cells[key] = {"state": "assumption", "value": text or current["value"]}
+    else:
+        return {"ok": False, "error": f"unknown mode {mode!r}"}
+    if not _save_session_drawing_cells(session_id, cells):
+        return {"ok": False, "error": "failed to persist cells"}
+    return {"ok": True, "cell": key, "cells": cells}
+
+
+def propose_drawing_cell(session_id: str, cell: str, value: str) -> dict[str, Any]:
+    """Vision or first-pass propose — only from empty."""
+    return _mutate_drawing_cell(session_id, cell, value=value, mode="vision_propose")
+
+
+def correct_drawing_cell(session_id: str, cell: str, value: str) -> dict[str, Any]:
+    """Owner correction — value stored unconfirmed."""
+    return _mutate_drawing_cell(session_id, cell, value=value, mode="correction")
+
+
+def confirm_drawing_cell(session_id: str, cell: str, value: str = "") -> dict[str, Any]:
+    """Explicit accept — marks confirmed."""
+    return _mutate_drawing_cell(session_id, cell, value=value or None, mode="confirm")
+
+
+def tag_drawing_cell_assumption(session_id: str, cell: str, value: str = "") -> dict[str, Any]:
+    return _mutate_drawing_cell(session_id, cell, value=value or None, mode="assumption")
+
+
+def get_drawing_cells_state(session_id: str) -> dict[str, Any]:
+    """Return persisted drawing cells and quote pipeline flags for the bench."""
+    from .quote_pipeline import read_quote_pipeline_state
+
+    cells = _load_session_drawing_cells(session_id)
+    pipeline = read_quote_pipeline_state(session_id)
+    state = str(pipeline.get("state") or "on_desk")
+    return {
+        "ok": True,
+        "cells": cells,
+        "cells_initialized": cells is not None,
+        "pipeline_state": state,
+        "handoff_ready": state == "handoff_ready",
+    }
+
+
+def mark_quote_handoff_ready(session_id: str) -> dict[str, Any]:
+    """Record handoff_ready only — no WhatsApp, mail, or PDF send."""
+    cells = _load_session_drawing_cells(session_id)
+    if cells is None:
+        init = init_drawing_cells(session_id)
+        if not init.get("ok"):
+            return init
+        cells = init.get("cells")
+    if not isinstance(cells, dict):
+        return {"ok": False, "error": "drawing cells unavailable"}
+    for key in HARD_DRAWING_CELLS:
+        cell = _normalize_drawing_cell(cells.get(key))
+        if cell["state"] != "confirmed" or not cell["value"].strip():
+            return {"ok": False, "error": f"{key} must be confirmed before handoff"}
+    for key in ASSUMPTION_DRAWING_CELLS:
+        cell = _normalize_drawing_cell(cells.get(key))
+        if cell["state"] not in {"confirmed", "assumption"}:
+            return {"ok": False, "error": f"{key} must be confirmed or tagged before handoff"}
+    from .quote_pipeline import mark_handoff_ready
+
+    out = mark_handoff_ready(session_id)
+    if not out.get("ok"):
+        return out
+    return {
+        "ok": True,
+        "state": "handoff_ready",
+        "pipeline_state": "handoff_ready",
+        "revision_id": out.get("revision_id"),
+    }
+
+
+def mutate_drawing_cells_action(
+    session_id: str,
+    *,
+    action: str,
+    cell: str = "",
+    value: str = "",
+) -> dict[str, Any]:
+    act = (action or "get").strip().lower()
+    if act == "get":
+        return get_drawing_cells_state(session_id)
+    if act == "init":
+        return init_drawing_cells(session_id)
+    if act == "handoff_ready":
+        return mark_quote_handoff_ready(session_id)
+    if act == "propose":
+        return propose_drawing_cell(session_id, cell, value)
+    if act == "correct":
+        return correct_drawing_cell(session_id, cell, value)
+    if act == "confirm":
+        return confirm_drawing_cell(session_id, cell, value)
+    if act == "assumption":
+        return tag_drawing_cell_assumption(session_id, cell, value)
+    return {"ok": False, "error": f"unknown action {action!r}"}
+
+
+def store_send_gate_override(
+    session_id: str,
+    *,
+    customer_exact_name: str = "",
+    rm_basis_age_ack: str = "",
+) -> dict[str, Any]:
+    from .masterdata.quotes import load_send_gate_overrides, revision_id_from_session, save_send_gate_overrides
+
+    revision_id = revision_id_from_session(session_id)
+    if not revision_id:
+        return {"ok": False, "error": "no quote revision on session"}
+    with db.connect() as conn:
+        overrides = load_send_gate_overrides(conn, revision_id)
+        if customer_exact_name.strip():
+            overrides["customer_exact_name"] = customer_exact_name.strip()
+        if rm_basis_age_ack.strip() or rm_basis_age_ack == "none":
+            overrides["rm_basis_age_ack"] = rm_basis_age_ack.strip() if rm_basis_age_ack != "none" else "none"
+        save_send_gate_overrides(conn, revision_id, overrides)
+    return {"ok": True, "overrides": overrides}
+
+
+def _customer_exact_master_name(conn: sqlite3.Connection, typed: str) -> bool:
+    """True when typed matches customers.name exactly (aliases do not count)."""
+    name = (typed or "").strip()
+    if not name:
+        return False
+    row = conn.execute(
+        "SELECT 1 FROM customers WHERE name = ? LIMIT 1",
+        (name,),
+    ).fetchone()
+    return row is not None
+
+
+def _load_send_gate_overrides(session_id: str, revision_facts: dict[str, Any] | None) -> dict[str, Any]:
+    if revision_facts and revision_facts.get("send_gate_overrides") is not None:
+        raw = revision_facts.get("send_gate_overrides")
+        return dict(raw) if isinstance(raw, dict) else {}
+    if not settings.masterdata_enabled:
+        return {}
+    from .masterdata.quotes import load_send_gate_overrides, revision_id_from_session
+
+    revision_id = revision_id_from_session(session_id)
+    if not revision_id:
+        return {}
+    with db.connect() as conn:
+        return load_send_gate_overrides(conn, revision_id)
+
+
+def _rm_basis_age_ack_expected(basis_date: str, rm_present: bool) -> str:
+    if not rm_present:
+        return ""
+    raw = (basis_date or "").strip()
+    if not raw or _is_tbd(raw):
+        return "none"
+    age = _rm_basis_age_days(raw)
+    if age is None:
+        return "none"
+    if age > _RM_BASIS_MAX_AGE_DAYS:
+        return str(age)
+    return ""
+
+
+def _drawing_cell_verify_checks(
+    *,
+    session_id: str,
+    stage_norm: str,
+    cells: dict[str, dict[str, str]],
+    overrides: dict[str, Any],
+    revision_facts: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    checks: list[dict[str, Any]] = []
+    for key in HARD_DRAWING_CELLS:
+        cell = cells[key]
+        ok = cell["state"] == "confirmed" and bool(cell["value"].strip())
+        if stage_norm == "send" and not ok:
+            checks.append(
+                _check(
+                    f"drawing_cell_{key}",
+                    False,
+                    f"{key} must be confirmed at send (state={cell['state']})",
+                    "quote_revisions.drawing_cells_json",
+                )
+            )
+        elif ok:
+            checks.append(
+                _check(
+                    f"drawing_cell_{key}",
+                    True,
+                    f"{key}: {cell['value'][:80]}",
+                    "quote_revisions.drawing_cells_json",
+                )
+            )
+        else:
+            checks.append(
+                _check(
+                    f"drawing_cell_{key}",
+                    True,
+                    f"{key} pending (state={cell['state']}) — draft",
+                    "quote_revisions.drawing_cells_json",
+                    severity="WARN",
+                )
+            )
+
+    for key in ASSUMPTION_DRAWING_CELLS:
+        cell = cells[key]
+        if stage_norm != "send":
+            continue
+        if cell["state"] == "proposed" and cell["value"].strip():
+            checks.append(
+                _check(
+                    f"drawing_cell_{key}",
+                    False,
+                    f"{key} has an unconfirmed customer change (state=proposed)",
+                    "quote_revisions.drawing_cells_json",
+                )
+            )
+
+    open_assumptions = [
+        key
+        for key in ASSUMPTION_DRAWING_CELLS
+        if cells[key]["state"] == "assumption" and cells[key]["value"].strip()
+    ]
+    if open_assumptions and stage_norm == "send":
+        typed = str(overrides.get("customer_exact_name") or "").strip()
+        with db.connect() as conn:
+            exact_ok = _customer_exact_master_name(conn, typed)
+        if exact_ok:
+            checks.append(
+                _check(
+                    "assumption_send_gate",
+                    True,
+                    f"Owner typed exact customer name for {len(open_assumptions)} assumption(s)",
+                    "quote_revisions.send_gate_overrides_json",
+                )
+            )
+        else:
+            checks.append(
+                _check(
+                    "assumption_send_gate",
+                    False,
+                    "Open assumption(s) require the customer's exact master-data name (not an alias)",
+                    "quote_revisions.send_gate_overrides_json",
+                )
+            )
+    elif open_assumptions:
+        checks.append(
+            _check(
+                "assumption_send_gate",
+                True,
+                f"{len(open_assumptions)} assumption(s) — allowed at draft",
+                "quote_revisions.drawing_cells_json",
+                severity="WARN",
+            )
+        )
+
+    if open_assumptions and stage_norm == "send":
+        doc_text = ""
+        if revision_facts:
+            doc_text = str(revision_facts.get("quote_document_text") or "")
+        if not doc_text:
+            doc_text = _latest_memory(session_id, "last_quote_document_text")
+        if "assumption" in doc_text.lower():
+            checks.append(
+                _check(
+                    "pdf_assumptions_disclosed",
+                    True,
+                    "Quote document text includes assumption disclosure",
+                    "quote_revisions.quote_document_text",
+                )
+            )
+        else:
+            checks.append(
+                _check(
+                    "pdf_assumptions_disclosed",
+                    False,
+                    "Open assumptions must appear as assumptions on the quote document",
+                    "quote_revisions.quote_document_text",
+                )
+            )
+    return checks
+
+
+def _rm_basis_override_allows_send(
+    overrides: dict[str, Any],
+    expected_age_ack: str,
+) -> bool:
+    if not expected_age_ack:
+        return False
+    typed_name = str(overrides.get("customer_exact_name") or "").strip()
+    ack = str(overrides.get("rm_basis_age_ack") or "").strip()
+    if not typed_name or ack != expected_age_ack:
+        return False
+    with db.connect() as conn:
+        return _customer_exact_master_name(conn, typed_name)
+
+
 def analyze_drawing_vision(
     path: str,
     *,
@@ -479,6 +889,27 @@ def quote_to_pdf(*, session_id: str, part_name: str = "", rows: list[list[Any]] 
         if rm_note:
             rm_line += f" — {rm_note}"
         story.append(Paragraph(rm_line, styles["BodyText"]))
+    drawing_cells = _load_session_drawing_cells(session_id)
+    doc_text_parts: list[str] = [
+        "QUOTATION",
+        f"Date: {issued}",
+        f"Customer: {customer or '—'}",
+        f"Part: {part}",
+    ]
+    if drawing:
+        doc_text_parts.append(f"Drawing: {drawing}")
+    if scope_line:
+        doc_text_parts.append(scope_line)
+    if material:
+        doc_text_parts.append(rm_line if rm_note else f"Material: {material}")
+    if drawing_cells:
+        for cell_key in ASSUMPTION_DRAWING_CELLS:
+            cell = drawing_cells[cell_key]
+            if cell["state"] == "assumption" and cell["value"].strip():
+                label = cell_key.replace("_", " ").title()
+                line = f"{label} (assumption): {cell['value']}"
+                story.append(Paragraph(line, styles["BodyText"]))
+                doc_text_parts.append(line)
     story.append(Spacer(1, 4 * mm))
     table_data = [["Item", "Material", "Qty", "Unit price", "Line total"]]
     grand = 0.0
@@ -525,6 +956,15 @@ def quote_to_pdf(*, session_id: str, part_name: str = "", rows: list[list[Any]] 
     artifact = db.add_artifact(uuid.uuid4().hex[:12], "pdf", name, str(path))
     db.add_memory(session_id, "last_quote_pdf", artifact["id"])
     db.add_memory(session_id, "last_quote_pdf_path", artifact["path"])
+    document_text = "\n".join(doc_text_parts)
+    db.add_memory(session_id, "last_quote_document_text", document_text)
+    if settings.masterdata_enabled:
+        from .masterdata.quotes import revision_id_from_session, save_quote_document_text
+
+        revision_id = revision_id_from_session(session_id)
+        if revision_id:
+            with db.connect() as conn:
+                save_quote_document_text(conn, revision_id, document_text)
     return {"ok": True, "artifact": artifact, "total_inr": grand if any_price else None}
 
 
@@ -836,7 +1276,14 @@ def verify_quote(*, session_id: str, stage: str = "draft", to: str = "", subject
                 )
             )
 
-    # 3. Material grade present
+    drawing_cells: dict[str, dict[str, str]] | None = None
+    if revision_facts and revision_facts.get("drawing_cells") is not None:
+        drawing_cells = _drawing_cells_coerced(revision_facts.get("drawing_cells"))
+    else:
+        drawing_cells = _load_session_drawing_cells(session_id)
+    send_overrides = _load_send_gate_overrides(session_id, revision_facts)
+
+    # 3. Material grade present (legacy when drawing cells not initialized)
     material = _fact("last_quote_material") if not revision_facts else _fact("material")
     if not material and rows:
         for row in rows:
@@ -844,7 +1291,20 @@ def verify_quote(*, session_id: str, stage: str = "draft", to: str = "", subject
                 material = str(row[1])
                 break
     mat_ok = not _is_tbd(material)
-    if mat_ok:
+    cells_for_verify = drawing_cells
+    if cells_for_verify is None and stage_norm == "send":
+        cells_for_verify = _blank_drawing_cells()
+    if cells_for_verify is not None:
+        checks.extend(
+            _drawing_cell_verify_checks(
+                session_id=session_id,
+                stage_norm=stage_norm,
+                cells=cells_for_verify,
+                overrides=send_overrides,
+                revision_facts=revision_facts,
+            )
+        )
+    elif mat_ok:
         checks.append(_check("material", True, material, "last_quote_material"))
     else:
         checks.append(_check("material", False, f"Material empty or TBD ({material or 'missing'})", "last_quote_material"))
@@ -997,17 +1457,41 @@ def verify_quote(*, session_id: str, stage: str = "draft", to: str = "", subject
 
     if _rm_basis_applies(scope, rm_present):
         basis_date = _latest_memory(session_id, "last_quote_rm_basis_date").strip()
+        expected_age_ack = _rm_basis_age_ack_expected(basis_date, rm_present)
         if basis_date and not _is_tbd(basis_date):
-            checks.append(_rm_basis_date_check(basis_date, stage_norm=stage_norm))
-        else:
-            checks.append(
-                _check(
+            rm_check = _rm_basis_date_check(basis_date, stage_norm=stage_norm)
+            if (
+                stage_norm == "send"
+                and not rm_check["pass"]
+                and rm_check.get("severity") == "BLOCKER"
+                and _rm_basis_override_allows_send(send_overrides, expected_age_ack)
+            ):
+                rm_check = _check(
                     "rm_basis_date",
-                    False,
-                    "Raw-material price basis requires a dated evidence (supplier quote, invoice, or estimate)",
-                    "last_quote_rm_basis_date",
+                    True,
+                    f"Stale RM acknowledged with exact customer name and age {expected_age_ack}",
+                    "quote_revisions.send_gate_overrides_json",
                 )
+            checks.append(rm_check)
+        else:
+            rm_check = _check(
+                "rm_basis_date",
+                False,
+                "Raw-material price basis requires a dated evidence (supplier quote, invoice, or estimate)",
+                "last_quote_rm_basis_date",
             )
+            if (
+                stage_norm == "send"
+                and expected_age_ack == "none"
+                and _rm_basis_override_allows_send(send_overrides, "none")
+            ):
+                rm_check = _check(
+                    "rm_basis_date",
+                    True,
+                    "Missing RM basis acknowledged with exact customer name and age none",
+                    "quote_revisions.send_gate_overrides_json",
+                )
+            checks.append(rm_check)
         if settings.masterdata_enabled:
             material_name = _fact("material").strip() if revision_facts else _latest_memory(session_id, "last_quote_material").strip()
             as_of_day = basis_date[:10] if basis_date and not _is_tbd(basis_date) else _quote_calendar_today().isoformat()
@@ -1276,6 +1760,12 @@ def verify_quote(*, session_id: str, stage: str = "draft", to: str = "", subject
     checks.extend(_knowledge_proof_checks(session_id))
 
     result = _finalize_verify(checks)
+    if stage_norm == "draft":
+        from .quote_margin import compute_margin_hint
+
+        hint = compute_margin_hint(session_id, route="owner")
+        if not hint.get("silent") and hint.get("hint_text"):
+            result["margin_hint"] = hint["hint_text"]
     if pdf_ok and pdf_file:
         digest = pdf_file_sha256(pdf_file)
         if digest:

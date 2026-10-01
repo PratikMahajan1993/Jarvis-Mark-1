@@ -33,6 +33,7 @@ import {
   canListen,
   classifyDecision,
   silence,
+  shouldAutoSpeakChatReply,
   speakText,
   startListening,
   stopListening,
@@ -389,6 +390,14 @@ export function applyResponse(
   }
 
   const nextAction = firstUnparked(result.pending || []);
+  const drawingOpen = Boolean(
+    getDesk().drawingChat?.open !== false &&
+      (getDesk().drawingChat?.filename || getDesk().drawingChat?.local_name || getDesk().drawingChat?.local_path),
+  );
+  const autoSpeakReply = shouldAutoSpeakChatReply({
+    drawingOpen,
+    workspace: getSection().workspace,
+  });
   const rawDisplay = (result.reply || result.speak || "").trim() || IDLE_VOICE;
   const display = isDeskNoticeVoice(rawDisplay) ? IDLE_VOICE : rawDisplay;
   const ttsRaw = (result.speak || result.reply || "").trim();
@@ -464,7 +473,7 @@ export function applyResponse(
     return;
   }
 
-  if (ctl.voiceEnabled && tts) {
+  if (ctl.voiceEnabled && tts && autoSpeakReply) {
     dispatchTurn({ type: "SPEAK_START", text: tts });
     void speakText(tts).finally(() => {
       if (gen !== ctl.speakGen) return;
@@ -689,7 +698,19 @@ export async function send(message: string) {
         showVoice(ctl.sentenceBuf);
         const taken = takeSentences(ctl.unspoken + delta);
         ctl.unspoken = taken.rest;
-        if (ctl.voiceEnabled) for (const sentence of taken.ready) void speakText(sentence);
+        const drawingOpenStream = Boolean(
+          getDesk().drawingChat?.open !== false &&
+            (getDesk().drawingChat?.filename ||
+              getDesk().drawingChat?.local_name ||
+              getDesk().drawingChat?.local_path),
+        );
+        const streamAutoSpeak = shouldAutoSpeakChatReply({
+          drawingOpen: drawingOpenStream,
+          workspace: getSection().workspace,
+        });
+        if (ctl.voiceEnabled && streamAutoSpeak) {
+          for (const sentence of taken.ready) void speakText(sentence);
+        }
         return;
       }
       if (name === "approval.request" && event.pending?.id) {
@@ -703,11 +724,21 @@ export async function send(message: string) {
         const rest = ctl.unspoken.trim();
         ctl.unspoken = "";
         ctl.sentenceBuf = "";
-        let spoke = Boolean(streamed.trim());
-        if (ctl.voiceEnabled && rest) {
+        const drawingOpenDone = Boolean(
+          getDesk().drawingChat?.open !== false &&
+            (getDesk().drawingChat?.filename ||
+              getDesk().drawingChat?.local_name ||
+              getDesk().drawingChat?.local_path),
+        );
+        const doneAutoSpeak = shouldAutoSpeakChatReply({
+          drawingOpen: drawingOpenDone,
+          workspace: getSection().workspace,
+        });
+        let spoke = Boolean(streamed.trim() && doneAutoSpeak);
+        if (ctl.voiceEnabled && doneAutoSpeak && rest) {
           void speakText(rest);
           spoke = true;
-        } else if (ctl.voiceEnabled && !streamed.trim()) {
+        } else if (ctl.voiceEnabled && doneAutoSpeak && !streamed.trim()) {
           const finalText = String(event.response.speak || event.response.reply || "").trim();
           if (finalText) {
             void speakText(finalText);

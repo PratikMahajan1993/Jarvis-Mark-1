@@ -718,6 +718,73 @@ export function whenSpeechIdle(callback: () => void) {
   speechIdleWaiters.push(callback);
 }
 
+const QUOTE_BLOCKER_STORE = "jarvis.quoteBlockerSpeech";
+const spokenQuoteBlockers = new Set<string>();
+let quoteBlockerStoreLoaded = false;
+
+function loadQuoteBlockerStore() {
+  if (quoteBlockerStoreLoaded || typeof window === "undefined") return;
+  quoteBlockerStoreLoaded = true;
+  try {
+    const raw = window.localStorage.getItem(QUOTE_BLOCKER_STORE);
+    if (!raw) return;
+    const keys = JSON.parse(raw) as string[];
+    for (const key of keys.slice(-40)) spokenQuoteBlockers.add(key);
+  } catch {
+    /* ignore */
+  }
+}
+
+function persistQuoteBlockerStore() {
+  try {
+    window.localStorage.setItem(QUOTE_BLOCKER_STORE, JSON.stringify([...spokenQuoteBlockers].slice(-40)));
+  } catch {
+    /* ignore */
+  }
+}
+
+/** With a drawing open on Engineering, chat replies are not auto-spoken — blockers use trySpeakQuoteBlocker. */
+export function shouldAutoSpeakChatReply(opts: { drawingOpen: boolean; workspace: string }): boolean {
+  if (!opts.drawingOpen || opts.workspace !== "engineering") return true;
+  return false;
+}
+
+export function claimQuoteBlockerSpeech(blockerId: string): boolean {
+  const key = (blockerId || "").trim();
+  if (!key) return false;
+  loadQuoteBlockerStore();
+  if (spokenQuoteBlockers.has(key)) return false;
+  spokenQuoteBlockers.add(key);
+  persistQuoteBlockerStore();
+  return true;
+}
+
+export function releaseQuoteBlockerSpeech(blockerId: string) {
+  const key = (blockerId || "").trim();
+  if (!key) return;
+  loadQuoteBlockerStore();
+  if (!spokenQuoteBlockers.delete(key)) return;
+  persistQuoteBlockerStore();
+}
+
+export function trySpeakQuoteBlocker(blocker: { id: string; evidence: string }) {
+  const line = (blocker.evidence || "").trim();
+  if (!line || !claimQuoteBlockerSpeech(blocker.id)) return;
+  void speakText(line.slice(0, 480));
+}
+
+export function isMarginSuggestion(text: string): boolean {
+  return /\bmargin\s+(hint|suggestion|move)\b/i.test(text);
+}
+
+export function shouldShowReplySpeakControl(text: string): boolean {
+  return Boolean(text.trim()) && !isMarginSuggestion(text);
+}
+
+export function speakReplyLine(text: string) {
+  void speakText(text.trim());
+}
+
 export function silence() {
   playGen += 1;
   playsInFlight = 0;

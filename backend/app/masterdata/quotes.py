@@ -235,6 +235,9 @@ def persist_built_quote(
         """,
         line_rows,
     )
+    from ..quote_pipeline import set_revision_on_desk
+
+    set_revision_on_desk(session_id, revision_id, conn=conn)
     return revision_id
 
 
@@ -243,6 +246,61 @@ def revision_id_from_session(session_id: str) -> str:
         if mem.get("key") == "last_quote_revision_id":
             return str(mem.get("value") or "").strip()
     return ""
+
+
+def _parse_json_object(raw: str | None) -> dict[str, Any] | None:
+    if raw is None:
+        return None
+    text = str(raw).strip()
+    if not text:
+        return None
+    try:
+        parsed = json.loads(text)
+    except json.JSONDecodeError:
+        return None
+    return parsed if isinstance(parsed, dict) else None
+
+
+def load_drawing_cells(conn: sqlite3.Connection, revision_id: str) -> dict[str, Any] | None:
+    row = conn.execute(
+        "SELECT drawing_cells_json FROM quote_revisions WHERE id = ?",
+        (revision_id,),
+    ).fetchone()
+    if not row:
+        return None
+    return _parse_json_object(row["drawing_cells_json"])
+
+
+def save_drawing_cells(conn: sqlite3.Connection, revision_id: str, cells: dict[str, Any]) -> None:
+    conn.execute(
+        "UPDATE quote_revisions SET drawing_cells_json = ? WHERE id = ?",
+        (json.dumps(cells), revision_id),
+    )
+
+
+def load_send_gate_overrides(conn: sqlite3.Connection, revision_id: str) -> dict[str, Any]:
+    row = conn.execute(
+        "SELECT send_gate_overrides_json FROM quote_revisions WHERE id = ?",
+        (revision_id,),
+    ).fetchone()
+    if not row:
+        return {}
+    parsed = _parse_json_object(row["send_gate_overrides_json"])
+    return parsed or {}
+
+
+def save_send_gate_overrides(conn: sqlite3.Connection, revision_id: str, overrides: dict[str, Any]) -> None:
+    conn.execute(
+        "UPDATE quote_revisions SET send_gate_overrides_json = ? WHERE id = ?",
+        (json.dumps(overrides), revision_id),
+    )
+
+
+def save_quote_document_text(conn: sqlite3.Connection, revision_id: str, text: str) -> None:
+    conn.execute(
+        "UPDATE quote_revisions SET quote_document_text = ? WHERE id = ?",
+        (text, revision_id),
+    )
 
 
 def rows_from_lines(lines: list[sqlite3.Row]) -> list[list[Any]]:
@@ -316,6 +374,14 @@ def load_revision_facts(conn: sqlite3.Connection, revision_id: str) -> dict[str,
         "machine_id": machine_ids[0] if len(machine_ids) == 1 else "",
         "machining_rate": meta.get("machining_rate") or "",
         "delivery_days": rev["delivery_days"],
+        "drawing_cells": _parse_json_object(rev["drawing_cells_json"] if "drawing_cells_json" in rev.keys() else None),
+        "send_gate_overrides": _parse_json_object(
+            rev["send_gate_overrides_json"] if "send_gate_overrides_json" in rev.keys() else None
+        )
+        or {},
+        "quote_document_text": str(rev["quote_document_text"] or "")
+        if "quote_document_text" in rev.keys()
+        else "",
     }
 
 

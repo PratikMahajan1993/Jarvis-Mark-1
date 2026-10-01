@@ -40,6 +40,6 @@ export const ENGINEERING_ORB: OrbSpec = {
     listening: { rate: 0.7, brightness: 1.25 },
     thinking: { rate: 2, brightness: 1.1 },
     speaking: { rate: 1, brightness: { base: 1, level: 0.6 } },
-    hitl: { rate: 0.5, pulseHz: 0.5, tint: AMBER, tintMix: 0.65 },
+    hitl: { rate: 0.32, pulseHz: 0.45, tint: AMBER, tintMix: 0.72 },
   },
 };

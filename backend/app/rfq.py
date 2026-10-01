@@ -343,6 +343,11 @@ def request_program(
             "pending": None,
         }
     path = str(result.get("path") or "")
+    setup_path = ""
+    if path:
+        from .shop_desk import write_setup_chart
+
+        setup_path = write_setup_chart(path)
     remember_cnc(session_id, path, rfq_row.get("id") if rfq_row else "")
     if path:
         art = db.add_artifact(uuid.uuid4().hex[:12], "cnc-draft", Path(path).name, path)
@@ -355,6 +360,7 @@ def request_program(
         "Copy it as draft-accepted. Not proven, not sent to a machine.",
         {
             "path": path,
+            "setup_path": setup_path,
             "rfq_id": (rfq_row or {}).get("id") or "",
             "job_id": (job or {}).get("id") or "",
             "nc": result.get("nc") or "",

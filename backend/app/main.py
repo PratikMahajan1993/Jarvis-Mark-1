@@ -53,6 +53,9 @@ from .schemas import (
     QuoteOperationBody,
     MhrAttestBody,
     QuoteVerifyBody,
+    QuoteDrawingCellsBody,
+    QuotePipelineBody,
+    QuoteAssumptionReplyBody,
     ConfirmRequest,
     Preferences,
     PreferencesUpdate,
@@ -1069,6 +1072,58 @@ def api_quote_verify(payload: QuoteVerifyBody) -> dict:
     from .quote import verify_quote
 
     return verify_quote(session_id=payload.session_id, stage=payload.stage)
+
+
+@app.get("/api/quote/drawing-cells")
+def api_quote_drawing_cells_get(session_id: str = "default") -> dict:
+    from .quote import get_drawing_cells_state
+
+    return get_drawing_cells_state(session_id)
+
+
+@app.post("/api/quote/drawing-cells")
+def api_quote_drawing_cells_post(payload: QuoteDrawingCellsBody) -> dict:
+    from .quote import mutate_drawing_cells_action
+
+    return mutate_drawing_cells_action(
+        payload.session_id,
+        action=payload.action,
+        cell=payload.cell,
+        value=payload.value,
+    )
+
+
+@app.get("/api/quote/pipeline")
+def api_quote_pipeline_get(session_id: str = "default") -> dict:
+    from .quote_pipeline import read_quote_pipeline_state
+
+    return read_quote_pipeline_state(session_id)
+
+
+@app.post("/api/quote/pipeline")
+def api_quote_pipeline_post(payload: QuotePipelineBody) -> dict:
+    from .quote_pipeline import pipeline_action
+
+    return pipeline_action(payload.session_id, payload.action, payload.revision_id)
+
+
+@app.get("/api/quote/margin-hint")
+def api_quote_margin_hint(session_id: str = "default", route: str = "owner") -> dict:
+    from .quote_margin import compute_margin_hint
+
+    return compute_margin_hint(session_id, route=route)
+
+
+@app.post("/api/quote/assumption-reply")
+def api_quote_assumption_reply(payload: QuoteAssumptionReplyBody) -> dict:
+    from .quote_assumption_mail import handle_customer_assumption_reply
+
+    return handle_customer_assumption_reply(
+        payload.session_id,
+        payload.cell,
+        payload.body,
+        channel=payload.channel,
+    )
 
 
 @app.get("/api/quote-variance/erosion")

@@ -145,6 +145,26 @@ class QuoteVerifyBody(BaseModel):
     stage: str = "draft"
 
 
+class QuoteDrawingCellsBody(BaseModel):
+    session_id: str = "default"
+    action: str = "get"
+    cell: str = ""
+    value: str = ""
+
+
+class QuotePipelineBody(BaseModel):
+    session_id: str = "default"
+    action: str = "get"
+    revision_id: str = ""
+
+
+class QuoteAssumptionReplyBody(BaseModel):
+    session_id: str = "default"
+    cell: str
+    body: str
+    channel: str = "email"
+
+
 class TtsRequest(BaseModel):
     text: str
     profile: str | None = None

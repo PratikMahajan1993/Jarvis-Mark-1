@@ -1102,7 +1102,14 @@ def _run_agent(message: str, session_id: str = "default", route=None) -> ChatRes
         db.add_message(session_id, "assistant", result.speak or "")
         return result
 
-    # Hermes-first when gateway is warm; Gemini legacy only on miss/unavailable.
+    # Hermes-first when gateway is warm. Shop turns do not fall through to a second planner.
+    from .shop_desk import program_validity_refusal
+
+    refused = program_validity_refusal(message)
+    if refused:
+        db.add_message(session_id, "assistant", refused)
+        return _chat_response(session_id, speak=refused)
+
     use_hermes = app_settings.hermes_enabled and hermes_available()
     router_casual = route_intent == "casual_chat"
 
@@ -1236,6 +1243,20 @@ def _run_agent(message: str, session_id: str = "default", route=None) -> ChatRes
         elif not use_hermes:
             fb_fields["error"] = "hermes unavailable"
         _log_brain(**fb_fields)
+        return _chat_response(session_id, speak=speak)
+
+    if route_intent == "tool_ops" and not is_rfq_definition(message):
+        speak = (
+            "The shop brain could not finish that step. The quote is paused. "
+            "You can still confirm the drawing cells, price from master data, and write a draft PDF on the desk."
+        )
+        db.add_message(session_id, "assistant", speak)
+        _log_brain(
+            brain="shop_paused",
+            model="none",
+            speak=speak,
+            error=hermes_last_error[0] or "hermes unavailable",
+        )
         return _chat_response(session_id, speak=speak)
 
     import time as _time
@@ -1832,11 +1853,23 @@ def resolve_pending(action_id: str, approved: bool, session_id: str) -> ChatResp
                 effect_id,
                 provider_message_id=str(sent.get("id") or sent.get("gmail_id") or ""),
             )
+            if action["kind"] == "quote_send":
+                from .quote_pipeline import settle_quote_send_outcome
+
+                settle_quote_send_outcome(session_id, "sent")
         except HitlPostProviderCrash:
+            if action["kind"] == "quote_send":
+                from .quote_pipeline import settle_quote_send_outcome
+
+                settle_quote_send_outcome(session_id, "unknown")
             raise
         except Exception:
             _settle_external_effect(effect_id, "failed", error="send_failed")
             db.set_pending_status(action_id, "failed")
+            if action["kind"] == "quote_send":
+                from .quote_pipeline import settle_quote_send_outcome
+
+                settle_quote_send_outcome(session_id, "failed")
             speak = "Gmail did not take it."
             return ChatResponse(speak=speak, reply=speak, scene=_fallback_scene(speak), watching=False, agents=_current_agents(session_id))
         remember_person(session_id, to_addr, sent.get("id") or payload.get("source_id"), subject)

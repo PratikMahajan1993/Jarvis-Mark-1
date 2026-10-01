@@ -1320,6 +1320,15 @@ def _quote_send(
     **_: Any,
 ) -> dict[str, Any]:
     from ..quote import queue_quote_send, quote_refuse_if_pdf_drift, verify_quote
+    from ..quote_pipeline import mark_quote_sending, pipeline_blocks_send
+
+    blocked, reason = pipeline_blocks_send(session_id)
+    if blocked:
+        return {
+            "ok": False,
+            "error": reason,
+            "speak": reason,
+        }
 
     verify_result = verify_quote(session_id=session_id, stage="send", to=to, subject=subject)
     if verify_result.get("stop"):
@@ -1350,6 +1359,7 @@ def _quote_send(
         }
     subj = subject or "Quotation"
     body_text = body or "Please find the quotation attached."
+    mark_quote_sending(session_id)
     result = queue_quote_send(
         session_id=session_id,
         to=to,

@@ -189,7 +189,36 @@ export const api = {
         rate_id: rateId,
       }),
     }),
-  verifyQuote: (sessionId = "default", stage = "draft") =>
+  quoteDrawingCells: (sessionId = "default") =>
+    json<{
+      ok: boolean;
+      cells?: Record<string, { state: string; value: string }> | null;
+      cells_initialized?: boolean;
+      pipeline_state?: string;
+      handoff_ready?: boolean;
+      error?: string;
+    }>(`/api/quote/drawing-cells?session_id=${encodeURIComponent(sessionId)}`),
+  quoteDrawingCellsAction: (
+    sessionId: string,
+    action: string,
+    fields: { cell?: string; value?: string } = {},
+  ) =>
+    json<{
+      ok: boolean;
+      cells?: Record<string, { state: string; value: string }>;
+      state?: string;
+      pipeline_state?: string;
+      error?: string;
+    }>("/api/quote/drawing-cells", {
+      method: "POST",
+      body: JSON.stringify({
+        session_id: sessionId,
+        action,
+        cell: fields.cell ?? "",
+        value: fields.value ?? "",
+      }),
+    }),
+  verifyQuote: (sessionId = "default", stage: "draft" | "send" = "draft") =>
     json<import("@/lib/pane/quoteContract").QuoteVerifyResult>("/api/quote/verify", {
       method: "POST",
       body: JSON.stringify({ session_id: sessionId, stage }),

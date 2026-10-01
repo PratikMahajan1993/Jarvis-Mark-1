@@ -1,10 +1,17 @@
 ---
-description: Start the Jarvis HUD, API, Hermes gateway, and Ollama
+name: "source-command-start-jarvis"
+description: "Start the Jarvis HUD, API, Hermes gateway, and Ollama"
 ---
+
+# source-command-start-jarvis
+
+Use this skill when the user asks to run the migrated source command `start-jarvis`.
+
+## Command Template
 
 Do not inspect what is already running. Do not read other files. Do not edit product code.
 
-Immediately run this one command from `d:\Cursor\Jarvis`:
+Immediately run this one command from `d:\Codex\Jarvis`:
 
 `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-jarvis.ps1`
 

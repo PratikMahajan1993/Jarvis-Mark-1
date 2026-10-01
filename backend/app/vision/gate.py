@@ -385,6 +385,17 @@ def _release_expired_claim(conn: Any, *, cycle_start: str, digest: str) -> None:
         release_claim(conn, str(row["id"]))
 
 
+def cloud_line_is_down() -> bool:
+    """True when a short outbound connect fails. Cloud vision must not run then."""
+    import socket
+
+    try:
+        with socket.create_connection(("1.1.1.1", 443), timeout=1.2):
+            return False
+    except OSError:
+        return True
+
+
 def dispatch_drawing_vision(
     path: str | Path,
     *,
@@ -506,6 +517,17 @@ def dispatch_drawing_vision(
             "page_count": pages,
             "sheet_index": index,
             "error": f"Pack has {pages} sheets (threshold {threshold}). Review the sheet index before spending a unit.",
+        }
+
+    if cloud_line_is_down():
+        set_analysis_state(digest, "needs_vision")
+        return {
+            "ok": False,
+            "analysis_state": "needs_vision",
+            "path": str(file_path),
+            "name": file_path.name,
+            "file_sha256": digest,
+            "error": "Cloud vision is unavailable while the line is down.",
         }
 
     if settings.masterdata_enabled and owner_spend:

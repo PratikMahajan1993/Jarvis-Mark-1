@@ -16,6 +16,8 @@ from app.quote import (
     PLAYBOOK_NOTES_PATH,
     append_playbook_note,
     build_quote,
+    confirm_drawing_cell,
+    init_drawing_cells,
     quote_to_pdf,
     verify_quote,
 )
@@ -44,6 +46,10 @@ def _seed_good_quote(session: str) -> None:
             }
         ],
     )
+    init_drawing_cells(session)
+    confirm_drawing_cell(session, "revision", "Rev A")
+    confirm_drawing_cell(session, "quantity", "2")
+    confirm_drawing_cell(session, "material", "EN8")
     quote_to_pdf(session_id=session, part_name="Bracket")
     db.add_memory(session, "last_quote_delivery_days", "14")
 

@@ -1,7 +1,16 @@
 "use client";
 
 import { LayoutGroup, motion, useReducedMotion } from "motion/react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { api } from "@/lib/api";
+import {
+  releaseQuoteBlockerSpeech,
+  shouldShowReplySpeakControl,
+  speakReplyLine,
+  trySpeakQuoteBlocker,
+} from "@/lib/voice";
+import { QuoteBenchStepper } from "./QuoteBenchStepper";
+import { quoteBlockerFromVerify, type QuoteBenchStepId } from "./quoteBench";
 import { EngineeringDeck, engineeringTasks } from "./EngineeringDeck";
 import { stageMorphLayoutId } from "./deckCardMeta";
 import type { DropIntent } from "./dropIntent";
@@ -90,8 +99,10 @@ export default function EngineeringSection({ id }: SectionProps) {
   const sessionId = useDesk((s) => s.activeSession);
   const drawingChat = useDesk((s) => s.drawingChat);
   const [focusMode, setFocusMode] = useState<StageFocusMode>("normal");
+  const [benchStep, setBenchStep] = useState<QuoteBenchStepId>("confirm");
   const [dropHighlight, setDropHighlight] = useState(false);
   const [dropPrompt, setDropPrompt] = useState(false);
+  const quoteBlockerRef = useRef<string | null>(null);
   const conversations = useDesk((s) => s.desk);
   const tasks = engineeringTasks(conversations);
   const activeConversationId = useDesk((s) => s.activeConversationId);
@@ -139,6 +150,36 @@ export default function EngineeringSection({ id }: SectionProps) {
     void desk.resolveEngineeringDropIntent(intent);
   };
 
+  const voiceLine = sectionVoiceLine(voiceVisible ? voice : "", focusTitle);
+  const showSpeakControl = useMemo(() => shouldShowReplySpeakControl(voiceLine), [voiceLine]);
+
+  useEffect(() => {
+    if (!active || !hasDrawing) return;
+    let cancelled = false;
+    const poll = () => {
+      void api.verifyQuote(sessionId, "send").then((result) => {
+        if (cancelled) return;
+        const blocker = quoteBlockerFromVerify(result.checks);
+        if (!blocker) {
+          if (quoteBlockerRef.current) releaseQuoteBlockerSpeech(quoteBlockerRef.current);
+          quoteBlockerRef.current = null;
+          return;
+        }
+        if (quoteBlockerRef.current && quoteBlockerRef.current !== blocker.id) {
+          releaseQuoteBlockerSpeech(quoteBlockerRef.current);
+        }
+        quoteBlockerRef.current = blocker.id;
+        trySpeakQuoteBlocker(blocker);
+      });
+    };
+    poll();
+    const timer = window.setInterval(poll, 4000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [active, hasDrawing, sessionId]);
+
   return (
     <LayoutGroup id="engineering">
       <div className="relative grid h-full grid-cols-12 grid-rows-8 gap-3" data-focus={focusMode}>
@@ -171,15 +212,42 @@ export default function EngineeringSection({ id }: SectionProps) {
 
         {dropPrompt ? <DropIntentPrompt onChoose={onDropIntent} /> : null}
 
-        <motion.div layout transition={SPRING.pane} className="relative min-h-0 min-w-0" style={{ gridArea: areas.sheet }}>
-          <QuoteSheet scene={scene} hasDrawing={hasDrawing} sessionId={sessionId} focused={focusMode === "stage"} />
+        <motion.div
+          layout
+          transition={SPRING.pane}
+          className="relative flex min-h-0 min-w-0 flex-col"
+          style={{ gridArea: areas.sheet }}
+        >
+          <QuoteBenchStepper
+            sessionId={sessionId}
+            activeStep={benchStep}
+            onStepChange={setBenchStep}
+            hasDrawing={hasDrawing}
+          />
+          <QuoteSheet
+            scene={scene}
+            hasDrawing={hasDrawing}
+            sessionId={sessionId}
+            focused={focusMode === "stage"}
+            benchStep={hasDrawing ? benchStep : undefined}
+          />
         </motion.div>
 
         <motion.div layout transition={SPRING.pane} className="relative min-h-0 min-w-0" style={{ gridArea: areas.strip }}>
           <div className="flex h-full min-h-0 items-center gap-4">
             <AgentDots agents={agents} />
             <div className="min-w-0 flex-1">
-              <ConverseStrip line={sectionVoiceLine(voiceVisible ? voice : "", focusTitle)} />
+              <ConverseStrip line={voiceLine} />
+              {showSpeakControl ? (
+                <button
+                  type="button"
+                  className="mt-1 rounded border border-[color:var(--border)] px-2 py-0.5 font-mono text-[9px] uppercase tracking-[0.14em] text-[color:var(--muted)] hover:border-[color:var(--accent)] hover:text-[color:var(--accent)]"
+                  aria-label="Speak this reply"
+                  onClick={() => speakReplyLine(voiceLine)}
+                >
+                  Speak
+                </button>
+              ) : null}
             </div>
           </div>
         </motion.div>
