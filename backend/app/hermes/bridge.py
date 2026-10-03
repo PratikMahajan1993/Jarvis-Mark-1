@@ -190,7 +190,7 @@ def ensure_playbooks_installed() -> bool:
             else:
                 shutil.copy2(item, target)
 
-    for skill_name, folder in (("quote", "quote"), ("masterdata", "masterdata")):
+    for skill_name, folder in (("quote", "quote"), ("masterdata", "masterdata"), ("sheets", "sheets")):
         source = playbooks / folder
         if not source.is_dir() or not (source / "SKILL.md").is_file():
             continue

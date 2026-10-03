@@ -1439,6 +1439,47 @@ def _browser_queue_action(
     return _ok(result, pending=result.get("pending"))
 
 
+def _sheet_model_read(session_id: str, **_: Any) -> dict[str, Any]:
+    from app.features.sheets.talk import tool_read
+
+    return tool_read(session_id=session_id)
+
+
+def _sheet_model_edit(session_id: str, action: str = "", payload: Any = "", **fields: Any) -> dict[str, Any]:
+    from app.features.sheets.talk import tool_edit
+
+    return tool_edit(session_id=session_id, action=action, payload=payload, **fields)
+
+
+def _sheet_template_list(session_id: str, **_: Any) -> dict[str, Any]:
+    from app.features.sheets.talk import tool_list
+
+    return tool_list(session_id=session_id)
+
+
+def _sheet_template_clone(
+    session_id: str,
+    template_id: str = "",
+    title: str = "",
+    discard: Any = False,
+    **_: Any,
+) -> dict[str, Any]:
+    from app.features.sheets.talk import tool_clone
+
+    return tool_clone(session_id=session_id, template_id=template_id, title=title, discard=discard)
+
+
+def _sheet_model_apply(
+    session_id: str,
+    telegram_user_id: str = "",
+    actor: str = "",
+    **_: Any,
+) -> dict[str, Any]:
+    from app.features.sheets.talk import tool_apply
+
+    return tool_apply(session_id=session_id, telegram_user_id=telegram_user_id, actor=actor)
+
+
 HANDLERS.update(
     {
         "get_briefing": _get_briefing,
@@ -1495,6 +1536,11 @@ HANDLERS.update(
         "get_weather": _get_weather,
         "browser_record_evidence": _browser_record_evidence,
         "browser_queue_action": _browser_queue_action,
+        "sheet_model_read": _sheet_model_read,
+        "sheet_model_edit": _sheet_model_edit,
+        "sheet_template_list": _sheet_template_list,
+        "sheet_template_clone": _sheet_template_clone,
+        "sheet_model_apply": _sheet_model_apply,
     }
 )
 
@@ -1936,6 +1982,67 @@ TOOL_SCHEMAS = [
                 "type": "object",
                 "properties": {
                     "conversation_id": {"type": "string"},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "sheet_model_read",
+            "description": "Read the open workbook model, its outline, and the next gap. Does not write Google.",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "sheet_model_edit",
+            "description": "Edit the open workbook model. action is set_title, add_tab, rename_tab, remove_tab, add_block, insert_column, rename_column, remove_column, set_kind, set_filler, set_formula, set_dropdown, set_text, or set_rows. payload is a JSON object. Does not write Google.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "action": {"type": "string"},
+                    "payload": {"type": "string", "description": "JSON object of fields for the action"},
+                },
+                "required": ["action"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "sheet_template_list",
+            "description": "List structure-only sheet templates saved when a workbook was created.",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "sheet_template_clone",
+            "description": "Copy a saved template into the open model under a new title. Sample values are dropped. Does not write Google.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "template_id": {"type": "string"},
+                    "title": {"type": "string"},
+                    "discard": {"type": "boolean"},
+                },
+                "required": ["template_id", "title"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "sheet_model_apply",
+            "description": "Create a new spreadsheet file from the open model in one batch. The desk owner may apply. Pass actor staff to refuse. A Telegram user id must be in TELEGRAM_OWNER_USER_IDS. A second create with no edits returns the first file.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "telegram_user_id": {"type": "string"},
+                    "actor": {"type": "string"},
                 },
             },
         },

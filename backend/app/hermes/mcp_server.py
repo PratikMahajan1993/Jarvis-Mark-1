@@ -780,6 +780,48 @@ def jarvis_get_oee_trend(days: int = 30) -> str:
     return _dump(execute_tool("get_oee_trend", {"days": days}, _session()))
 
 
+@mcp.tool()
+def jarvis_sheet_model_read() -> str:
+    """Read the open workbook model, its outline, and the next gap. Does not write Google."""
+    return _dump(execute_tool("sheet_model_read", {}, _session()))
+
+
+@mcp.tool()
+def jarvis_sheet_model_edit(action: str, payload: str = "") -> str:
+    """Edit the open workbook model. payload is a JSON object. Does not write Google. See the shop-sheets skill for actions."""
+    return _dump(execute_tool("sheet_model_edit", {"action": action, "payload": payload}, _session()))
+
+
+@mcp.tool()
+def jarvis_sheet_template_list() -> str:
+    """List structure-only sheet templates saved after a create."""
+    return _dump(execute_tool("sheet_template_list", {}, _session()))
+
+
+@mcp.tool()
+def jarvis_sheet_template_clone(template_id: str, title: str, discard: bool = False) -> str:
+    """Copy a saved template into the open model under a new title. Sample values are dropped. Pass discard when the open model already has work. Does not write Google."""
+    return _dump(
+        execute_tool(
+            "sheet_template_clone",
+            {"template_id": template_id, "title": title, "discard": discard},
+            _session(),
+        )
+    )
+
+
+@mcp.tool()
+def jarvis_sheet_model_apply(telegram_user_id: str = "", actor: str = "") -> str:
+    """Create a new spreadsheet from the model in one batch. Desk owner may omit telegram_user_id. Pass actor=staff to refuse. A Telegram id must be in TELEGRAM_OWNER_USER_IDS."""
+    return _dump(
+        execute_tool(
+            "sheet_model_apply",
+            {"telegram_user_id": telegram_user_id, "actor": actor},
+            _session(),
+        )
+    )
+
+
 def main() -> None:
     mcp.run(transport="stdio")
 
