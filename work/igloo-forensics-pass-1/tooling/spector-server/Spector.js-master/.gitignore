@@ -1,0 +1,15 @@
+################################################################################
+# .gitignore file
+################################################################################
+
+.temp/
+/built
+/.tempChromeProfileForDebug
+/node_modules
+npm-debug.log.**
+npm-debug.log
+.DS_Store
+test-results/
+playwright-report/
+
+.playwright-cli/

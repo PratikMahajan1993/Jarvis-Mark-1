@@ -1,0 +1,151 @@
+{
+  "resourceCount": 101,
+  "encodedBodyBytes": 17113170,
+  "groups": {
+    "js": {
+      "count": 8,
+      "encodedBodyBytes": 568876,
+      "decodedBodyBytes": 1835680
+    },
+    "png": {
+      "count": 1,
+      "encodedBodyBytes": 1245,
+      "decodedBodyBytes": 1245
+    },
+    "json": {
+      "count": 1,
+      "encodedBodyBytes": 1334,
+      "decodedBodyBytes": 24308
+    },
+    "wasm": {
+      "count": 2,
+      "encodedBodyBytes": 314851,
+      "decodedBodyBytes": 758862
+    },
+    "drc": {
+      "count": 22,
+      "encodedBodyBytes": 586525,
+      "decodedBodyBytes": 592021
+    },
+    "ktx2": {
+      "count": 49,
+      "encodedBodyBytes": 12700764,
+      "decodedBodyBytes": 12700764
+    },
+    "ogg": {
+      "count": 18,
+      "encodedBodyBytes": 2939575,
+      "decodedBodyBytes": 2939575
+    }
+  },
+  "hosts": [
+    "www.igloo.inc",
+    ""
+  ],
+  "headers": [
+    {
+      "url": "https://www.igloo.inc/assets/App3D-f554a111.js",
+      "status": 200,
+      "type": "script",
+      "headers": {
+        "access-control-allow-origin": "*",
+        "age": "1083832",
+        "cache-control": "public, max-age=14400, must-revalidate",
+        "cf-cache-status": "REVALIDATED",
+        "cf-ray": "a44b17784f425644-BOM",
+        "content-disposition": "inline; filename=\"App3D-f554a111.js\"",
+        "content-encoding": "br",
+        "content-type": "application/javascript; charset=utf-8",
+        "date": "Sat, 03 Oct 2026 09:59:01 GMT",
+        "etag": "\"4b298fbcf92366796b1301ab2a2ae260\"",
+        "last-modified": "Fri, 17 Jul 2026 01:33:32 GMT",
+        "nel": "{\"report_to\":\"cf-nel\",\"success_fraction\":0.0,\"max_age\":604800}",
+        "report-to": "{\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=AmghPtEK8Ntw8K3AD8s9enqg9o4SQTeCmpEHCaDR9HE7g44nqOfiVBiOzBO3eLYmD9yV7DUKCVuk6dlJbe4nLSYMG6jTY3VuTDfr%2BF%2BavQXDXmheCRaq41jWalCihVY%3D\"}]}",
+        "server": "cloudflare",
+        "strict-transport-security": "max-age=63072000",
+        "vary": "accept-encoding",
+        "x-frame-options": "DENY",
+        "x-vercel-cache": "HIT",
+        "x-vercel-id": "bom1::nw7vg-1785335845688-b033ad700d69"
+      }
+    },
+    {
+      "url": "https://www.igloo.inc/assets/fonts/IBMPlexMono-Medium.json",
+      "status": 200,
+      "type": "fetch",
+      "headers": {
+        "access-control-allow-origin": "*",
+        "age": "17804",
+        "cache-control": "public, max-age=0, must-revalidate",
+        "cf-cache-status": "DYNAMIC",
+        "cf-ray": "a44b177afe3b5644-BOM",
+        "content-disposition": "inline; filename=\"IBMPlexMono-Medium.json\"",
+        "content-encoding": "br",
+        "content-type": "application/json; charset=utf-8",
+        "date": "Sat, 03 Oct 2026 09:59:01 GMT",
+        "etag": "W/\"b01f6e167b9e1ffd9a0f289d99c42928\"",
+        "last-modified": "Sat, 03 Oct 2026 05:02:16 GMT",
+        "nel": "{\"report_to\":\"cf-nel\",\"success_fraction\":0.0,\"max_age\":604800}",
+        "report-to": "{\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=pXXaRoJfPe3bjNLd8SNMYGikeB%2B2K5gtdj4HE0Y2tteTW%2B2Wfr1v8ZBpS8pgjgEaM7rNHS5OrZQo78unok0mqjKqFywhKWioDCTU13uRYGkHz4vnjyIHFIWtrv1kEFQ%3D\"}]}",
+        "server": "cloudflare",
+        "strict-transport-security": "max-age=63072000",
+        "vary": "accept-encoding",
+        "x-frame-options": "DENY",
+        "x-vercel-cache": "HIT",
+        "x-vercel-id": "bom1::d488s-1791021541606-eaa0720f620c"
+      }
+    },
+    {
+      "url": "https://www.igloo.inc/assets/images/igloo/mountain_color.ktx2",
+      "status": 200,
+      "type": "fetch",
+      "headers": {
+        "accept-ranges": "bytes",
+        "access-control-allow-origin": "*",
+        "age": "18662",
+        "cache-control": "public, max-age=0, must-revalidate",
+        "cf-cache-status": "DYNAMIC",
+        "cf-ray": "a44b1782192f5644-BOM",
+        "content-disposition": "inline; filename=\"mountain_color.ktx2\"",
+        "content-length": "591988",
+        "content-type": "image/ktx2",
+        "date": "Sat, 03 Oct 2026 09:59:02 GMT",
+        "etag": "\"b6891b4ffce27a3d9955351726871020\"",
+        "last-modified": "Sat, 03 Oct 2026 04:48:00 GMT",
+        "nel": "{\"report_to\":\"cf-nel\",\"success_fraction\":0.0,\"max_age\":604800}",
+        "report-to": "{\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=xB4DdASQAelmZEJhHTNQQInlZxAA1ue0%2BEGaRFqzvQul3jWQ3LE2pflaWN0gwgavWkzz2ooUwBVhTWS8V9G4tnL4N0d%2F71EGX%2Bgx9RZoVzaS2yFSyN9%2FkZhHkFw12zs%3D\"}]}",
+        "server": "cloudflare",
+        "strict-transport-security": "max-age=63072000",
+        "x-frame-options": "DENY",
+        "x-vercel-cache": "HIT",
+        "x-vercel-id": "bom1::czwcx-1791021542738-cfe50765a7c8"
+      }
+    },
+    {
+      "url": "https://www.igloo.inc/assets/audio/music-highq.ogg",
+      "status": 200,
+      "type": "fetch",
+      "headers": {
+        "accept-ranges": "bytes",
+        "access-control-allow-origin": "*",
+        "age": "4762",
+        "cache-control": "public, max-age=14400, must-revalidate",
+        "cf-cache-status": "REVALIDATED",
+        "cf-ray": "a44b1792acbd5644-BOM",
+        "content-disposition": "inline; filename=\"music-highq.ogg\"",
+        "content-length": "1527578",
+        "content-type": "audio/ogg",
+        "date": "Sat, 03 Oct 2026 09:59:05 GMT",
+        "etag": "\"3c763fe90ccbb964163ec157b5ec6094\"",
+        "last-modified": "Thu, 09 Jul 2026 04:54:46 GMT",
+        "nel": "{\"report_to\":\"cf-nel\",\"success_fraction\":0.0,\"max_age\":604800}",
+        "report-to": "{\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=CbLQlpC8ci%2FneGgj7uB%2Ba7Td7tPeAPXx%2Bk7u6um8HwcOagMZMbOazwOlsgdo2DDBHFvZa5mXLwNGAUvyWNPy7QLg%2FpiVTtJ3pxaYh2mYt6xPayyOknyXmwAl%2B8spY%2F0%3D\"}]}",
+        "server": "cloudflare",
+        "strict-transport-security": "max-age=63072000",
+        "x-frame-options": "DENY",
+        "x-vercel-cache": "HIT",
+        "x-vercel-id": "bom1::9wgkv-1783577648721-9ce5dbd9b4ac"
+      }
+    }
+  ]
+}

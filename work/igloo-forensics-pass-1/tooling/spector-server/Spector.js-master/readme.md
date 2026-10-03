@@ -1,0 +1,311 @@
+[SpectorJS](readme.md)
+=========
+
+## Summary
+**Explore and Troubleshoot your WebGL scenes (All engines and Vanilla script support) with ease.**
+
+Spector is a tool aimed at *WebGL* developers wanting to know what happens in their context. It enables capturing of all the available information from a frame. You will be able to look at your entire **commands list** with their associated **visual states** and **context information**.
+
+[![Build Status](https://github.com/BabylonJS/Spector.js/workflows/CI/badge.svg)](https://github.com/BabylonJS/Spector.js/actions)
+[![License](https://img.shields.io/github/license/BabylonJS/Spector.js)](https://github.com/BabylonJS/Spector.js/blob/master/LICENSE.txt)
+[![devDependencies Status](https://david-dm.org/babylonjs/spectorjs/dev-status.svg)](https://david-dm.org/babylonjs/spectorjs?type=dev)
+
+This can be used either as a *browser extension* or directly from your page with a *Standalone Version*.
+
+<p align="center">
+  <img src="https://spectordoc.babylonjs.com/pictures/title.png" style="width:512px">
+</p>
+
+## Table of Content
+* [Why](#why)
+* [Browser extension](#browser-extension)
+* [Use as a Module](#use-as-a-module)
+  * [Webpack sample](#webpack-sample)
+* [Use as a Script Reference](#use-as-a-script-reference)
+  * [CDN](#cdn)
+  * [From the repository](#repo)
+  * [Node_Modules](#node_modules)
+  * [How To Reference](#how-to-reference)
+* [Basic usage](#basic-usage)
+* [Custom data](#custom-data)
+* [OffscreenCanvas Support](#offscreencanvas-support)
+  * [Main-thread OffscreenCanvas](#main-thread-offscreencanvas)
+  * [Worker OffscreenCanvas](#worker-offscreencanvas-manual-api--recommended)
+  * [Auto-injection](#auto-injection-best-effort)
+* [MCP Server](#mcp-server)
+* [Available APIs](documentation/apis.md)
+* [Build Locally](documentation/build.md)
+* [Contribute](documentation/contribute.md)
+* [ChangeLog](documentation/changeLogs.md)
+* [Learn WebGl](#learn-about-webgl)
+
+## Why
+###### [Back to top](#table-of-content)
+As a core member of the BabylonJS team I often found the need to debug what was happening to my webgl context. I was a huge fan of webgl inspector until we introduced WebGL2 in Babylon. As the WebGL community as a whole is our focus, I thought it would be great to share an extension compatible with all the Webgl/Webgl2 engines available.
+
+You can use the library inside of your own application easily as it is transpiled as a UMD module. It will either work as a script reference or with your favorite bundling tools like webpack.
+
+## Browser extension
+###### [Back to top](#table-of-content)
+If you are willing to use the browser extension, you can direclty install it from the store:
+- [Chrome](https://chrome.google.com/webstore/detail/spectorjs/denbgaamihkadbghdceggmchnflmhpmk)
+- [Firefox](https://addons.mozilla.org/en-US/firefox/addon/spector-js/)
+
+You can find on [Real Time Rendering](http://www.realtimerendering.com/blog/debugging-webgl-with-spectorjs/) a complete tutorial about the [Spector extension](http://www.realtimerendering.com/blog/debugging-webgl-with-spectorjs/). Else, you can refer to the [extension documentation](https://github.com/BabylonJS/Spector.js/blob/release/documentation/extension.md#how-to-use) to learn how to use it.
+
+Or you can take a look at the following documentation to load it from the source: [Browser Extension](https://github.com/BabylonJS/Spector.js/tree/master/documentation/extension.md).
+
+<p align="center">
+    <img src="https://spectordoc.babylonjs.com/pictures/extensionPopup.png" style="width:256px" width="256px">
+</p>
+
+## Use as a Module
+###### [Back to top](#table-of-content)
+In order to install the library in your application directory, please type the following command on a command line prompt open on the application directory:
+
+```
+npm install spectorjs
+```
+
+From this point you are all set to use it in your app.
+
+### Webpack sample
+###### [Back to top](#table-of-content)
+As a quick demo, here is a simple way to use the spector module with webpack.
+
+Please follow the instructions below to create a new directory and install the required tools:
+
+```
+mkdir sample
+cd sample
+npm init
+npm install --save-dev webpack webpack-cli
+npm install spectorjs --save-dev
+```
+
+Following the HelloWorld example from Webpack, you can now create it in the sample folder:
+
+A js file named `entry.js` containing the following code:
+
+```javascript
+var SPECTOR = require("spectorjs");
+
+var spector = new SPECTOR.Spector();
+spector.displayUI();
+```
+
+And an html file named `index.html` containing the following code:
+
+```html
+<html>
+    <head>
+    </head>
+    <body>
+        <script type="text/javascript" src="dist/main.js" charset="utf-8"></script>
+    </body>
+</html>
+```
+
+Now your application is ready. Go back to your command line and bundle the javascript file:
+
+```
+npx webpack entry.js 
+```
+
+You are all set. You can open your `index.html` file and see the inspector running e.g. `open index.html` on Linux and macOS. It obviously won't be that useful on an empty page but at least you get the integration idea.
+
+## Use as a Script Reference
+###### [Back to top](#table-of-content)
+
+### CDN
+Feel free to leverage the jsDelivr CDN to use the library from your own projects: [https://cdn.jsdelivr.net/npm/spectorjs@0.9.35/dist/spector.bundle.js](https://cdn.jsdelivr.net/npm/spectorjs@0.9.35/dist/spector.bundle.js)
+
+### Repo
+If you prefer to host your own version, the library is available in the [dist](https://github.com/BabylonJS/Spector.js/blob/master/dist/spector.bundle.js) folder of the repo.
+
+### node_modules
+If you used npm to install the library you can find the spector.bundle.js file in the node_module/spectorjs/dist folder.
+
+### How To Reference
+Simply add the following tag in your html page header:
+
+```html
+<script type="text/javascript" src="https://spectorcdn.babylonjs.com/spector.bundle.js"></script>
+```
+
+## Basic Usage
+###### [Back to top](#table-of-content)
+Once available in your app, you can instantiate an inspector by inserting the following command in your script:
+
+```javascript
+var spector = new SPECTOR.Spector();
+```
+
+You can then display the embedded UI directly in your page:
+
+```javascript
+spector.displayUI();
+```
+
+Or launch a capture and reuse its JSON result at your will:
+
+```javascript
+spector.onCapture.add((capture) => {
+    // Do something with capture.
+    var myEvent = new CustomEvent("SpectorOnCaptureEvent", { detail: { captureString: JSON.stringify(capture) } });
+    document.dispatchEvent(myEvent);
+});
+
+var canvas = document.getElementById("renderCanvas");
+spector.captureCanvas(canvas);
+```
+
+Another api you can rely upon is:
+
+```javascript
+spector.spyCanvases();
+```
+
+This will enable a complete tracking of the gl calls even before capturing which enables for instance access to the texture inputs or memory consumption information.
+
+## Custom Data
+###### [Back to top](#table-of-content)
+You can simply add custom data to the capture by adding a special field named **__SPECTOR_Metadata** to your WebGLObjects.
+
+```javascript
+var cubeVerticesColorBuffer = gl.createBuffer();
+cubeVerticesColorBuffer.__SPECTOR_Metadata = { name: "cubeVerticesColorBuffer" };
+```
+
+This will enable the visibility of your custom name in your capture. This can be an invaluable asset during troubleshoot session. This can also help with referencing your materials' friendly names from your captures.
+
+## OffscreenCanvas Support
+###### [Back to top](#table-of-content)
+Spector supports capturing WebGL commands from **OffscreenCanvas** — both on the main thread and inside Web Workers.
+
+### Bundles
+
+| Bundle | Use |
+|--------|-----|
+| `dist/spector.bundle.js` | Main thread (includes UI) |
+| `dist/spector.worker.bundle.js` | Inside Workers (headless, no UI) |
+
+### Main-thread OffscreenCanvas
+
+No special setup needed — `captureCanvas` works with `OffscreenCanvas` the same way it works with a regular `<canvas>`:
+
+```javascript
+var spector = new SPECTOR.Spector();
+
+var offscreen = new OffscreenCanvas(800, 600);
+var gl = offscreen.getContext('webgl2');
+// ... render ...
+
+spector.onCapture.add(function(capture) {
+    console.log('Captured', capture.commands.length, 'commands');
+});
+spector.captureCanvas(offscreen);
+```
+
+See [`sample/offscreen.html`](sample/offscreen.html) for a working example.
+
+### Worker OffscreenCanvas (Manual API — recommended)
+
+Use `spyWorker()` to bridge a specific Worker, then `captureWorker()` to trigger a capture. The Worker must load `spector.worker.bundle.js`.
+
+**Main thread:**
+
+```javascript
+var spector = new SPECTOR.Spector();
+var worker = new Worker('myWorker.js');
+
+// Bridge the Worker for capture
+spector.spyWorker(worker);
+
+// Capture from the Worker
+spector.onCapture.add(function(capture) {
+    console.log('Captured from Worker:', capture.commands.length, 'commands');
+    spector.getResultUI().display();
+    spector.getResultUI().addCapture(capture);
+});
+spector.captureWorker(worker);
+```
+
+**Inside `myWorker.js`:**
+
+```javascript
+importScripts('spector.worker.bundle.js');
+
+// OffscreenCanvas received via message or created directly
+var canvas = new OffscreenCanvas(800, 600);
+var gl = canvas.getContext('webgl2');
+
+function render() {
+    // ... draw calls ...
+    setTimeout(render, 16); // rAF may not be available in Workers
+}
+render();
+```
+
+See [`sample/worker.html`](sample/worker.html) for a working example.
+
+### Auto-injection (best-effort)
+
+**Browser extension:** Worker auto-injection is **OFF by default**, including for existing users (#394, #395). In the popup, **Auto-inject Workers (experimental)** explicitly enables best-effort instrumentation of Workers, including OffscreenCanvas Workers. Changing the checkbox reloads the tab. Like **Show offscreen canvas(es)**, the choice is stored in page `sessionStorage`, scoped to the tab and origin (and applied to currently loaded frames), not globally to all sites. It survives reloads; an absent setting defaults off.
+
+With the option off, the extension leaves `window.Worker` exactly as it was: no constructor wrapper, options inspection, URL coercion, or preflight fetch. Main-thread canvas capture still works. Disabling the checkbox and reloading stops installing interception; it does not undo instrumentation in an already-running Worker.
+
+**Programmatic API:** `spyWorkers()` remains a separate, explicit opt-in. It monkey-patches the global `Worker` constructor to attempt automatic injection into subsequent classic Workers:
+
+```javascript
+var spector = new SPECTOR.Spector();
+spector.spyWorkers('spector.worker.bundle.js');
+// Subsequent classic Workers are candidates for best-effort injection
+
+// Stop intercepting:
+// spector.stopSpyingWorkers();
+```
+
+> **⚠️ Experimental — can alter Worker behavior:** Both auto-injection paths only consider primitive string URLs for same-origin HTTP(S) classic Workers without options. Module Workers, URL objects, custom options, subclasses, redirects, blob/data/cross-origin URLs, strict scripts, and recognizable URL-sensitive code use native construction. Dynamic imports, `importScripts`, nested Workers, `location`, `Request`, `fetch`, XHR, WebSocket/EventSource, and isolation-sensitive APIs are bypassed rather than rewritten. There is no `postMessage` override or startup message queue. Conservative source checks are **not a compatibility guarantee**: computed names can evade them, source and bundle preflights add synchronous requests, and blob wrapping still changes the worker global and script error locations. Known preflight failures fall back before creating a blob, but asynchronous CSP/startup failures cannot transparently fall back after construction. Leave auto-injection off for native behavior; prefer the [manual API](#worker-offscreencanvas-manual-api--recommended) when you control the Worker source. For module Workers, explicitly load the worker bundle using `import` instead of `importScripts`.
+
+Application scripts served with CSP (including report-only policies) stay native. Bundle import failures are caught so the application can still start, but preflight cannot guarantee injection, undo partially executed instrumentation, or recover a blob Worker blocked by CSP. Stopping `spyWorkers()` deactivates retained interceptor references without overwriting a newer third-party Worker wrapper.
+
+### API Reference
+
+| Method | Description |
+|--------|-------------|
+| `spyWorker(worker)` | Bridge a specific Worker for capture. Returns a `WorkerBridge`. |
+| `captureWorker(worker, commandCount?, quickCapture?, fullCapture?)` | Trigger a capture on a bridged Worker. Auto-bridges if needed. |
+| `spyWorkers(bundleUrl?)` | Explicitly opt in to experimental, best-effort Worker auto-injection. |
+| `stopSpyingWorkers()` | Stop intercepting Worker construction. |
+
+## MCP Server
+###### [Back to top](#table-of-content)
+Spector.js includes an [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server that lets AI assistants debug **any WebGL website** directly. Load a URL, capture frames, and inspect draw calls, shaders, textures, and GL state — all from your AI-powered editor.
+
+```
+npm run mcp:install
+npm run mcp:build
+```
+
+Then add to your MCP client config:
+```json
+{
+  "mcpServers": {
+    "spector": {
+      "command": "node",
+      "args": ["<path-to-repo>/mcp/dist/index.js"]
+    }
+  }
+}
+```
+
+See the full documentation in [mcp/README.md](mcp/README.md).
+
+## Learn About WebGL
+###### [Back to top](#table-of-content)
+I would advise you to check out and start with the Awesome [BabylonJS](http://www.babylonjs.com/) the community there will be more than happy to welcome anybody willing to learn Web 3d.
+
+<p align="center">
+    <img src="https://spectordoc.babylonjs.com/pictures/babylonJS.png">
+</p>

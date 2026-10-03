@@ -1,0 +1,226 @@
+{
+  "scope": "desktop; mobile artifacts excluded",
+  "date": "2026-10-03",
+  "files": [
+    {
+      "file": "App3D-f554a111.js",
+      "bytes": 1487415,
+      "sha256": "54e3068a859b5b027d55e474b7ccf5aadf8df071e27689b3cfac073ad62cca48"
+    },
+    {
+      "file": "audioworker-036a09db.js",
+      "bytes": 116311,
+      "sha256": "c56952955111dd8af5d2b10bea2cc2cda131272d54b524bc1c54eb46b0fa3d9d"
+    },
+    {
+      "file": "basis_transcoder.js",
+      "bytes": 67059,
+      "sha256": "a7bb97ecab372f4ad63db3ae74fcfe5e436f0cce02646ec1d3c4feb8b898face"
+    },
+    {
+      "file": "bitmapworker-046527f8.js",
+      "bytes": 2948,
+      "sha256": "900fd0f9c549420ff08947d54b37e7880dae20e4dfe8a02e574fd19b23836ae2"
+    },
+    {
+      "file": "bundle-analysis.md",
+      "bytes": 23805,
+      "sha256": "c99f218eedcc775c4d85b5d92a04dd12aad948a94bb68c2f36265a622c22933d"
+    },
+    {
+      "file": "bundle-snippets.json",
+      "bytes": 236700,
+      "sha256": "e3d87a6c78f494da3dfffdc538d623a6262d29a4087e92663ad5ad148db81b2a"
+    },
+    {
+      "file": "creator-case-study.html",
+      "bytes": 224449,
+      "sha256": "bbdad3b1fb02bf0ca2e08de300b523ec8c92ecf34c986aa678d3de406c40711c"
+    },
+    {
+      "file": "deep-console.json",
+      "bytes": 1147,
+      "sha256": "f99ce3b670f1b3d5c46ae2199a952ae6ce30198e8776bf556b57b9cb6a71ec86"
+    },
+    {
+      "file": "desktop-accessibility.json",
+      "bytes": 5330,
+      "sha256": "108a342ac36e8f56b2619aeb0b8848f4054ed6d1a336b849ebcdab3181db9b6a"
+    },
+    {
+      "file": "desktop-behavior.json",
+      "bytes": 3108164,
+      "sha256": "125c61fbf3996cc9e2c25d9651de2639721f657d587f7220bbcd60c720c0fb28"
+    },
+    {
+      "file": "desktop-console.json",
+      "bytes": 69,
+      "sha256": "01072d1c970aa1418e9eea1e3977b0da3f106748fe7bfe2edf09a3164ec6d31b"
+    },
+    {
+      "file": "desktop-entry.json",
+      "bytes": 133983,
+      "sha256": "dbac6ef162f2768ecdf7740cab8630ad2c3e6d10949f1cecaf82f389deb183e2"
+    },
+    {
+      "file": "desktop-idle-frame-intervals.json",
+      "bytes": 3595,
+      "sha256": "3c9f592bb5813023c267ef8bf9cf08b7162c899c2b557f1b36f04b9601d345da"
+    },
+    {
+      "file": "desktop-metrics.json",
+      "bytes": 2413,
+      "sha256": "79edc816604bc04fb2de00d29f7901fce6d4c1f77c57567bdfef92bb3246c2cd"
+    },
+    {
+      "file": "desktop-network.json",
+      "bytes": 133202,
+      "sha256": "92c36ea9048b73eae22d205f7ec4d693cc6f175f967ee4c76f50e3618a35ff31"
+    },
+    {
+      "file": "desktop-scroll-end.json",
+      "bytes": 133983,
+      "sha256": "dbac6ef162f2768ecdf7740cab8630ad2c3e6d10949f1cecaf82f389deb183e2"
+    },
+    {
+      "file": "desktop-wheel450.json",
+      "bytes": 133983,
+      "sha256": "dbac6ef162f2768ecdf7740cab8630ad2c3e6d10949f1cecaf82f389deb183e2"
+    },
+    {
+      "file": "desktop.har",
+      "bytes": 321416,
+      "sha256": "a65aef9afe87d6ba92576e8881ca0451b90c9e3d01b8527bbdaf9733b7ba6956"
+    },
+    {
+      "file": "draco_wasm_wrapper.js",
+      "bytes": 58763,
+      "sha256": "e8049906ef3f8f75d3456c22a3f31bfdfe5b5b5bd09ccdec613b9e9a49d554d8"
+    },
+    {
+      "file": "exrworker-41cbee65.js",
+      "bytes": 83463,
+      "sha256": "4842b67bc261ad6c43d99df431919cc7bd39df0eb8af58562cb637c1ba827ffc"
+    },
+    {
+      "file": "font-msdf.json",
+      "bytes": 24308,
+      "sha256": "607b4cc1d061869a047383a945b82dd84cfa4f047426c4e03fd2f15091c70474"
+    },
+    {
+      "file": "home.html",
+      "bytes": 1410,
+      "sha256": "b88f245f2308b996f4ad5ae36d2329627062d22474382bd96f6214a288d13841"
+    },
+    {
+      "file": "index-2eb69c09.js",
+      "bytes": 16546,
+      "sha256": "48e3373c58b7979ac48fd6bd49a710b43f1ac64ce60a0d4faf83761ba6aeea46"
+    },
+    {
+      "file": "msdfworker-ac346fa7.js",
+      "bytes": 3175,
+      "sha256": "5b43e8239ef5bf35a8452f5c1d4384e58cd357d6aa57a6a6d421394b22004ad5"
+    },
+    {
+      "file": "network-summary.json",
+      "bytes": 6132,
+      "sha256": "a917d3b7fa09b20b84a5c3d93c05bad6598018d842620b0479e7f80cd6dc71ed"
+    },
+    {
+      "file": "spector-cube1-draws.json",
+      "bytes": 77052,
+      "sha256": "2cb59b08763b391101175772ec908c5b06981050a91075e4c84f08df63c96ffb"
+    },
+    {
+      "file": "spector-cube1-frost-draws.json",
+      "bytes": 77199,
+      "sha256": "cd45b56b90300d0f595fb00599946c63a0c925347825a632c7749a433444f793"
+    },
+    {
+      "file": "spector-cube1-frost-shaders.json",
+      "bytes": 480380,
+      "sha256": "13bce6a83e80fa4eda63c7b272f328420d5e4864b5d041dde4e246f8318675ff"
+    },
+    {
+      "file": "spector-cube1-frost.json",
+      "bytes": 20493433,
+      "sha256": "a00b822a02e1ff3ececd8fbb4dd8ad332e4dab9bb470d401ba9b69324c171cbe"
+    },
+    {
+      "file": "spector-cube1-shaders.json",
+      "bytes": 480380,
+      "sha256": "c8cf10b0aa52684b1fa044c77e479f0775a3334a508c68bae71e583c68c07698"
+    },
+    {
+      "file": "spector-cube1.json",
+      "bytes": 20478895,
+      "sha256": "cd5c56f78385de744c7abf4a2107c19206636d9b38fafb891ebae93e779c46f8"
+    },
+    {
+      "file": "spector-detail-draws.json",
+      "bytes": 98638,
+      "sha256": "4707bd24cf9a1849b88c34bcee84a6570a3da713fff345c4a3c3c07a697dfe12"
+    },
+    {
+      "file": "spector-detail-shaders.json",
+      "bytes": 221478,
+      "sha256": "ffab713f20282535ce629f5aee920d1ba15010226667999511f3cc981b45642b"
+    },
+    {
+      "file": "spector-detail.json",
+      "bytes": 19535938,
+      "sha256": "f4329079be8da08a82865832086845164499e6f933d422398353cf2bd1140a68"
+    },
+    {
+      "file": "spector-footer-draws.json",
+      "bytes": 93645,
+      "sha256": "dbed660f2d08729d74b41c3ab3f91efbcd3d9f486dabd80321304a325aadf9f3"
+    },
+    {
+      "file": "spector-footer-shaders.json",
+      "bytes": 275572,
+      "sha256": "c8769be5eb96f5e6aae3e09372a9d539ed473885562e99f79754f5cb2c94395a"
+    },
+    {
+      "file": "spector-footer.json",
+      "bytes": 23693604,
+      "sha256": "8562438bf70ffd9b50387d79eff784b54806a69327ba64ef54fc4920b7b42b64"
+    },
+    {
+      "file": "spector-hero-draws.json",
+      "bytes": 110639,
+      "sha256": "8da9f398db6778eb9858326a016c3f72fb7b16c900fa964b63ea479eba0702c3"
+    },
+    {
+      "file": "spector-hero-shaders.json",
+      "bytes": 341398,
+      "sha256": "40e92a541d55534152146912e95b5f92575bd9b430de1515184de5a63c1068bd"
+    },
+    {
+      "file": "spector-hero.json",
+      "bytes": 21722592,
+      "sha256": "edd0ca4d125b6ba10c7696fe94af6bb3c3ce953bf2a533c6560f711dcec4193f"
+    },
+    {
+      "file": "spector-setup.json",
+      "bytes": 1880,
+      "sha256": "ed0fc8adf65f5040e54ff3600d8338e367a74c159d8c2cce03c5e3ab86b721df"
+    },
+    {
+      "file": "spector-summary.json",
+      "bytes": 61703,
+      "sha256": "b7a6f724082a5860ac492d7b4a969cdd6f6c790f4749174149990effcc7e7cdb"
+    },
+    {
+      "file": "volume-header.json",
+      "bytes": 185,
+      "sha256": "cde179af5dd42d155a2580d8f58c5c11dda4fa86593ff0dad279ec3b5934c14d"
+    },
+    {
+      "file": "volume-medium-32.ktx2",
+      "bytes": 45330,
+      "sha256": "cc7fe3d9fad037af6f655104378fd3bb10834c1435b4cdd0ced60e359a8a4ee6"
+    }
+  ]
+}

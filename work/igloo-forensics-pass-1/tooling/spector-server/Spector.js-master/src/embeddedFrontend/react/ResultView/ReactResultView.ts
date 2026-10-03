@@ -1,0 +1,853 @@
+// tslint:disable-next-line:no-submodule-imports
+import { createRoot, Root } from "react-dom/client";
+import { createElement } from "react";
+import { Observable } from "../../../shared/utils/observable";
+import { ICapture } from "../../../shared/capture/capture";
+import { ICommandCapture } from "../../../shared/capture/commandCapture";
+import { IShaderCapture } from "../../../shared/capture/programCapture";
+import { ExternalStore } from "../shared/ExternalStore";
+import {
+    ISourceCodeChangeEvent,
+    ICommandListItemState,
+    IVisualStateItem,
+    ISourceCodeState,
+    MenuStatus,
+    ResultViewState,
+    JSONRenderItem,
+    IRawImagePixels,
+} from "../shared/types";
+import { ResultViewRoot } from "./ResultViewRoot";
+import { ResultViewContext } from "./ResultViewContext";
+import { buildJSON, buildJSONGroup, buildCommandDetail, toFilter } from "./jsonTreeBuilder";
+import { SourceMapResolver } from "../shared/sourceMapResolver";
+import { compareCaptures } from "../shared/captureComparer";
+
+// ─── Default (empty) state ───────────────────────────────────────────────────
+
+const EMPTY_STATE: ResultViewState = {
+    visible: false,
+    menuStatus: MenuStatus.Captures,
+    searchText: "",
+    captures: [],
+    currentCapture: null,
+    commands: [],
+    currentCommandIndex: -1,
+    visualStates: [],
+    currentVisualStateIndex: -1,
+    sourceCodeState: null,
+    sourceCodeError: "",
+    commandCount: 0,
+    informationLeft: [],
+    informationRight: [],
+    initStateData: [],
+    endStateData: [],
+    commandDetailData: [],
+    compareRows: [],
+    compareSummary: { added: 0, removed: 0, changed: 0, unchanged: 0 },
+    compareOnlyDifferences: true,
+    canCompare: false,
+    compareLabel: "",
+    textureViewer: { open: false, src: "", label: "", pixelated: false, raw: null },
+};
+
+// ─── Adapter class ──────────────────────────────────────────────────────────
+
+/**
+ * React adapter for ResultView.
+ *
+ * Implements the exact same public API as the original MVX-based ResultView
+ * so it can be swapped in as a drop-in replacement. All orchestration logic
+ * (command/visual-state building, JSON trees, keyboard navigation, search)
+ * is ported from the original 821-line resultView.ts.
+ */
+export class ReactResultView {
+    // ─── Observables ──────────────────────────────────────────────────────
+    public readonly onSourceCodeChanged: Observable<ISourceCodeChangeEvent>;
+
+    // ─── React internals ──────────────────────────────────────────────────
+    public readonly store: ExternalStore<ResultViewState>;
+    private readonly _root: Root;
+    private readonly _container: HTMLDivElement;
+    private readonly _rootPlaceHolder: Element;
+
+    // ─── Tracking ─────────────────────────────────────────────────────────
+    private _currentCommandId: number = -1;
+
+    // ─── Source-map resolution (#98): lazy, display-time only ──────────────
+    private readonly _sourceMapResolver: SourceMapResolver = new SourceMapResolver();
+    private readonly _resolvedStackTraces: Map<number, string[]> = new Map();
+    private readonly _resolvingStackTraces: Set<number> = new Set();
+
+    constructor(rootPlaceHolder: Element = null) {
+        this._rootPlaceHolder = rootPlaceHolder || document.body;
+
+        this.onSourceCodeChanged = new Observable<ISourceCodeChangeEvent>();
+
+        // ── Store ──
+        this.store = new ExternalStore<ResultViewState>({ ...EMPTY_STATE });
+
+        // ── Mount React tree (once) ──
+        this._container = document.createElement("div");
+        this._container.className = "spector-react-result-view";
+        this._rootPlaceHolder.appendChild(this._container);
+        this._root = createRoot(this._container);
+        this._root.render(
+            createElement(ResultViewContext.Provider, { value: this },
+                createElement(ResultViewRoot),
+            ),
+        );
+
+        // ── Keyboard navigation ──
+        this._rootPlaceHolder.addEventListener("keydown", (event) => {
+            const state = this.store.getSnapshot();
+            if (state.menuStatus !== MenuStatus.Commands) { return; }
+
+            const keyCode = (event as any).keyCode;
+            if (keyCode === 38) {          // Up arrow
+                event.preventDefault();
+                event.stopPropagation();
+                this._selectPreviousCommand();
+            } else if (keyCode === 40) {   // Down arrow
+                event.preventDefault();
+                event.stopPropagation();
+                this._selectNextCommand();
+            } else if (keyCode === 33) {   // Page Up
+                event.preventDefault();
+                event.stopPropagation();
+                this._selectPreviousVisualState();
+            } else if (keyCode === 34) {   // Page Down
+                event.preventDefault();
+                event.stopPropagation();
+                this._selectNextVisualState();
+            }
+        });
+    }
+
+    // ─── Public API (matches original ResultView) ─────────────────────────
+
+    public display(): void {
+        this.store.setState((prev) => ({ ...prev, visible: true }));
+    }
+
+    public hide(): void {
+        this.store.setState((prev) => ({ ...prev, visible: false }));
+    }
+
+    public addCapture(capture: ICapture): number {
+        this.store.setState((prev) => {
+            const deactivated = prev.captures.map((entry) => ({
+                capture: entry.capture,
+                active: false,
+            }));
+            return {
+                ...prev,
+                captures: [{ capture, active: true }, ...deactivated],
+                currentCapture: capture,
+            };
+        });
+        this._currentCommandId = -1;
+        this._displayCurrentCapture();
+        return 0;
+    }
+
+    public selectCapture(captureIndex: number): void {
+        this._currentCommandId = -1;
+        this.store.setState((prev) => {
+            const captures = prev.captures.map((entry, i) => ({
+                capture: entry.capture,
+                active: i === captureIndex,
+            }));
+            return {
+                ...prev,
+                captures,
+                currentCapture: captures[captureIndex]?.capture ?? null,
+            };
+        });
+        this._displayCurrentCapture();
+    }
+
+    public selectCommand(commandIndex: number): void {
+        const state = this.store.getSnapshot();
+        if (commandIndex < 0 || commandIndex >= state.commands.length) { return; }
+
+        const cmd = state.commands[commandIndex];
+        this._currentCommandId = cmd.capture.id;
+        const visualStateIndex = cmd.visualStateIndex;
+
+        const commandDetailData = this._buildCommandDetail(commandIndex, state.commands, state.visualStates);
+
+        this.store.setState((prev) => ({
+            ...prev,
+            commands: prev.commands.map((c, i) => (c.active !== (i === commandIndex) ? { ...c, active: i === commandIndex } : c)),
+            currentCommandIndex: commandIndex,
+            visualStates: prev.visualStates.map((v, i) => (v.active !== (i === visualStateIndex) ? { ...v, active: i === visualStateIndex } : v)),
+            currentVisualStateIndex: visualStateIndex,
+            commandDetailData,
+        }));
+    }
+
+    public selectVisualState(visualStateIndex: number): void {
+        const state = this.store.getSnapshot();
+        if (visualStateIndex < 0 || visualStateIndex >= state.visualStates.length) { return; }
+
+        const vs = state.visualStates[visualStateIndex];
+        const commandIndex = vs.commandIndex;
+
+        // Handle special sentinel values for init/end state
+        if (commandIndex === Number.MIN_VALUE) {
+            this._displayInitState();
+            return;
+        }
+        if (commandIndex === Number.MAX_VALUE) {
+            this._displayEndState();
+            return;
+        }
+
+        if (commandIndex >= 0) {
+            this._currentCommandId = state.commands[commandIndex].capture.id;
+        }
+
+        const commandDetailData = commandIndex >= 0
+            ? this._buildCommandDetail(commandIndex, state.commands, state.visualStates)
+            : state.commandDetailData;
+
+        this.store.setState((prev) => ({
+            ...prev,
+            visualStates: prev.visualStates.map((v, i) => (v.active !== (i === visualStateIndex) ? { ...v, active: i === visualStateIndex } : v)),
+            currentVisualStateIndex: visualStateIndex,
+            commands: commandIndex >= 0
+                ? prev.commands.map((c, i) => (c.active !== (i === commandIndex) ? { ...c, active: i === commandIndex } : c))
+                : prev.commands,
+            currentCommandIndex: commandIndex >= 0 ? commandIndex : prev.currentCommandIndex,
+            commandDetailData,
+        }));
+    }
+
+    public showSourceCodeError(error: string): void {
+        this.store.setState((prev) => ({
+            ...prev,
+            sourceCodeError: error,
+        }));
+    }
+
+    public saveCapture(capture: ICapture): void {
+        const captureInString = JSON.stringify(capture, null, 4);
+        const blob = new Blob([captureInString], { type: "octet/stream" });
+        const fileName = "capture " + new Date(capture.startTime).toTimeString().split(" ")[0] + ".json";
+
+        const a = document.createElement("a");
+        const url = window.URL.createObjectURL(blob);
+        a.setAttribute("href", url);
+        a.setAttribute("download", fileName);
+        a.click();
+    }
+
+    // ─── Callbacks for React components ───────────────────────────────────
+
+    /** Called by React when user selects a menu tab. */
+    public handleMenuStatusChange = (status: MenuStatus): void => {
+        const state = this.store.getSnapshot();
+        if (!state.currentCapture) {
+            // No capture — only allow switching to Captures tab
+            this.store.setState((prev) => ({ ...prev, menuStatus: MenuStatus.Captures }));
+            return;
+        }
+        switch (status) {
+            case MenuStatus.Captures:
+                this._displayCaptures();
+                break;
+            case MenuStatus.Commands:
+                this._displayCurrentCapture();
+                break;
+            case MenuStatus.Information:
+                this._displayInformation();
+                break;
+            case MenuStatus.InitState:
+                this._displayInitState();
+                break;
+            case MenuStatus.EndState:
+                this._displayEndState();
+                break;
+            case MenuStatus.Compare:
+                this._displayCompare();
+                break;
+        }
+    }
+
+    /** Called by React when search text changes. */
+    public handleSearchTextChange = (searchText: string): void => {
+        this.store.setState((prev) => ({ ...prev, searchText }));
+        this._search(searchText);
+    }
+
+    /** Called by React when the Compare "Differences only" toggle changes (#155). */
+    public handleCompareOnlyDifferencesChange = (onlyDifferences: boolean): void => {
+        this.store.setState((prev) => ({ ...prev, compareOnlyDifferences: onlyDifferences }));
+    }
+
+    /**
+     * Called by React when a Compare row's command link is clicked (#155):
+     * switch to the Commands view and select the corresponding command in the
+     * current capture.
+     */
+    public handleCompareCommandSelected = (commandId: number): void => {
+        if (commandId === undefined || commandId === null) { return; }
+        this._currentCommandId = commandId;
+        this._displayCurrentCapture();
+    }
+
+    /** Called by React when user selects a command. */
+    public handleCommandSelected = (commandIndex: number): void => {
+        this.selectCommand(commandIndex);
+    }
+
+    /** Open the texture viewer modal for a displayed texture/attachment (#183). */
+    public openTextureViewer = (payload: { src: string; label: string; pixelated: boolean; raw: IRawImagePixels | null }): void => {
+        this.store.setState((prev) => ({
+            ...prev,
+            textureViewer: {
+                open: true,
+                src: payload.src,
+                label: payload.label,
+                pixelated: payload.pixelated,
+                raw: payload.raw || null,
+            },
+        }));
+    }
+
+    /** Close the texture viewer modal (#183). */
+    public closeTextureViewer = (): void => {
+        this.store.setState((prev) => ({ ...prev, textureViewer: { ...prev.textureViewer, open: false } }));
+    }
+
+    /** Called by React when user selects a visual state. */
+    public handleVisualStateSelected = (visualStateIndex: number): void => {
+        this.selectVisualState(visualStateIndex);
+    }
+
+    /** Called by React when a shader link is clicked (vertex). */
+    public handleVertexSelected = (commandIndex: number): void => {
+        this.selectCommand(commandIndex);
+        this._openShader(false);
+    }
+
+    /** Called by React when a shader link is clicked (fragment). */
+    public handleFragmentSelected = (commandIndex: number): void => {
+        this.selectCommand(commandIndex);
+        this._openShader(true);
+    }
+
+    /** Called when a shader-related command's source link is clicked. */
+    public handleShaderSelected = (commandIndex: number): void => {
+        const state = this.store.getSnapshot();
+        const shader = state.commands[commandIndex]?.capture.shader;
+        if (!shader) { return; }
+
+        this.selectCommand(commandIndex);
+        this._openCapturedShader(shader);
+    }
+
+    /** Called when a shader source link in command details is clicked. */
+    public handleShaderSourceOpen = (shader: IShaderCapture, programLog?: string): void => {
+        this._openCapturedShader(shader, programLog);
+    }
+
+    /** Called by React when source code is edited. */
+    public handleSourceCodeChanged = (event: ISourceCodeChangeEvent): void => {
+        this.onSourceCodeChanged.trigger(event);
+    }
+
+    /** Called by React when source code close button is clicked. */
+    public handleSourceCodeClose = (): void => {
+        this._displayCurrentCapture();
+    }
+
+    /** Called by React when source code tab changes. */
+    public handleSourceCodeTabChange = (fragment: boolean, translated: boolean): void => {
+        this.store.setState((prev) => {
+            if (!prev.sourceCodeState) { return prev; }
+            return {
+                ...prev,
+                sourceCodeState: { ...prev.sourceCodeState, fragment, translated },
+            };
+        });
+    }
+
+    /** Called by React when beautify checkbox changes. */
+    public handleBeautifyChanged = (beautify: boolean): void => {
+        this.store.setState((prev) => {
+            if (!prev.sourceCodeState) { return prev; }
+            return {
+                ...prev,
+                sourceCodeState: { ...prev.sourceCodeState, beautify },
+            };
+        });
+    }
+
+    /** Called by React when preprocess checkbox changes. */
+    public handlePreprocessChanged = (preprocessed: boolean): void => {
+        this.store.setState((prev) => {
+            if (!prev.sourceCodeState) { return prev; }
+            return {
+                ...prev,
+                sourceCodeState: { ...prev.sourceCodeState, preprocessed },
+            };
+        });
+    }
+
+    /** Called by React when save is requested on a capture. */
+    public handleSaveRequested = (capture: ICapture): void => {
+        this.saveCapture(capture);
+    }
+
+    /** Called by React when a capture is loaded (drag-drop). */
+    public handleCaptureLoaded = (capture: ICapture): void => {
+        this.addCapture(capture);
+    }
+
+    /** Called by React when user clicks close on the result view. */
+    public handleClose = (): void => {
+        this.hide();
+    }
+
+    // ─── Private: Display modes ──────────────────────────────────────────
+
+    private _displayCaptures(): void {
+        this.store.setState((prev) => ({
+            ...prev,
+            menuStatus: MenuStatus.Captures,
+        }));
+    }
+
+    /**
+     * Build and show the capture-to-capture command diff (#155).
+     *
+     * Compares the currently selected capture against the immediately previous
+     * one in the capture list (the next entry, since new captures are unshifted
+     * to the front). When there is no previous capture, the tab shows guidance.
+     */
+    private _displayCompare(): void {
+        const state = this.store.getSnapshot();
+        const activeIndex = state.captures.findIndex((entry) => entry.active);
+        const currentEntry = activeIndex >= 0 ? state.captures[activeIndex] : null;
+        // New captures are prepended, so the "previous" capture is the next index.
+        const previousEntry = currentEntry ? state.captures[activeIndex + 1] : null;
+
+        if (!currentEntry || !previousEntry) {
+            this.store.setState((prev) => ({
+                ...prev,
+                menuStatus: MenuStatus.Compare,
+                canCompare: false,
+                compareRows: [],
+                compareSummary: { added: 0, removed: 0, changed: 0, unchanged: 0 },
+                compareLabel: "",
+            }));
+            return;
+        }
+
+        const diff = compareCaptures(previousEntry.capture, currentEntry.capture);
+        const label = ReactResultView._captureLabel(previousEntry.capture) +
+            "  →  " + ReactResultView._captureLabel(currentEntry.capture);
+
+        this.store.setState((prev) => ({
+            ...prev,
+            menuStatus: MenuStatus.Compare,
+            canCompare: true,
+            compareRows: diff.rows,
+            compareSummary: diff.summary,
+            compareLabel: label,
+        }));
+    }
+
+    private static _captureLabel(capture: ICapture): string {
+        try {
+            return new Date(capture.startTime).toTimeString().split(" ")[0];
+        } catch {
+            return "capture";
+        }
+    }
+
+    private _displayInformation(): void {
+        const state = this.store.getSnapshot();
+        const capture = state.currentCapture;
+        if (!capture) { return; }
+
+        const leftItems: JSONRenderItem[] = [];
+        buildJSONGroup(leftItems, "Canvas", capture.canvas, state.searchText);
+        buildJSONGroup(leftItems, "Context", capture.context, state.searchText);
+
+        const rightItems: JSONRenderItem[] = [];
+        for (const analysis of capture.analyses) {
+            const title = analysis.analyserName === "Primitives" ? "Vertices count" : analysis.analyserName;
+            buildJSONGroup(rightItems, title, analysis, state.searchText);
+        }
+        buildJSONGroup(rightItems, "Frame Memory Changes", capture.frameMemory, state.searchText);
+        buildJSONGroup(rightItems, "Total Memory (seconds since application start: bytes)", capture.memory, state.searchText);
+
+        this.store.setState((prev) => ({
+            ...prev,
+            menuStatus: MenuStatus.Information,
+            commandCount: capture.commands.length,
+            informationLeft: leftItems,
+            informationRight: rightItems,
+        }));
+    }
+
+    private _displayInitState(): void {
+        const state = this.store.getSnapshot();
+        const capture = state.currentCapture;
+        if (!capture) { return; }
+
+        const items: JSONRenderItem[] = [];
+        buildJSON(items, capture.initState, state.searchText);
+
+        this.store.setState((prev) => ({
+            ...prev,
+            menuStatus: MenuStatus.InitState,
+            commandCount: capture.commands.length,
+            initStateData: items,
+        }));
+    }
+
+    private _displayEndState(): void {
+        const state = this.store.getSnapshot();
+        const capture = state.currentCapture;
+        if (!capture) { return; }
+
+        const items: JSONRenderItem[] = [];
+        buildJSON(items, capture.endState, state.searchText);
+
+        this.store.setState((prev) => ({
+            ...prev,
+            menuStatus: MenuStatus.EndState,
+            commandCount: capture.commands.length,
+            endStateData: items,
+        }));
+    }
+
+    private _displayCurrentCapture(): void {
+        const state = this.store.getSnapshot();
+        const capture = state.currentCapture;
+        if (!capture) { return; }
+
+        const searchText = state.searchText;
+
+        // Mark all captures inactive except current
+        const captures = state.captures.map((entry) => ({
+            capture: entry.capture,
+            active: entry.capture === capture,
+        }));
+
+        // Build visual states array
+        const visualStates: IVisualStateItem[] = [];
+        // Init visual state (index 0)
+        visualStates.push({
+            VisualState: capture.initState.VisualState,
+            time: capture.startTime,
+            commandIndex: Number.MIN_VALUE,
+            active: false,
+            previousVisualStateIndex: -1,
+            nextVisualStateIndex: -1,
+        });
+
+        // Build commands array
+        const commands: ICommandListItemState[] = [];
+        let currentVisualStateIdx = 0; // points to init visual state
+        let visualStateSet = false;
+
+        let autoSelectCommandIdx = -1;
+        let autoSelectVisualStateIdx = -1;
+
+        for (let i = 0; i < capture.commands.length; i++) {
+            const commandCapture = capture.commands[i];
+
+            // Filter check (matches original toFilter logic)
+            if (toFilter(commandCapture.marker, searchText) &&
+                toFilter(commandCapture.name, searchText) &&
+                commandCapture.id !== this._currentCommandId &&
+                (commandCapture.name !== "LOG" || toFilter(commandCapture.text, searchText))) {
+                continue;
+            }
+
+            const cmdIdx = commands.length;
+
+            const commandState: ICommandListItemState = {
+                capture: commandCapture,
+                previousCommandIndex: cmdIdx > 0 ? cmdIdx - 1 : -1,
+                nextCommandIndex: -1, // will be updated by next command
+                visualStateIndex: currentVisualStateIdx,
+                active: false,
+            };
+
+            // Link previous command's nextCommandIndex
+            if (cmdIdx > 0) {
+                commands[cmdIdx - 1].nextCommandIndex = cmdIdx;
+            }
+
+            if (commandCapture.VisualState) {
+                const vsIdx = visualStates.length;
+                const prevVsIdx = visualStates.length - 1;
+
+                const vs: IVisualStateItem = {
+                    VisualState: commandCapture.VisualState,
+                    time: commandCapture.endTime,
+                    commandIndex: cmdIdx,
+                    active: false,
+                    previousVisualStateIndex: prevVsIdx,
+                    nextVisualStateIndex: -1,
+                };
+
+                // Link previous visual state
+                visualStates[prevVsIdx].nextVisualStateIndex = vsIdx;
+
+                visualStates.push(vs);
+                currentVisualStateIdx = vsIdx;
+                visualStateSet = true;
+            } else if (!visualStateSet) {
+                // Before the first draw call, commands point to init visual state.
+                // Update init visual state to point to the first command.
+                visualStates[0].commandIndex = cmdIdx;
+                visualStateSet = true;
+            }
+
+            commandState.visualStateIndex = currentVisualStateIdx;
+            commands.push(commandState);
+
+            // Auto-select logic: first command, or command matching currentCommandId
+            if ((this._currentCommandId === -1 && cmdIdx === 0) ||
+                (this._currentCommandId === commandCapture.id)) {
+                autoSelectCommandIdx = cmdIdx;
+                autoSelectVisualStateIdx = currentVisualStateIdx;
+            }
+        }
+
+        // Apply auto-selection
+        if (autoSelectCommandIdx >= 0) {
+            commands[autoSelectCommandIdx].active = true;
+            this._currentCommandId = commands[autoSelectCommandIdx].capture.id;
+        }
+        if (autoSelectVisualStateIdx >= 0) {
+            visualStates[autoSelectVisualStateIdx].active = true;
+        }
+
+        // Build command detail for the selected command
+        let commandDetailData: JSONRenderItem[] = [];
+        if (autoSelectCommandIdx >= 0) {
+            commandDetailData = this._buildCommandDetail(autoSelectCommandIdx, commands, visualStates);
+        }
+
+        this.store.setState((prev) => ({
+            ...prev,
+            captures,
+            menuStatus: MenuStatus.Commands,
+            commandCount: capture.commands.length,
+            commands,
+            currentCommandIndex: autoSelectCommandIdx,
+            visualStates,
+            currentVisualStateIndex: autoSelectVisualStateIdx,
+            sourceCodeState: null,
+            sourceCodeError: "",
+            commandDetailData,
+        }));
+    }
+
+    private _openShader(fragment: boolean): void {
+        const state = this.store.getSnapshot();
+        if (state.currentCommandIndex < 0 || state.currentCommandIndex >= state.commands.length) { return; }
+
+        const commandState = state.commands[state.currentCommandIndex];
+        const drawCall = commandState.capture.DrawCall;
+        if (!drawCall || !drawCall.shaders || drawCall.shaders.length < 2) { return; }
+
+        const sourceCodeState: ISourceCodeState = {
+            programId: drawCall.programStatus.program.__SPECTOR_Object_TAG.id,
+            nameVertex: drawCall.shaders[0].name,
+            nameFragment: drawCall.shaders[1].name,
+            sourceVertex: drawCall.shaders[0].source,
+            sourceFragment: drawCall.shaders[1].source,
+            translatedSourceVertex: drawCall.shaders[0].translatedSource,
+            translatedSourceFragment: drawCall.shaders[1].translatedSource,
+            fragment,
+            translated: false,
+            editable: drawCall.programStatus.RECOMPILABLE,
+            beautify: true,
+            preprocessed: false,
+            singleShader: false,
+            sourceVertexLog: drawCall.shaders[0].infoLog || "",
+            sourceFragmentLog: drawCall.shaders[1].infoLog || "",
+            programLog: drawCall.programStatus.infoLog || "",
+        };
+
+        // Build command detail for the source code view
+        const commandDetailData = this._buildCommandDetail(
+            state.currentCommandIndex,
+            state.commands,
+            state.visualStates,
+        );
+
+        this.store.setState((prev) => ({
+            ...prev,
+            menuStatus: MenuStatus.SourceCode,
+            sourceCodeState,
+            sourceCodeError: "",
+            commandDetailData,
+        }));
+    }
+
+    private _openCapturedShader(shader: IShaderCapture, programLog: string = ""): void {
+        if (!shader || typeof shader.source !== "string") { return; }
+
+        const fragment = shader.shaderType === "FRAGMENT_SHADER";
+        const sourceCodeState: ISourceCodeState = {
+            programId: -1,
+            nameVertex: fragment ? "" : shader.name,
+            nameFragment: fragment ? shader.name : "",
+            sourceVertex: fragment ? "" : shader.source,
+            sourceFragment: fragment ? shader.source : "",
+            translatedSourceVertex: fragment ? "" : shader.translatedSource || "",
+            translatedSourceFragment: fragment ? shader.translatedSource || "" : "",
+            fragment,
+            translated: false,
+            editable: false,
+            beautify: true,
+            preprocessed: false,
+            singleShader: true,
+            sourceVertexLog: fragment ? "" : shader.infoLog || "",
+            sourceFragmentLog: fragment ? shader.infoLog || "" : "",
+            programLog,
+        };
+
+        this.store.setState((prev) => ({
+            ...prev,
+            menuStatus: MenuStatus.SourceCode,
+            sourceCodeState,
+            sourceCodeError: "",
+        }));
+    }
+
+    private _buildCommandDetail(
+        commandIndex: number,
+        commands: ICommandListItemState[],
+        visualStates: IVisualStateItem[],
+    ): JSONRenderItem[] {
+        if (commandIndex < 0 || commandIndex >= commands.length) { return []; }
+        const cmd = commands[commandIndex];
+        const vs = visualStates[cmd.visualStateIndex];
+        const resolved = this._resolvedStackTraces.get(cmd.capture.id);
+        const detail = buildCommandDetail(cmd.capture, vs?.VisualState, resolved);
+        if (!resolved) {
+            this._resolveStackTraceAsync(cmd.capture);
+        }
+        return detail;
+    }
+
+    /**
+     * Lazily resolve a command's stack-trace frames through source maps (#98).
+     *
+     * Runs off the capture hot path — only for the command currently being
+     * inspected — then patches the detail panel in place when resolution
+     * completes and the same command is still selected. Any failure leaves the
+     * raw frames untouched.
+     */
+    private _resolveStackTraceAsync(command: ICommandCapture): void {
+        const id = command.id;
+        if (this._resolvedStackTraces.has(id) || this._resolvingStackTraces.has(id)) {
+            return;
+        }
+        if (!command.stackTrace || command.stackTrace.length === 0) {
+            return;
+        }
+
+        this._resolvingStackTraces.add(id);
+        this._sourceMapResolver.resolveFrames(command.stackTrace)
+            .then((resolved) => {
+                this._resolvingStackTraces.delete(id);
+                this._resolvedStackTraces.set(id, resolved);
+
+                // Nothing changed (no maps found) — skip the re-render.
+                let changed = false;
+                for (let i = 0; i < resolved.length; i++) {
+                    if (resolved[i] !== command.stackTrace[i]) { changed = true; break; }
+                }
+                if (!changed) { return; }
+
+                // Only refresh if this command is still the selected one.
+                const state = this.store.getSnapshot();
+                const current = state.commands[state.currentCommandIndex];
+                if (current && current.capture.id === id) {
+                    const commandDetailData = this._buildCommandDetail(
+                        state.currentCommandIndex,
+                        state.commands,
+                        state.visualStates,
+                    );
+                    this.store.setState((prev) => ({ ...prev, commandDetailData }));
+                }
+            })
+            .catch(() => {
+                this._resolvingStackTraces.delete(id);
+            });
+    }
+
+    // ─── Private: Keyboard navigation ────────────────────────────────────
+
+    private _selectPreviousCommand(): void {
+        const state = this.store.getSnapshot();
+        if (state.currentCommandIndex < 0) { return; }
+        const cmd = state.commands[state.currentCommandIndex];
+        if (cmd.previousCommandIndex < 0) { return; }
+        this.selectCommand(cmd.previousCommandIndex);
+    }
+
+    private _selectNextCommand(): void {
+        const state = this.store.getSnapshot();
+        if (state.currentCommandIndex < 0) { return; }
+        const cmd = state.commands[state.currentCommandIndex];
+        if (cmd.nextCommandIndex < 0) { return; }
+        this.selectCommand(cmd.nextCommandIndex);
+    }
+
+    private _selectPreviousVisualState(): void {
+        const state = this.store.getSnapshot();
+        if (state.currentVisualStateIndex < 0) { return; }
+        const vs = state.visualStates[state.currentVisualStateIndex];
+        if (vs.previousVisualStateIndex < 0) { return; }
+        this.selectVisualState(vs.previousVisualStateIndex);
+    }
+
+    private _selectNextVisualState(): void {
+        const state = this.store.getSnapshot();
+        if (state.currentVisualStateIndex < 0) { return; }
+        const vs = state.visualStates[state.currentVisualStateIndex];
+        if (vs.nextVisualStateIndex < 0) { return; }
+        this.selectVisualState(vs.nextVisualStateIndex);
+    }
+
+    // ─── Private: Search ─────────────────────────────────────────────────
+
+    private _search(searchText: string): void {
+        const state = this.store.getSnapshot();
+        switch (state.menuStatus) {
+            case MenuStatus.Captures:
+            case MenuStatus.Commands:
+                this._displayCurrentCapture();
+                break;
+            case MenuStatus.EndState:
+                this._displayEndState();
+                break;
+            case MenuStatus.Information:
+                this._displayInformation();
+                break;
+            case MenuStatus.InitState:
+                this._displayInitState();
+                break;
+        }
+        // The original resets searchText after rebuilding. Match that behavior.
+        // Actually, reading the original more carefully: it sets this.searchText = text,
+        // then rebuilds (which uses this.searchText), then sets this.searchText = "".
+        // This means the search only applies during rebuild. We replicate by
+        // NOT resetting searchText — in React the state stays and the user can
+        // clear it themselves. The original behavior was odd (reset after use).
+        // We'll match the original: reset after use.
+        this.store.setState((prev) => ({ ...prev, searchText: "" }));
+    }
+}

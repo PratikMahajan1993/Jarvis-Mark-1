@@ -1,0 +1,3092 @@
+[
+  {
+    "file": "spector-cube1-frost.json",
+    "commands": 453,
+    "drawCommands": 38,
+    "programCount": 25,
+    "analyses": [
+      {
+        "analyserName": "Commands",
+        "bindTexture": 68,
+        "activeTexture": 51,
+        "depthMask": 44,
+        "bindVertexArray": 29,
+        "useProgram": 27,
+        "bindFramebuffer": 25,
+        "drawArrays": 25,
+        "disable": 24,
+        "enable": 24,
+        "uniformMatrix4fv": 21,
+        "bindBuffer": 20,
+        "scissor": 17,
+        "viewport": 16,
+        "uniform2f": 15,
+        "drawElements": 13,
+        "bufferSubData": 8,
+        "clear": 4,
+        "blendFunc": 3,
+        "blendFuncSeparate": 3,
+        "bufferData": 2,
+        "clearColor": 2,
+        "createBuffer": 2,
+        "frontFace": 2,
+        "uniform3f": 2,
+        "uniformMatrix3fv": 2,
+        "vertexAttribPointer": 2,
+        "generateMipmap": 1,
+        "uniform1f": 1
+      },
+      {
+        "analyserName": "CommandsSummary",
+        "total": 453,
+        "draw": 38,
+        "clear": 4
+      },
+      {
+        "analyserName": "Primitives",
+        "total": 74292,
+        "triangles": 74160,
+        "triangleStrip": 0,
+        "triangleFan": 0,
+        "lines": 114,
+        "lineStrip": 0,
+        "lineLoop": 0,
+        "points": 18
+      }
+    ],
+    "targets": [
+      {
+        "id": 21,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 1440,
+            "height": 900
+          }
+        ],
+        "depth": "DEPTH_COMPONENT24"
+      },
+      {
+        "id": 28,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 1440,
+            "height": 900
+          }
+        ],
+        "depth": "DEPTH_COMPONENT24"
+      },
+      {
+        "id": 10,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 512,
+            "height": 512
+          }
+        ]
+      },
+      {
+        "id": 27,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 1440,
+            "height": 900
+          }
+        ],
+        "depth": "DEPTH_COMPONENT24"
+      },
+      {
+        "id": 32,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 1440,
+            "height": 900
+          }
+        ],
+        "depth": "DEPTH_COMPONENT24"
+      },
+      {
+        "id": 33,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 1440,
+            "height": 900
+          }
+        ]
+      },
+      {
+        "id": 34,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 720,
+            "height": 450
+          }
+        ]
+      },
+      {
+        "id": 35,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 360,
+            "height": 225
+          }
+        ]
+      },
+      {
+        "id": 36,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 180,
+            "height": 113
+          }
+        ]
+      },
+      {
+        "id": 37,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 90,
+            "height": 57
+          }
+        ]
+      },
+      {
+        "id": 38,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 45,
+            "height": 29
+          }
+        ]
+      },
+      {
+        "id": 39,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 23,
+            "height": 15
+          }
+        ]
+      },
+      {
+        "id": 40,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 45,
+            "height": 29
+          }
+        ]
+      },
+      {
+        "id": 41,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 90,
+            "height": 57
+          }
+        ]
+      },
+      {
+        "id": 42,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 180,
+            "height": 113
+          }
+        ]
+      },
+      {
+        "id": 43,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 360,
+            "height": 225
+          }
+        ]
+      },
+      {
+        "id": 44,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 720,
+            "height": 450
+          }
+        ]
+      },
+      {
+        "id": 45,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 1440,
+            "height": 900
+          }
+        ],
+        "depth": "DEPTH_COMPONENT24"
+      },
+      {
+        "id": 46,
+        "attachments": [
+          {
+            "format": "RGBA8",
+            "type": "UNSIGNED_BYTE",
+            "width": 1440,
+            "height": 900
+          }
+        ]
+      },
+      {
+        "id": 47,
+        "attachments": [
+          {
+            "format": "RGBA8",
+            "type": "UNSIGNED_BYTE",
+            "width": 1440,
+            "height": 900
+          }
+        ]
+      },
+      {
+        "id": "default"
+      }
+    ],
+    "linkFailures": [],
+    "shaderCompileFailures": [],
+    "programs": [
+      {
+        "id": 60,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 79,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 68,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 59,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 67,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 65,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 66,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 61,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 62,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 69,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 63,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 64,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 23,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 81,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 1,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 9,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 10,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 11,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 83,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "LuminanceMaterial",
+          "LuminanceMaterial"
+        ]
+      },
+      {
+        "id": 84,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "DownsamplingMaterial",
+          "DownsamplingMaterial"
+        ]
+      },
+      {
+        "id": 85,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "UpsamplingMaterial",
+          "UpsamplingMaterial"
+        ]
+      },
+      {
+        "id": 86,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "EffectMaterial",
+          "EffectMaterial"
+        ]
+      },
+      {
+        "id": 87,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "EdgeDetectionMaterial",
+          "EdgeDetectionMaterial"
+        ]
+      },
+      {
+        "id": 88,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "SMAAWeightsMaterial",
+          "SMAAWeightsMaterial"
+        ]
+      },
+      {
+        "id": 89,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "EffectMaterial",
+          "EffectMaterial"
+        ]
+      }
+    ],
+    "note": "Spector command counts include multiDrawElementsWEBGL once as one API command; costs and counts vary by state. Capture duration is instrumentation overhead, not GPU frame time."
+  },
+  {
+    "file": "spector-cube1.json",
+    "commands": 450,
+    "drawCommands": 38,
+    "programCount": 25,
+    "analyses": [
+      {
+        "analyserName": "Commands",
+        "bindTexture": 67,
+        "activeTexture": 51,
+        "depthMask": 44,
+        "bindVertexArray": 29,
+        "useProgram": 28,
+        "bindFramebuffer": 25,
+        "drawArrays": 25,
+        "disable": 24,
+        "enable": 24,
+        "uniformMatrix4fv": 21,
+        "bindBuffer": 20,
+        "scissor": 17,
+        "viewport": 16,
+        "uniform2f": 15,
+        "drawElements": 13,
+        "bufferSubData": 8,
+        "clear": 4,
+        "blendFunc": 3,
+        "blendFuncSeparate": 3,
+        "bufferData": 2,
+        "clearColor": 2,
+        "createBuffer": 2,
+        "frontFace": 2,
+        "uniformMatrix3fv": 2,
+        "vertexAttribPointer": 2,
+        "generateMipmap": 1
+      },
+      {
+        "analyserName": "CommandsSummary",
+        "total": 450,
+        "draw": 38,
+        "clear": 4
+      },
+      {
+        "analyserName": "Primitives",
+        "total": 74292,
+        "triangles": 74160,
+        "triangleStrip": 0,
+        "triangleFan": 0,
+        "lines": 114,
+        "lineStrip": 0,
+        "lineLoop": 0,
+        "points": 18
+      }
+    ],
+    "targets": [
+      {
+        "id": 21,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 1440,
+            "height": 900
+          }
+        ],
+        "depth": "DEPTH_COMPONENT24"
+      },
+      {
+        "id": 28,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 1440,
+            "height": 900
+          }
+        ],
+        "depth": "DEPTH_COMPONENT24"
+      },
+      {
+        "id": 22,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 512,
+            "height": 512
+          }
+        ]
+      },
+      {
+        "id": 27,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 1440,
+            "height": 900
+          }
+        ],
+        "depth": "DEPTH_COMPONENT24"
+      },
+      {
+        "id": 32,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 1440,
+            "height": 900
+          }
+        ],
+        "depth": "DEPTH_COMPONENT24"
+      },
+      {
+        "id": 33,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 1440,
+            "height": 900
+          }
+        ]
+      },
+      {
+        "id": 34,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 720,
+            "height": 450
+          }
+        ]
+      },
+      {
+        "id": 35,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 360,
+            "height": 225
+          }
+        ]
+      },
+      {
+        "id": 36,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 180,
+            "height": 113
+          }
+        ]
+      },
+      {
+        "id": 37,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 90,
+            "height": 57
+          }
+        ]
+      },
+      {
+        "id": 38,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 45,
+            "height": 29
+          }
+        ]
+      },
+      {
+        "id": 39,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 23,
+            "height": 15
+          }
+        ]
+      },
+      {
+        "id": 40,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 45,
+            "height": 29
+          }
+        ]
+      },
+      {
+        "id": 41,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 90,
+            "height": 57
+          }
+        ]
+      },
+      {
+        "id": 42,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 180,
+            "height": 113
+          }
+        ]
+      },
+      {
+        "id": 43,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 360,
+            "height": 225
+          }
+        ]
+      },
+      {
+        "id": 44,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 720,
+            "height": 450
+          }
+        ]
+      },
+      {
+        "id": 45,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 1440,
+            "height": 900
+          }
+        ],
+        "depth": "DEPTH_COMPONENT24"
+      },
+      {
+        "id": 46,
+        "attachments": [
+          {
+            "format": "RGBA8",
+            "type": "UNSIGNED_BYTE",
+            "width": 1440,
+            "height": 900
+          }
+        ]
+      },
+      {
+        "id": 47,
+        "attachments": [
+          {
+            "format": "RGBA8",
+            "type": "UNSIGNED_BYTE",
+            "width": 1440,
+            "height": 900
+          }
+        ]
+      },
+      {
+        "id": "default"
+      }
+    ],
+    "linkFailures": [],
+    "shaderCompileFailures": [],
+    "programs": [
+      {
+        "id": 60,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 79,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 68,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 59,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 67,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 65,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 66,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 61,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 62,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 69,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 64,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 63,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 23,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 81,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 1,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 9,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 10,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 11,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 83,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "LuminanceMaterial",
+          "LuminanceMaterial"
+        ]
+      },
+      {
+        "id": 84,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "DownsamplingMaterial",
+          "DownsamplingMaterial"
+        ]
+      },
+      {
+        "id": 85,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "UpsamplingMaterial",
+          "UpsamplingMaterial"
+        ]
+      },
+      {
+        "id": 86,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "EffectMaterial",
+          "EffectMaterial"
+        ]
+      },
+      {
+        "id": 87,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "EdgeDetectionMaterial",
+          "EdgeDetectionMaterial"
+        ]
+      },
+      {
+        "id": 88,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "SMAAWeightsMaterial",
+          "SMAAWeightsMaterial"
+        ]
+      },
+      {
+        "id": 89,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "EffectMaterial",
+          "EffectMaterial"
+        ]
+      }
+    ],
+    "note": "Spector command counts include multiDrawElementsWEBGL once as one API command; costs and counts vary by state. Capture duration is instrumentation overhead, not GPU frame time."
+  },
+  {
+    "file": "spector-detail.json",
+    "commands": 392,
+    "drawCommands": 44,
+    "programCount": 22,
+    "analyses": [
+      {
+        "analyserName": "Commands",
+        "bindTexture": 53,
+        "depthMask": 38,
+        "bindVertexArray": 35,
+        "useProgram": 32,
+        "activeTexture": 31,
+        "drawElements": 23,
+        "bindFramebuffer": 22,
+        "disable": 22,
+        "enable": 22,
+        "uniformMatrix4fv": 22,
+        "drawArrays": 21,
+        "scissor": 17,
+        "viewport": 16,
+        "uniform2f": 12,
+        "bindBuffer": 8,
+        "uniform1f": 5,
+        "bufferSubData": 4,
+        "clear": 3,
+        "clearColor": 2,
+        "uniform3f": 2,
+        "blendFunc": 1,
+        "blendFuncSeparate": 1
+      },
+      {
+        "analyserName": "CommandsSummary",
+        "total": 392,
+        "draw": 44,
+        "clear": 3
+      },
+      {
+        "analyserName": "Primitives",
+        "total": 41306,
+        "triangles": 31056,
+        "triangleStrip": 0,
+        "triangleFan": 0,
+        "lines": 0,
+        "lineStrip": 0,
+        "lineLoop": 0,
+        "points": 10250
+      }
+    ],
+    "targets": [
+      {
+        "id": 51,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 288,
+            "height": 180
+          }
+        ]
+      },
+      {
+        "id": 50,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 1440,
+            "height": 900
+          }
+        ],
+        "depth": "DEPTH_COMPONENT24"
+      },
+      {
+        "id": 32,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 1440,
+            "height": 900
+          }
+        ],
+        "depth": "DEPTH_COMPONENT24"
+      },
+      {
+        "id": 33,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 1440,
+            "height": 900
+          }
+        ]
+      },
+      {
+        "id": 34,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 720,
+            "height": 450
+          }
+        ]
+      },
+      {
+        "id": 35,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 360,
+            "height": 225
+          }
+        ]
+      },
+      {
+        "id": 36,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 180,
+            "height": 113
+          }
+        ]
+      },
+      {
+        "id": 37,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 90,
+            "height": 57
+          }
+        ]
+      },
+      {
+        "id": 38,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 45,
+            "height": 29
+          }
+        ]
+      },
+      {
+        "id": 39,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 23,
+            "height": 15
+          }
+        ]
+      },
+      {
+        "id": 40,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 45,
+            "height": 29
+          }
+        ]
+      },
+      {
+        "id": 41,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 90,
+            "height": 57
+          }
+        ]
+      },
+      {
+        "id": 42,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 180,
+            "height": 113
+          }
+        ]
+      },
+      {
+        "id": 43,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 360,
+            "height": 225
+          }
+        ]
+      },
+      {
+        "id": 44,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 720,
+            "height": 450
+          }
+        ]
+      },
+      {
+        "id": 45,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 1440,
+            "height": 900
+          }
+        ],
+        "depth": "DEPTH_COMPONENT24"
+      },
+      {
+        "id": 46,
+        "attachments": [
+          {
+            "format": "RGBA8",
+            "type": "UNSIGNED_BYTE",
+            "width": 1440,
+            "height": 900
+          }
+        ]
+      },
+      {
+        "id": 47,
+        "attachments": [
+          {
+            "format": "RGBA8",
+            "type": "UNSIGNED_BYTE",
+            "width": 1440,
+            "height": 900
+          }
+        ]
+      },
+      {
+        "id": "default"
+      }
+    ],
+    "linkFailures": [],
+    "shaderCompileFailures": [],
+    "programs": [
+      {
+        "id": 71,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 38,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 35,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 33,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 36,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 37,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 34,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 1,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 13,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 14,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 15,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 9,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 12,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 10,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 11,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 83,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "LuminanceMaterial",
+          "LuminanceMaterial"
+        ]
+      },
+      {
+        "id": 84,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "DownsamplingMaterial",
+          "DownsamplingMaterial"
+        ]
+      },
+      {
+        "id": 85,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "UpsamplingMaterial",
+          "UpsamplingMaterial"
+        ]
+      },
+      {
+        "id": 86,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "EffectMaterial",
+          "EffectMaterial"
+        ]
+      },
+      {
+        "id": 87,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "EdgeDetectionMaterial",
+          "EdgeDetectionMaterial"
+        ]
+      },
+      {
+        "id": 88,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "SMAAWeightsMaterial",
+          "SMAAWeightsMaterial"
+        ]
+      },
+      {
+        "id": 89,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "EffectMaterial",
+          "EffectMaterial"
+        ]
+      }
+    ],
+    "note": "Spector command counts include multiDrawElementsWEBGL once as one API command; costs and counts vary by state. Capture duration is instrumentation overhead, not GPU frame time."
+  },
+  {
+    "file": "spector-footer.json",
+    "commands": 507,
+    "drawCommands": 50,
+    "programCount": 33,
+    "analyses": [
+      {
+        "analyserName": "Commands",
+        "bindTexture": 68,
+        "depthMask": 58,
+        "activeTexture": 46,
+        "bindVertexArray": 37,
+        "bindFramebuffer": 34,
+        "useProgram": 34,
+        "disable": 33,
+        "enable": 33,
+        "drawArrays": 32,
+        "uniformMatrix4fv": 26,
+        "scissor": 19,
+        "drawElements": 18,
+        "viewport": 18,
+        "uniform2f": 13,
+        "bindBuffer": 10,
+        "uniform1f": 7,
+        "bufferSubData": 4,
+        "clear": 4,
+        "clearColor": 4,
+        "blendFunc": 3,
+        "blendFuncSeparate": 3,
+        "frontFace": 2,
+        "uniformMatrix3fv": 1
+      },
+      {
+        "analyserName": "CommandsSummary",
+        "total": 507,
+        "draw": 50,
+        "clear": 4
+      },
+      {
+        "analyserName": "Primitives",
+        "total": 258839,
+        "triangles": 108771,
+        "triangleStrip": 0,
+        "triangleFan": 0,
+        "lines": 8,
+        "lineStrip": 0,
+        "lineLoop": 0,
+        "points": 150060
+      }
+    ],
+    "targets": [
+      {
+        "id": 14,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 128,
+            "height": 128
+          }
+        ]
+      },
+      {
+        "id": 19,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 128,
+            "height": 128
+          }
+        ]
+      },
+      {
+        "id": 16,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 128,
+            "height": 128
+          }
+        ]
+      },
+      {
+        "id": 17,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 128,
+            "height": 128
+          }
+        ]
+      },
+      {
+        "id": 18,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 128,
+            "height": 128
+          }
+        ]
+      },
+      {
+        "id": 15,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 128,
+            "height": 128
+          }
+        ]
+      },
+      {
+        "id": 30,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 128,
+            "height": 128
+          }
+        ]
+      },
+      {
+        "id": 29,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 1440,
+            "height": 900
+          }
+        ],
+        "depth": "DEPTH_COMPONENT24"
+      },
+      {
+        "id": 7,
+        "attachments": [
+          {
+            "format": "RGBA32F",
+            "type": "FLOAT",
+            "width": 388,
+            "height": 388
+          },
+          {
+            "format": "RGBA32F",
+            "type": "FLOAT",
+            "width": 388,
+            "height": 388
+          }
+        ]
+      },
+      {
+        "id": 31,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 1440,
+            "height": 900
+          }
+        ],
+        "depth": "DEPTH_COMPONENT24"
+      },
+      {
+        "id": 32,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 1440,
+            "height": 900
+          }
+        ],
+        "depth": "DEPTH_COMPONENT24"
+      },
+      {
+        "id": 33,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 1440,
+            "height": 900
+          }
+        ]
+      },
+      {
+        "id": 34,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 720,
+            "height": 450
+          }
+        ]
+      },
+      {
+        "id": 35,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 360,
+            "height": 225
+          }
+        ]
+      },
+      {
+        "id": 36,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 180,
+            "height": 113
+          }
+        ]
+      },
+      {
+        "id": 37,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 90,
+            "height": 57
+          }
+        ]
+      },
+      {
+        "id": 38,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 45,
+            "height": 29
+          }
+        ]
+      },
+      {
+        "id": 39,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 23,
+            "height": 15
+          }
+        ]
+      },
+      {
+        "id": 40,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 45,
+            "height": 29
+          }
+        ]
+      },
+      {
+        "id": 41,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 90,
+            "height": 57
+          }
+        ]
+      },
+      {
+        "id": 42,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 180,
+            "height": 113
+          }
+        ]
+      },
+      {
+        "id": 43,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 360,
+            "height": 225
+          }
+        ]
+      },
+      {
+        "id": 44,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 720,
+            "height": 450
+          }
+        ]
+      },
+      {
+        "id": 45,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 1440,
+            "height": 900
+          }
+        ],
+        "depth": "DEPTH_COMPONENT24"
+      },
+      {
+        "id": 46,
+        "attachments": [
+          {
+            "format": "RGBA8",
+            "type": "UNSIGNED_BYTE",
+            "width": 1440,
+            "height": 900
+          }
+        ]
+      },
+      {
+        "id": 47,
+        "attachments": [
+          {
+            "format": "RGBA8",
+            "type": "UNSIGNED_BYTE",
+            "width": 1440,
+            "height": 900
+          }
+        ]
+      },
+      {
+        "id": "default"
+      }
+    ],
+    "linkFailures": [],
+    "shaderCompileFailures": [],
+    "programs": [
+      {
+        "id": 72,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "FLUID_CURL",
+          "FLUID_CURL"
+        ]
+      },
+      {
+        "id": 73,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "FLUID_VORTICITY",
+          "FLUID_VORTICITY"
+        ]
+      },
+      {
+        "id": 74,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "FLUID_DIVERGENCE",
+          "FLUID_DIVERGENCE"
+        ]
+      },
+      {
+        "id": 75,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "FLUID_CLEAR",
+          "FLUID_CLEAR"
+        ]
+      },
+      {
+        "id": 76,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "FLUID_PRESSURE",
+          "FLUID_PRESSURE"
+        ]
+      },
+      {
+        "id": 77,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "FLUID_GRADIENT_SUBSTRACT",
+          "FLUID_GRADIENT_SUBSTRACT"
+        ]
+      },
+      {
+        "id": 78,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "FLUID_ADVECTION",
+          "FLUID_ADVECTION"
+        ]
+      },
+      {
+        "id": 41,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 56,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 55,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 6,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 46,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 54,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 57,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 39,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 52,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 45,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 42,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 47,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 49,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 50,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 82,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 1,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 9,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 10,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 11,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 83,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "LuminanceMaterial",
+          "LuminanceMaterial"
+        ]
+      },
+      {
+        "id": 84,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "DownsamplingMaterial",
+          "DownsamplingMaterial"
+        ]
+      },
+      {
+        "id": 85,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "UpsamplingMaterial",
+          "UpsamplingMaterial"
+        ]
+      },
+      {
+        "id": 86,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "EffectMaterial",
+          "EffectMaterial"
+        ]
+      },
+      {
+        "id": 87,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "EdgeDetectionMaterial",
+          "EdgeDetectionMaterial"
+        ]
+      },
+      {
+        "id": 88,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "SMAAWeightsMaterial",
+          "SMAAWeightsMaterial"
+        ]
+      },
+      {
+        "id": 89,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "EffectMaterial",
+          "EffectMaterial"
+        ]
+      }
+    ],
+    "note": "Spector command counts include multiDrawElementsWEBGL once as one API command; costs and counts vary by state. Capture duration is instrumentation overhead, not GPU frame time."
+  },
+  {
+    "file": "spector-hero.json",
+    "commands": 469,
+    "drawCommands": 48,
+    "programCount": 29,
+    "analyses": [
+      {
+        "analyserName": "Commands",
+        "bindTexture": 60,
+        "activeTexture": 42,
+        "uniformMatrix4fv": 40,
+        "depthMask": 38,
+        "bindVertexArray": 35,
+        "useProgram": 32,
+        "bindFramebuffer": 23,
+        "drawElements": 23,
+        "disable": 22,
+        "drawArrays": 22,
+        "enable": 22,
+        "uniform1f": 19,
+        "scissor": 17,
+        "viewport": 16,
+        "uniform2f": 11,
+        "bindBuffer": 10,
+        "pixelStorei": 8,
+        "texParameteri": 8,
+        "bufferSubData": 4,
+        "clear": 4,
+        "clearColor": 4,
+        "drawElementsInstanced": 2,
+        "texSubImage2D": 2,
+        "uniform3f": 2,
+        "blendFunc": 1,
+        "blendFuncSeparate": 1,
+        "multiDrawElementsWEBGL": 1
+      },
+      {
+        "analyserName": "CommandsSummary",
+        "total": 469,
+        "draw": 48,
+        "clear": 4
+      },
+      {
+        "analyserName": "Primitives",
+        "total": 122876,
+        "triangles": 117213,
+        "triangleStrip": 0,
+        "triangleFan": 0,
+        "lines": 5406,
+        "lineStrip": 0,
+        "lineLoop": 0,
+        "points": 257
+      }
+    ],
+    "targets": [
+      {
+        "id": 25,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 1440,
+            "height": 900
+          }
+        ],
+        "depth": "DEPTH_COMPONENT24"
+      },
+      {
+        "id": 3,
+        "attachments": [
+          {
+            "format": "RGBA32F",
+            "type": "FLOAT",
+            "width": 36,
+            "height": 36
+          },
+          {
+            "format": "RGBA32F",
+            "type": "FLOAT",
+            "width": 36,
+            "height": 36
+          }
+        ]
+      },
+      {
+        "id": 26,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 1440,
+            "height": 900
+          }
+        ],
+        "depth": "DEPTH_COMPONENT24"
+      },
+      {
+        "id": 32,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 1440,
+            "height": 900
+          }
+        ],
+        "depth": "DEPTH_COMPONENT24"
+      },
+      {
+        "id": 33,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 1440,
+            "height": 900
+          }
+        ]
+      },
+      {
+        "id": 34,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 720,
+            "height": 450
+          }
+        ]
+      },
+      {
+        "id": 35,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 360,
+            "height": 225
+          }
+        ]
+      },
+      {
+        "id": 36,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 180,
+            "height": 113
+          }
+        ]
+      },
+      {
+        "id": 37,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 90,
+            "height": 57
+          }
+        ]
+      },
+      {
+        "id": 38,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 45,
+            "height": 29
+          }
+        ]
+      },
+      {
+        "id": 39,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 23,
+            "height": 15
+          }
+        ]
+      },
+      {
+        "id": 40,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 45,
+            "height": 29
+          }
+        ]
+      },
+      {
+        "id": 41,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 90,
+            "height": 57
+          }
+        ]
+      },
+      {
+        "id": 42,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 180,
+            "height": 113
+          }
+        ]
+      },
+      {
+        "id": 43,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 360,
+            "height": 225
+          }
+        ]
+      },
+      {
+        "id": 44,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 720,
+            "height": 450
+          }
+        ]
+      },
+      {
+        "id": 45,
+        "attachments": [
+          {
+            "format": "RGBA16F",
+            "type": "HALF_FLOAT",
+            "width": 1440,
+            "height": 900
+          }
+        ],
+        "depth": "DEPTH_COMPONENT24"
+      },
+      {
+        "id": 46,
+        "attachments": [
+          {
+            "format": "RGBA8",
+            "type": "UNSIGNED_BYTE",
+            "width": 1440,
+            "height": 900
+          }
+        ]
+      },
+      {
+        "id": 47,
+        "attachments": [
+          {
+            "format": "RGBA8",
+            "type": "UNSIGNED_BYTE",
+            "width": 1440,
+            "height": 900
+          }
+        ]
+      },
+      {
+        "id": "default"
+      }
+    ],
+    "linkFailures": [],
+    "shaderCompileFailures": [],
+    "programs": [
+      {
+        "id": 17,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 26,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 30,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 22,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 28,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 16,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 27,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 70,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 21,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 20,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 18,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 19,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 32,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 29,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 24,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 31,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 25,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 80,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 2,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 9,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 10,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 11,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "Vertex",
+          "Fragment"
+        ]
+      },
+      {
+        "id": 83,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "LuminanceMaterial",
+          "LuminanceMaterial"
+        ]
+      },
+      {
+        "id": 84,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "DownsamplingMaterial",
+          "DownsamplingMaterial"
+        ]
+      },
+      {
+        "id": 85,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "UpsamplingMaterial",
+          "UpsamplingMaterial"
+        ]
+      },
+      {
+        "id": 86,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "EffectMaterial",
+          "EffectMaterial"
+        ]
+      },
+      {
+        "id": 87,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "EdgeDetectionMaterial",
+          "EdgeDetectionMaterial"
+        ]
+      },
+      {
+        "id": 88,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "SMAAWeightsMaterial",
+          "SMAAWeightsMaterial"
+        ]
+      },
+      {
+        "id": 89,
+        "link": true,
+        "shaderTypes": [
+          "VERTEX_SHADER",
+          "FRAGMENT_SHADER"
+        ],
+        "shaderNames": [
+          "EffectMaterial",
+          "EffectMaterial"
+        ]
+      }
+    ],
+    "note": "Spector command counts include multiDrawElementsWEBGL once as one API command; costs and counts vary by state. Capture duration is instrumentation overhead, not GPU frame time."
+  }
+]

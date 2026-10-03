@@ -1,0 +1,19 @@
+{
+    "compilerOptions": {
+        "outDir": "../.temp/tsc/",
+        "rootDir": "./",
+        "types": ["@types/webxr", "@types/react", "@types/react-dom"],
+        "sourceMap": true,
+        "noImplicitAny": true,
+        "noImplicitReturns": true,
+        "noImplicitThis": true,
+        "skipLibCheck": true,
+        "declaration":true,
+        "experimentalDecorators": true,
+        "module": "es6",
+        "moduleResolution": "node",
+        "target": "ES2015",
+        "jsx": "react-jsx",
+        "esModuleInterop": true
+    }
+}

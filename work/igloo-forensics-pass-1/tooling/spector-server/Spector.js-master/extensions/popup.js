@@ -1,0 +1,315 @@
+//_______________________________EXTENSION POLYFILL_____________________________________
+window.browser = (function () {
+  return window.msBrowser ||
+    window.browser ||
+    window.chrome ||
+    browser;
+})();
+
+function consumeLastError() {
+    if (window.browser.runtime && window.browser.runtime.lastError) {
+        return;
+    }
+};
+
+function sendMessage(message) {
+    try {
+        window.browser.tabs.query({ active: true, currentWindow: true }, function(tabs) { 
+            if (tabs.length > 0) {
+                window.browser.tabs.sendMessage(tabs[0].id, message, consumeLastError);
+            }
+        });
+    }
+    catch (e) {
+        // Tab has probably been closed.
+    }
+};
+
+function listenForMessage(callback) {
+    window.browser.runtime.onMessage.addListener(callback);
+};
+//_____________________________________________________________________________________
+
+var ui = null;
+var offScreenInput = null;
+var workerAutoInjectInput = null;
+
+// Display the capture UI.
+window.addEventListener("DOMContentLoaded", function() {
+    var openCaptureFileElement = document.getElementById("openCaptureFile");
+    openCaptureFileElement.addEventListener("dragenter", (e) => { this.drag(e); return false; }, false);
+    openCaptureFileElement.addEventListener("dragover", (e) => { this.drag(e); return false; }, false);
+    openCaptureFileElement.addEventListener("drop", (e) => { this.drop(e); }, false);
+
+    var captureOnLoadElement = document.getElementById("captureOnLoad");
+    var captureNowElement = document.getElementById("captureNow");
+    var captureOnLoadCountInput = document.getElementById("captureOnLoadCount");
+    var captureOnLoadTransientInput = document.getElementById("captureOnLoadTransient");
+    var quickCaptureInput = document.getElementById("quickCapture");
+    var fullCaptureInput = document.getElementById("fullCapture");
+    offScreenInput = document.getElementById("offScreen");
+    workerAutoInjectInput = document.getElementById("workerAutoInject");
+
+    captureNowElement.addEventListener("click", (e) => {
+        var commandCount = parseInt(captureOnLoadCountInput.value);
+        if (commandCount < 0 || commandCount === Number.NaN) {
+            commandCount = 500;
+        }
+        var quickCaptureInput = document.getElementById("quickCapture");
+        var fullCaptureInput = document.getElementById("fullCapture");
+
+        var canvasInfo = ui.getSelectedCanvasInformation();
+        if (canvasInfo) {
+            var canvasRef = canvasInfo.ref;
+            this.captureNow(canvasRef, quickCaptureInput.checked, fullCaptureInput.checked, commandCount);
+        }
+        return false; 
+    });
+
+    captureOnLoadElement.addEventListener("click", (e) => { 
+        var transient = captureOnLoadTransientInput.checked;
+        var quickCapture = quickCaptureInput.checked;
+        var fullCapture = fullCaptureInput.checked;
+        var commandCount = parseInt(captureOnLoadCountInput.value);
+        if (commandCount < 0 || commandCount === Number.NaN) {
+            commandCount = 500;
+        }
+        this.captureonLoad(commandCount, transient, quickCapture, fullCapture); 
+        return false; 
+    });
+
+    offScreenInput.onchange = () => {
+        this.changeOffScreenStatus(offScreenInput.checked);
+    };
+
+    workerAutoInjectInput.onchange = () => {
+        this.changeWorkerAutoInjectStatus(workerAutoInjectInput.checked);
+    };
+
+    var shaderCompileDelayInput = document.getElementById("shaderCompileDelay");
+    if (shaderCompileDelayInput) {
+        // Restore the last selection so the dropdown reflects the active value.
+        try {
+            window.browser.storage.local.get("shaderCompileDelay", function (items) {
+                var stored = items && items.shaderCompileDelay;
+                if (typeof stored !== "undefined" && stored !== null) {
+                    shaderCompileDelayInput.value = String(stored);
+                }
+            });
+        }
+        catch (e) {
+            // Storage unavailable — ignore.
+        }
+
+        shaderCompileDelayInput.onchange = () => {
+            var delayMs = parseInt(shaderCompileDelayInput.value, 10);
+            if (isNaN(delayMs) || delayMs < 0) {
+                delayMs = 0;
+            }
+            try {
+                window.browser.storage.local.set({ shaderCompileDelay: delayMs });
+            }
+            catch (e) {
+                // Storage unavailable — ignore.
+            }
+            this.changeShaderCompileDelay(delayMs);
+        };
+    }
+
+    initUI();
+    refreshCanvases();
+    playAll();
+});
+
+var captureCanvas = function(e) {
+    if (e) {
+        var quickCaptureInput = document.getElementById("quickCapture");
+        var fullCaptureInput = document.getElementById("fullCapture");
+        var canvasRef = e.ref;
+
+        captureNow(canvasRef, quickCaptureInput.checked, fullCaptureInput.checked, 0);
+    }
+}
+
+var captureNow = function(canvasRef, quickCapture, fullCapture, commandCount) {
+    sendMessage({ 
+        action: "capture", 
+        canvasRef: canvasRef,
+        quickCapture: quickCapture,
+        fullCapture: fullCapture,
+        commandCount: commandCount
+    });
+}
+
+var captureonLoad = function(commandCount, transient, quickCapture, fullCapture) {
+    sendMessage({ 
+        action: "captureOnLoad",
+        commandCount : commandCount,
+        transient: transient,
+        quickCapture: quickCapture,
+        fullCapture: fullCapture
+    });
+}
+
+var changeOffScreenStatus = function(offScreen) {
+    sendMessage({ 
+        action: "changeOffScreen",
+        captureOffScreen : offScreen,
+    });
+}
+
+var changeWorkerAutoInjectStatus = function(workerAutoInject) {
+    sendMessage({
+        action: "changeWorkerAutoInject",
+        workerAutoInject: workerAutoInject,
+    });
+}
+
+var changeShaderCompileDelay = function(delayMs) {
+    sendMessage({
+        action: "setShaderCompileDelay",
+        delayMs: delayMs,
+    });
+}
+
+var drag = function(e) {
+    e.stopPropagation();
+    e.preventDefault();
+}
+
+var drop = function(eventDrop) {
+    eventDrop.stopPropagation();
+    eventDrop.preventDefault();
+
+    this.loadFiles(eventDrop);
+}
+
+var loadFiles = function(event) {
+    var filesToLoad = null;
+
+    // Handling data transfer via drag'n'drop
+    if (event && event.dataTransfer && event.dataTransfer.files) {
+        filesToLoad = event.dataTransfer.files;
+    }
+
+    // Handling files from input files
+    if (event && event.target && event.target.files) {
+        filesToLoad = event.target.files;
+    }
+
+    // Load the files.
+    if (filesToLoad && filesToLoad.length > 0) {
+        for (let i = 0; i < filesToLoad.length; i++) {
+            let name = filesToLoad[i].name.toLowerCase();
+            let extension = name.split('.').pop();
+            let type = filesToLoad[i].type;
+            
+            if (extension === "json") {
+                const fileToLoad = filesToLoad[i];
+
+                const reader = new FileReader();
+                reader.onerror = e => {
+                    console.error("Error while reading file: " + fileToLoad.name + e);
+                };
+                reader.onload = e => {
+                    try {
+                        browser.storage.local.set({
+                            'currentCapture': JSON.parse(e.target['result']),
+                        });
+                
+                        window.browser.runtime.sendMessage({ captureDone: true }, consumeLastError);
+
+                    }
+                    catch (exception) {
+                        console.error("Error while reading file: " + fileToLoad.name + exception);
+                    }
+                };
+                reader.readAsText(fileToLoad);
+            }
+        }
+    }
+}
+
+var initUI = function() {
+    ui = new SPECTOR.EmbeddedFrontend.CaptureMenu();
+    ui.onPlayRequested.add(this.play, this);
+    ui.onPlayNextFrameRequested.add(this.playNextFrame, this);
+    ui.onPauseRequested.add(this.pause, this);
+    ui.onCaptureRequested.add(this.captureCanvas, this);
+    ui.display();
+}
+
+var refreshCanvases = function() {
+    window.browser.runtime.sendMessage({ refreshCanvases: true }, consumeLastError);
+}
+
+var updateCanvasesListInformation = function (canvasesToSend) {
+    ui.updateCanvasesListInformation(canvasesToSend.canvases);
+    offScreenInput.checked = canvasesToSend.captureOffScreen;
+    workerAutoInjectInput.checked = canvasesToSend.workerAutoInject === true;
+}
+
+var refreshFps = function(fps, frameId, tabId) {
+    var canvasInfo = ui.getSelectedCanvasInformation();
+    if (canvasInfo && canvasInfo.ref.tabId == tabId && canvasInfo.ref.frameId == frameId) {
+        ui.setFPS(fps);
+    }
+}
+
+var captureComplete = function(errorMessage) {
+    ui.captureComplete(errorMessage);
+}
+
+var playAll = function() {
+    sendMessage({ action: "playAll" });
+} 
+
+var play = function(e) {
+    if (e) {     
+        sendMessage({ action: "play", canvasRef: e.ref });
+    }
+} 
+
+var playNextFrame = function(e) {
+    if (e) {       
+        sendMessage({ action: "playNextFrame", canvasRef: e.ref });
+    }
+} 
+
+var pause = function(e) {
+    if (e) {
+        sendMessage({ action: "pause", canvasRef: e.ref });
+    }
+}
+
+//_____________________________________________________________________________________
+
+listenForMessage(function(request, sender, sendResponse) {
+    var frameId;
+    if (typeof sender.frameId === "number") {
+        frameId = sender.frameId;
+    } 
+    else if (request.uniqueId) {
+        frameId = request.uniqueId;
+    }
+    else {
+        frameId = sender.id;
+    }
+    frameId += "";
+
+    if (request.popup === "updateCanvasesListInformation") {
+        updateCanvasesListInformation(request.data);
+    }
+    else if (request.popup === "refreshFps") {
+        refreshFps(request.data.fps, request.data.frameId, request.data.senderTabId);
+    }
+    else if (request.popup === "captureComplete") {
+        captureComplete(request.data);
+    }
+    else if (request.popup === "refreshCanvases") {
+        refreshCanvases();
+    }
+
+    // Return the frameid for reference.
+    sendResponse({ frameId: frameId });
+});

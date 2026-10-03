@@ -1,0 +1,5539 @@
+[
+  {
+    "commandId": 22,
+    "command": "drawArrays",
+    "args": [
+      4,
+      0,
+      3
+    ],
+    "program": 71,
+    "viewport": [
+      0,
+      0,
+      288,
+      180
+    ],
+    "depth": false,
+    "blend": false,
+    "target": 51,
+    "attachments": [
+      {
+        "format": "RGBA16F",
+        "type": "HALF_FLOAT",
+        "width": 288,
+        "height": 180
+      }
+    ],
+    "uniforms": [
+      {
+        "name": "uSplatCoords",
+        "type": "FLOAT_VEC2",
+        "value": [
+          0.5,
+          0.5
+        ]
+      },
+      {
+        "name": "uSplatPrevCoords",
+        "type": "FLOAT_VEC2",
+        "value": [
+          0.5,
+          0.5
+        ]
+      },
+      {
+        "name": "uSplatRadius",
+        "type": "FLOAT",
+        "value": 0
+      },
+      {
+        "name": "tBuffer",
+        "type": "SAMPLER_2D",
+        "value": 0
+      },
+      {
+        "name": "tAdvect",
+        "type": "SAMPLER_2D",
+        "value": 1
+      },
+      {
+        "name": "resolution",
+        "type": "FLOAT_VEC2",
+        "value": [
+          1440,
+          900
+        ]
+      },
+      {
+        "name": "resolutionUI",
+        "type": "FLOAT_VEC2",
+        "value": [
+          1440,
+          900
+        ]
+      },
+      {
+        "name": "aspect",
+        "type": "FLOAT",
+        "value": [
+          1.600000023841858
+        ]
+      },
+      {
+        "name": "time",
+        "type": "FLOAT",
+        "value": [
+          36.67100143432617
+        ]
+      },
+      {
+        "name": "dtRatio",
+        "type": "FLOAT",
+        "value": [
+          3.119999885559082
+        ]
+      }
+    ],
+    "uniformBlocks": [
+      {
+        "name": "Global",
+        "bindingPoint": 0,
+        "size": 28,
+        "activeUniformCount": 5,
+        "vertex": false,
+        "fragment": true,
+        "buffer": {
+          "__SPECTOR_Object_TAG": {
+            "typeName": "WebGLBuffer",
+            "id": 6,
+            "displayText": "WebGLBuffer - ID: 6"
+          },
+          "__SPECTOR_Object_CustomData": {
+            "target": "UNIFORM_BUFFER",
+            "length": 32,
+            "usage": 35044
+          }
+        },
+        "bufferUsage": "STATIC_DRAW",
+        "bufferLength": 32
+      }
+    ]
+  },
+  {
+    "commandId": 38,
+    "command": "drawElements",
+    "args": [
+      4,
+      25161,
+      5125,
+      0
+    ],
+    "program": 38,
+    "viewport": [
+      0,
+      0,
+      1440,
+      900
+    ],
+    "depth": true,
+    "blend": false,
+    "target": 50,
+    "attachments": [
+      {
+        "format": "RGBA16F",
+        "type": "HALF_FLOAT",
+        "width": 1440,
+        "height": 900
+      }
+    ],
+    "depthFormat": "DEPTH_COMPONENT24",
+    "uniforms": [
+      {
+        "name": "modelViewMatrix",
+        "type": "FLOAT_MAT4",
+        "value": [
+          1.0993386507034302,
+          -0.019275447353720665,
+          0.0329095721244812,
+          0,
+          0.020035749301314354,
+          1.0995267629623413,
+          -0.025287607684731483,
+          0,
+          -0.032452292740345,
+          0.025871828198432922,
+          1.0992168188095093,
+          0,
+          0.02376844361424446,
+          0.00883634202182293,
+          -2.4998714923858643,
+          1
+        ]
+      },
+      {
+        "name": "projectionMatrix",
+        "type": "FLOAT_MAT4",
+        "value": [
+          1.5088834762573242,
+          0,
+          0,
+          0,
+          0,
+          2.4142136573791504,
+          0,
+          0,
+          0,
+          0,
+          -1.0002000331878662,
+          -1,
+          0,
+          0,
+          -0.20002000033855438,
+          0
+        ]
+      },
+      {
+        "name": "tMap",
+        "type": "SAMPLER_2D",
+        "value": 0
+      },
+      {
+        "name": "tNoise",
+        "type": "SAMPLER_2D",
+        "value": 1
+      },
+      {
+        "name": "tCaustics",
+        "type": "SAMPLER_2D",
+        "value": 2
+      },
+      {
+        "name": "resolution",
+        "type": "FLOAT_VEC2",
+        "value": [
+          1440,
+          900
+        ]
+      },
+      {
+        "name": "resolutionUI",
+        "type": "FLOAT_VEC2",
+        "value": [
+          1440,
+          900
+        ]
+      },
+      {
+        "name": "aspect",
+        "type": "FLOAT",
+        "value": [
+          1.600000023841858
+        ]
+      },
+      {
+        "name": "time",
+        "type": "FLOAT",
+        "value": [
+          36.67100143432617
+        ]
+      },
+      {
+        "name": "dtRatio",
+        "type": "FLOAT",
+        "value": [
+          3.119999885559082
+        ]
+      }
+    ],
+    "uniformBlocks": [
+      {
+        "name": "Global",
+        "bindingPoint": 0,
+        "size": 28,
+        "activeUniformCount": 5,
+        "vertex": false,
+        "fragment": true,
+        "buffer": {
+          "__SPECTOR_Object_TAG": {
+            "typeName": "WebGLBuffer",
+            "id": 6,
+            "displayText": "WebGLBuffer - ID: 6"
+          },
+          "__SPECTOR_Object_CustomData": {
+            "target": "UNIFORM_BUFFER",
+            "length": 32,
+            "usage": 35044
+          }
+        },
+        "bufferUsage": "STATIC_DRAW",
+        "bufferLength": 32
+      }
+    ]
+  },
+  {
+    "commandId": 47,
+    "command": "drawArrays",
+    "args": [
+      0,
+      0,
+      10000
+    ],
+    "program": 35,
+    "viewport": [
+      0,
+      0,
+      1440,
+      900
+    ],
+    "depth": true,
+    "blend": true,
+    "target": 50,
+    "attachments": [
+      {
+        "format": "RGBA16F",
+        "type": "HALF_FLOAT",
+        "width": 1440,
+        "height": 900
+      }
+    ],
+    "depthFormat": "DEPTH_COMPONENT24",
+    "uniforms": [
+      {
+        "name": "modelViewMatrix",
+        "type": "FLOAT_MAT4",
+        "value": [
+          0.9998766779899597,
+          -0.012533641420304775,
+          0.009462391026318073,
+          0,
+          0.01249955128878355,
+          0.9999151825904846,
+          0.0036532629746943712,
+          0,
+          -0.0095073776319623,
+          -0.0035345368087291718,
+          0.9999485611915588,
+          0,
+          0.02376844361424446,
+          0.00883634202182293,
+          -2.4998714923858643,
+          1
+        ]
+      },
+      {
+        "name": "projectionMatrix",
+        "type": "FLOAT_MAT4",
+        "value": [
+          1.5088834762573242,
+          0,
+          0,
+          0,
+          0,
+          2.4142136573791504,
+          0,
+          0,
+          0,
+          0,
+          -1.0002000331878662,
+          -1,
+          0,
+          0,
+          -0.20002000033855438,
+          0
+        ]
+      },
+      {
+        "name": "uColor",
+        "type": "FLOAT_VEC3",
+        "value": [
+          0.026241222396492958,
+          0.03071344457566738,
+          0.03310476616024971
+        ]
+      },
+      {
+        "name": "tSim",
+        "type": "SAMPLER_2D",
+        "value": 0
+      },
+      {
+        "name": "resolution",
+        "type": "FLOAT_VEC2",
+        "value": [
+          1440,
+          900
+        ]
+      },
+      {
+        "name": "resolutionUI",
+        "type": "FLOAT_VEC2",
+        "value": [
+          1440,
+          900
+        ]
+      },
+      {
+        "name": "aspect",
+        "type": "FLOAT",
+        "value": [
+          1.600000023841858
+        ]
+      },
+      {
+        "name": "time",
+        "type": "FLOAT",
+        "value": [
+          36.67100143432617
+        ]
+      },
+      {
+        "name": "dtRatio",
+        "type": "FLOAT",
+        "value": [
+          3.119999885559082
+        ]
+      }
+    ],
+    "uniformBlocks": [
+      {
+        "name": "Global",
+        "bindingPoint": 0,
+        "size": 28,
+        "activeUniformCount": 5,
+        "vertex": true,
+        "fragment": false,
+        "buffer": {
+          "__SPECTOR_Object_TAG": {
+            "typeName": "WebGLBuffer",
+            "id": 6,
+            "displayText": "WebGLBuffer - ID: 6"
+          },
+          "__SPECTOR_Object_CustomData": {
+            "target": "UNIFORM_BUFFER",
+            "length": 32,
+            "usage": 35044
+          }
+        },
+        "bufferUsage": "STATIC_DRAW",
+        "bufferLength": 32
+      }
+    ]
+  },
+  {
+    "commandId": 51,
+    "command": "drawArrays",
+    "args": [
+      4,
+      0,
+      3
+    ],
+    "program": 33,
+    "viewport": [
+      0,
+      0,
+      1440,
+      900
+    ],
+    "depth": false,
+    "blend": true,
+    "target": 50,
+    "attachments": [
+      {
+        "format": "RGBA16F",
+        "type": "HALF_FLOAT",
+        "width": 1440,
+        "height": 900
+      }
+    ],
+    "depthFormat": "DEPTH_COMPONENT24",
+    "uniforms": [
+      {
+        "name": "uColor1",
+        "type": "FLOAT_VEC3",
+        "value": [
+          0.0027317428030073643,
+          0.006048833020031452,
+          0.013702083379030228
+        ]
+      },
+      {
+        "name": "uColor2",
+        "type": "FLOAT_VEC3",
+        "value": [
+          0.14702726900577545,
+          0.18116424977779388,
+          0.2345505803823471
+        ]
+      },
+      {
+        "name": "uRotation",
+        "type": "FLOAT",
+        "value": -0.6600000262260437
+      },
+      {
+        "name": "resolution",
+        "type": "FLOAT_VEC2",
+        "value": [
+          1440,
+          900
+        ]
+      },
+      {
+        "name": "resolutionUI",
+        "type": "FLOAT_VEC2",
+        "value": [
+          1440,
+          900
+        ]
+      },
+      {
+        "name": "aspect",
+        "type": "FLOAT",
+        "value": [
+          1.600000023841858
+        ]
+      },
+      {
+        "name": "time",
+        "type": "FLOAT",
+        "value": [
+          36.67100143432617
+        ]
+      },
+      {
+        "name": "dtRatio",
+        "type": "FLOAT",
+        "value": [
+          3.119999885559082
+        ]
+      }
+    ],
+    "uniformBlocks": [
+      {
+        "name": "Global",
+        "bindingPoint": 0,
+        "size": 28,
+        "activeUniformCount": 5,
+        "vertex": false,
+        "fragment": true,
+        "buffer": {
+          "__SPECTOR_Object_TAG": {
+            "typeName": "WebGLBuffer",
+            "id": 6,
+            "displayText": "WebGLBuffer - ID: 6"
+          },
+          "__SPECTOR_Object_CustomData": {
+            "target": "UNIFORM_BUFFER",
+            "length": 32,
+            "usage": 35044
+          }
+        },
+        "bufferUsage": "STATIC_DRAW",
+        "bufferLength": 32
+      }
+    ]
+  },
+  {
+    "commandId": 58,
+    "command": "drawElements",
+    "args": [
+      4,
+      6,
+      5123,
+      0
+    ],
+    "program": 36,
+    "viewport": [
+      0,
+      0,
+      1440,
+      900
+    ],
+    "depth": true,
+    "blend": true,
+    "target": 50,
+    "attachments": [
+      {
+        "format": "RGBA16F",
+        "type": "HALF_FLOAT",
+        "width": 1440,
+        "height": 900
+      }
+    ],
+    "depthFormat": "DEPTH_COMPONENT24",
+    "uniforms": [
+      {
+        "name": "modelViewMatrix",
+        "type": "FLOAT_MAT4",
+        "value": [
+          1.1372193098068237,
+          -0.9780992269515991,
+          0.0073552243411540985,
+          0,
+          1.9560457468032837,
+          2.274461507797241,
+          0.026637403294444084,
+          0,
+          -0.0095073776319623,
+          -0.0035345368087291718,
+          0.9999485611915588,
+          0,
+          1.703437089920044,
+          0.7778381705284119,
+          -2.4811830520629883,
+          1
+        ]
+      },
+      {
+        "name": "projectionMatrix",
+        "type": "FLOAT_MAT4",
+        "value": [
+          1.5088834762573242,
+          0,
+          0,
+          0,
+          0,
+          2.4142136573791504,
+          0,
+          0,
+          0,
+          0,
+          -1.0002000331878662,
+          -1,
+          0,
+          0,
+          -0.20002000033855438,
+          0
+        ]
+      },
+      {
+        "name": "uColor",
+        "type": "FLOAT_VEC3",
+        "value": [
+          0.637596845626831,
+          0.7681511640548706,
+          1
+        ]
+      },
+      {
+        "name": "tMap",
+        "type": "SAMPLER_2D",
+        "value": 0
+      },
+      {
+        "name": "resolution",
+        "type": "FLOAT_VEC2",
+        "value": [
+          1440,
+          900
+        ]
+      },
+      {
+        "name": "resolutionUI",
+        "type": "FLOAT_VEC2",
+        "value": [
+          1440,
+          900
+        ]
+      },
+      {
+        "name": "aspect",
+        "type": "FLOAT",
+        "value": [
+          1.600000023841858
+        ]
+      },
+      {
+        "name": "time",
+        "type": "FLOAT",
+        "value": [
+          36.67100143432617
+        ]
+      },
+      {
+        "name": "dtRatio",
+        "type": "FLOAT",
+        "value": [
+          3.119999885559082
+        ]
+      }
+    ],
+    "uniformBlocks": [
+      {
+        "name": "Global",
+        "bindingPoint": 0,
+        "size": 28,
+        "activeUniformCount": 5,
+        "vertex": false,
+        "fragment": true,
+        "buffer": {
+          "__SPECTOR_Object_TAG": {
+            "typeName": "WebGLBuffer",
+            "id": 6,
+            "displayText": "WebGLBuffer - ID: 6"
+          },
+          "__SPECTOR_Object_CustomData": {
+            "target": "UNIFORM_BUFFER",
+            "length": 32,
+            "usage": 35044
+          }
+        },
+        "bufferUsage": "STATIC_DRAW",
+        "bufferLength": 32
+      }
+    ]
+  },
+  {
+    "commandId": 64,
+    "command": "drawElements",
+    "args": [
+      4,
+      6,
+      5123,
+      0
+    ],
+    "program": 37,
+    "viewport": [
+      0,
+      0,
+      1440,
+      900
+    ],
+    "depth": true,
+    "blend": true,
+    "target": 50,
+    "attachments": [
+      {
+        "format": "RGBA16F",
+        "type": "HALF_FLOAT",
+        "width": 1440,
+        "height": 900
+      }
+    ],
+    "depthFormat": "DEPTH_COMPONENT24",
+    "uniforms": [
+      {
+        "name": "modelViewMatrix",
+        "type": "FLOAT_MAT4",
+        "value": [
+          3.999506711959839,
+          -0.0501345656812191,
+          0.03784956410527229,
+          0,
+          0.0499982051551342,
+          3.9996607303619385,
+          0.014613051898777485,
+          0,
+          -0.0380295105278492,
+          -0.014138147234916687,
+          3.9997942447662354,
+          0,
+          -2.3983185291290283,
+          -0.9953998923301697,
+          -1.5263985395431519,
+          1
+        ]
+      },
+      {
+        "name": "projectionMatrix",
+        "type": "FLOAT_MAT4",
+        "value": [
+          1.5088834762573242,
+          0,
+          0,
+          0,
+          0,
+          2.4142136573791504,
+          0,
+          0,
+          0,
+          0,
+          -1.0002000331878662,
+          -1,
+          0,
+          0,
+          -0.20002000033855438,
+          0
+        ]
+      },
+      {
+        "name": "uColor",
+        "type": "FLOAT_VEC3",
+        "value": [
+          0.637596845626831,
+          0.7681511640548706,
+          1
+        ]
+      },
+      {
+        "name": "tMap",
+        "type": "SAMPLER_2D",
+        "value": 0
+      },
+      {
+        "name": "tBokeh",
+        "type": "SAMPLER_2D",
+        "value": 1
+      },
+      {
+        "name": "resolution",
+        "type": "FLOAT_VEC2",
+        "value": [
+          1440,
+          900
+        ]
+      },
+      {
+        "name": "resolutionUI",
+        "type": "FLOAT_VEC2",
+        "value": [
+          1440,
+          900
+        ]
+      },
+      {
+        "name": "aspect",
+        "type": "FLOAT",
+        "value": [
+          1.600000023841858
+        ]
+      },
+      {
+        "name": "time",
+        "type": "FLOAT",
+        "value": [
+          36.67100143432617
+        ]
+      },
+      {
+        "name": "dtRatio",
+        "type": "FLOAT",
+        "value": [
+          3.119999885559082
+        ]
+      }
+    ],
+    "uniformBlocks": [
+      {
+        "name": "Global",
+        "bindingPoint": 0,
+        "size": 28,
+        "activeUniformCount": 5,
+        "vertex": false,
+        "fragment": true,
+        "buffer": {
+          "__SPECTOR_Object_TAG": {
+            "typeName": "WebGLBuffer",
+            "id": 6,
+            "displayText": "WebGLBuffer - ID: 6"
+          },
+          "__SPECTOR_Object_CustomData": {
+            "target": "UNIFORM_BUFFER",
+            "length": 32,
+            "usage": 35044
+          }
+        },
+        "bufferUsage": "STATIC_DRAW",
+        "bufferLength": 32
+      }
+    ]
+  },
+  {
+    "commandId": 68,
+    "command": "drawArrays",
+    "args": [
+      0,
+      0,
+      250
+    ],
+    "program": 34,
+    "viewport": [
+      0,
+      0,
+      1440,
+      900
+    ],
+    "depth": true,
+    "blend": true,
+    "target": 50,
+    "attachments": [
+      {
+        "format": "RGBA16F",
+        "type": "HALF_FLOAT",
+        "width": 1440,
+        "height": 900
+      }
+    ],
+    "depthFormat": "DEPTH_COMPONENT24",
+    "uniforms": [
+      {
+        "name": "modelViewMatrix",
+        "type": "FLOAT_MAT4",
+        "value": [
+          0.9998766779899597,
+          -0.012533641420304775,
+          0.009462391026318073,
+          0,
+          0.01249955128878355,
+          0.9999151825904846,
+          0.0036532629746943712,
+          0,
+          -0.0095073776319623,
+          -0.0035345368087291718,
+          0.9999485611915588,
+          0,
+          0.02376844361424446,
+          0.00883634202182293,
+          -2.4998714923858643,
+          1
+        ]
+      },
+      {
+        "name": "projectionMatrix",
+        "type": "FLOAT_MAT4",
+        "value": [
+          1.5088834762573242,
+          0,
+          0,
+          0,
+          0,
+          2.4142136573791504,
+          0,
+          0,
+          0,
+          0,
+          -1.0002000331878662,
+          -1,
+          0,
+          0,
+          -0.20002000033855438,
+          0
+        ]
+      },
+      {
+        "name": "uRotation",
+        "type": "FLOAT",
+        "value": -0.6600000262260437
+      },
+      {
+        "name": "resolution",
+        "type": "FLOAT_VEC2",
+        "value": [
+          1440,
+          900
+        ]
+      },
+      {
+        "name": "resolutionUI",
+        "type": "FLOAT_VEC2",
+        "value": [
+          1440,
+          900
+        ]
+      },
+      {
+        "name": "aspect",
+        "type": "FLOAT",
+        "value": [
+          1.600000023841858
+        ]
+      },
+      {
+        "name": "time",
+        "type": "FLOAT",
+        "value": [
+          36.67100143432617
+        ]
+      },
+      {
+        "name": "dtRatio",
+        "type": "FLOAT",
+        "value": [
+          3.119999885559082
+        ]
+      }
+    ],
+    "uniformBlocks": [
+      {
+        "name": "Global",
+        "bindingPoint": 0,
+        "size": 28,
+        "activeUniformCount": 5,
+        "vertex": true,
+        "fragment": false,
+        "buffer": {
+          "__SPECTOR_Object_TAG": {
+            "typeName": "WebGLBuffer",
+            "id": 6,
+            "displayText": "WebGLBuffer - ID: 6"
+          },
+          "__SPECTOR_Object_CustomData": {
+            "target": "UNIFORM_BUFFER",
+            "length": 32,
+            "usage": 35044
+          }
+        },
+        "bufferUsage": "STATIC_DRAW",
+        "bufferLength": 32
+      }
+    ]
+  },
+  {
+    "commandId": 84,
+    "command": "drawArrays",
+    "args": [
+      4,
+      0,
+      3
+    ],
+    "program": 1,
+    "viewport": [
+      0,
+      0,
+      1440,
+      900
+    ],
+    "depth": false,
+    "blend": false,
+    "target": 32,
+    "attachments": [
+      {
+        "format": "RGBA16F",
+        "type": "HALF_FLOAT",
+        "width": 1440,
+        "height": 900
+      }
+    ],
+    "depthFormat": "DEPTH_COMPONENT24",
+    "uniforms": [
+      {
+        "name": "uInCubes",
+        "type": "BOOL",
+        "value": true
+      },
+      {
+        "name": "uBlueOffset",
+        "type": "FLOAT_VEC2",
+        "value": [
+          3.8355984687805176,
+          2.263195037841797
+        ]
+      },
+      {
+        "name": "uProgress",
+        "type": "FLOAT",
+        "value": 0
+      },
+      {
+        "name": "uDetailProgress",
+        "type": "FLOAT",
+        "value": 1
+      },
+      {
+        "name": "uDetailProgress2",
+        "type": "FLOAT",
+        "value": 1
+      },
+      {
+        "name": "tScene1",
+        "type": "SAMPLER_2D",
+        "value": 0
+      },
+      {
+        "name": "tScene2",
+        "type": "SAMPLER_2D",
+        "value": 1
+      },
+      {
+        "name": "tScroll",
+        "type": "SAMPLER_2D",
+        "value": 2
+      },
+      {
+        "name": "tBlue",
+        "type": "SAMPLER_2D",
+        "value": 3
+      },
+      {
+        "name": "tDetail",
+        "type": "SAMPLER_2D",
+        "value": 4
+      },
+      {
+        "name": "tCubes",
+        "type": "SAMPLER_2D",
+        "value": 5
+      },
+      {
+        "name": "tFrost",
+        "type": "SAMPLER_2D",
+        "value": 6
+      },
+      {
+        "name": "resolution",
+        "type": "FLOAT_VEC2",
+        "value": [
+          1440,
+          900
+        ]
+      },
+      {
+        "name": "resolutionUI",
+        "type": "FLOAT_VEC2",
+        "value": [
+          1440,
+          900
+        ]
+      },
+      {
+        "name": "aspect",
+        "type": "FLOAT",
+        "value": [
+          1.600000023841858
+        ]
+      },
+      {
+        "name": "time",
+        "type": "FLOAT",
+        "value": [
+          36.67100143432617
+        ]
+      },
+      {
+        "name": "dtRatio",
+        "type": "FLOAT",
+        "value": [
+          3.119999885559082
+        ]
+      }
+    ],
+    "uniformBlocks": [
+      {
+        "name": "Global",
+        "bindingPoint": 0,
+        "size": 28,
+        "activeUniformCount": 5,
+        "vertex": false,
+        "fragment": true,
+        "buffer": {
+          "__SPECTOR_Object_TAG": {
+            "typeName": "WebGLBuffer",
+            "id": 6,
+            "displayText": "WebGLBuffer - ID: 6"
+          },
+          "__SPECTOR_Object_CustomData": {
+            "target": "UNIFORM_BUFFER",
+            "length": 32,
+            "usage": 35044
+          }
+        },
+        "bufferUsage": "STATIC_DRAW",
+        "bufferLength": 32
+      }
+    ]
+  },
+  {
+    "commandId": 101,
+    "command": "drawElements",
+    "args": [
+      4,
+      78,
+      5123,
+      0
+    ],
+    "program": 13,
+    "viewport": [
+      0,
+      0,
+      1440,
+      900
+    ],
+    "depth": false,
+    "blend": true,
+    "target": 32,
+    "attachments": [
+      {
+        "format": "RGBA16F",
+        "type": "HALF_FLOAT",
+        "width": 1440,
+        "height": 900
+      }
+    ],
+    "depthFormat": "DEPTH_COMPONENT24",
+    "uniforms": [
+      {
+        "name": "uHighlights",
+        "type": "BOOL",
+        "value": true
+      },
+      {
+        "name": "modelMatrix",
+        "type": "FLOAT_MAT4",
+        "value": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          470,
+          -154.19232177734375,
+          0,
+          1
+        ]
+      },
+      {
+        "name": "projectionMatrix",
+        "type": "FLOAT_MAT4",
+        "value": [
+          0.0013888889225199819,
+          0,
+          0,
+          0,
+          0,
+          0.002222222276031971,
+          0,
+          0,
+          0,
+          0,
+          -0.0020002000965178013,
+          0,
+          0,
+          0,
+          -1.0002000331878662,
+          1
+        ]
+      },
+      {
+        "name": "viewMatrix",
+        "type": "FLOAT_MAT4",
+        "value": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          -720,
+          450,
+          -6,
+          1
+        ]
+      },
+      {
+        "name": "uShow1",
+        "type": "FLOAT",
+        "value": 1
+      },
+      {
+        "name": "uShow2",
+        "type": "FLOAT",
+        "value": 1
+      },
+      {
+        "name": "uColor",
+        "type": "FLOAT_VEC3",
+        "value": [
+          0.13563333451747894,
+          0.16202937066555023,
+          0.20863686501979828
+        ]
+      },
+      {
+        "name": "uOpacity",
+        "type": "FLOAT",
+        "value": 1
+      },
+      {
+        "name": "uFadeMargin",
+        "type": "FLOAT",
+        "value": 65
+      },
+      {
+        "name": "tSim",
+        "type": "SAMPLER_2D",
+        "value": 0
+      },
+      {
+        "name": "tMap",
+        "type": "SAMPLER_2D",
+        "value": 1
+      },
+      {
+        "name": "resolution",
+        "type": "FLOAT_VEC2",
+        "value": [
+          1440,
+          900
+        ]
+      },
+      {
+        "name": "resolutionUI",
+        "type": "FLOAT_VEC2",
+        "value": [
+          1440,
+          900
+        ]
+      },
+      {
+        "name": "aspect",
+        "type": "FLOAT",
+        "value": [
+          1.600000023841858
+        ]
+      },
+      {
+        "name": "time",
+        "type": "FLOAT",
+        "value": [
+          36.67100143432617
+        ]
+      },
+      {
+        "name": "dtRatio",
+        "type": "FLOAT",
+        "value": [
+          3.119999885559082
+        ]
+      }
+    ],
+    "uniformBlocks": [
+      {
+        "name": "Global",
+        "bindingPoint": 0,
+        "size": 28,
+        "activeUniformCount": 5,
+        "vertex": true,
+        "fragment": true,
+        "buffer": {
+          "__SPECTOR_Object_TAG": {
+            "typeName": "WebGLBuffer",
+            "id": 6,
+            "displayText": "WebGLBuffer - ID: 6"
+          },
+          "__SPECTOR_Object_CustomData": {
+            "target": "UNIFORM_BUFFER",
+            "length": 32,
+            "usage": 35044
+          }
+        },
+        "bufferUsage": "STATIC_DRAW",
+        "bufferLength": 32
+      }
+    ]
+  },
+  {
+    "commandId": 105,
+    "command": "drawElements",
+    "args": [
+      4,
+      5364,
+      5123,
+      0
+    ],
+    "program": 13,
+    "viewport": [
+      0,
+      0,
+      1440,
+      900
+    ],
+    "depth": false,
+    "blend": true,
+    "target": 32,
+    "attachments": [
+      {
+        "format": "RGBA16F",
+        "type": "HALF_FLOAT",
+        "width": 1440,
+        "height": 900
+      }
+    ],
+    "depthFormat": "DEPTH_COMPONENT24",
+    "uniforms": [
+      {
+        "name": "uHighlights",
+        "type": "BOOL",
+        "value": true
+      },
+      {
+        "name": "modelMatrix",
+        "type": "FLOAT_MAT4",
+        "value": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          470,
+          -199.9615478515625,
+          0,
+          1
+        ]
+      },
+      {
+        "name": "projectionMatrix",
+        "type": "FLOAT_MAT4",
+        "value": [
+          0.0013888889225199819,
+          0,
+          0,
+          0,
+          0,
+          0.002222222276031971,
+          0,
+          0,
+          0,
+          0,
+          -0.0020002000965178013,
+          0,
+          0,
+          0,
+          -1.0002000331878662,
+          1
+        ]
+      },
+      {
+        "name": "viewMatrix",
+        "type": "FLOAT_MAT4",
+        "value": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          -720,
+          450,
+          -6,
+          1
+        ]
+      },
+      {
+        "name": "uShow1",
+        "type": "FLOAT",
+        "value": 1
+      },
+      {
+        "name": "uShow2",
+        "type": "FLOAT",
+        "value": 1
+      },
+      {
+        "name": "uColor",
+        "type": "FLOAT_VEC3",
+        "value": [
+          0.35640013217926025,
+          0.4019777774810791,
+          0.47353148460388184
+        ]
+      },
+      {
+        "name": "uOpacity",
+        "type": "FLOAT",
+        "value": 1
+      },
+      {
+        "name": "uFadeMargin",
+        "type": "FLOAT",
+        "value": 65
+      },
+      {
+        "name": "tSim",
+        "type": "SAMPLER_2D",
+        "value": 0
+      },
+      {
+        "name": "tMap",
+        "type": "SAMPLER_2D",
+        "value": 1
+      },
+      {
+        "name": "resolution",
+        "type": "FLOAT_VEC2",
+        "value": [
+          1440,
+          900
+        ]
+      },
+      {
+        "name": "resolutionUI",
+        "type": "FLOAT_VEC2",
+        "value": [
+          1440,
+          900
+        ]
+      },
+      {
+        "name": "aspect",
+        "type": "FLOAT",
+        "value": [
+          1.600000023841858
+        ]
+      },
+      {
+        "name": "time",
+        "type": "FLOAT",
+        "value": [
+          36.67100143432617
+        ]
+      },
+      {
+        "name": "dtRatio",
+        "type": "FLOAT",
+        "value": [
+          3.119999885559082
+        ]
+      }
+    ],
+    "uniformBlocks": [
+      {
+        "name": "Global",
+        "bindingPoint": 0,
+        "size": 28,
+        "activeUniformCount": 5,
+        "vertex": true,
+        "fragment": true,
+        "buffer": {
+          "__SPECTOR_Object_TAG": {
+            "typeName": "WebGLBuffer",
+            "id": 6,
+            "displayText": "WebGLBuffer - ID: 6"
+          },
+          "__SPECTOR_Object_CustomData": {
+            "target": "UNIFORM_BUFFER",
+            "length": 32,
+            "usage": 35044
+          }
+        },
+        "bufferUsage": "STATIC_DRAW",
+        "bufferLength": 32
+      }
+    ]
+  },
+  {
+    "commandId": 109,
+    "command": "drawElements",
+    "args": [
+      4,
+      66,
+      5123,
+      0
+    ],
+    "program": 13,
+    "viewport": [
+      0,
+      0,
+      1440,
+      900
+    ],
+    "depth": false,
+    "blend": true,
+    "target": 32,
+    "attachments": [
+      {
+        "format": "RGBA16F",
+        "type": "HALF_FLOAT",
+        "width": 1440,
+        "height": 900
+      }
+    ],
+    "depthFormat": "DEPTH_COMPONENT24",
+    "uniforms": [
+      {
+        "name": "uHighlights",
+        "type": "BOOL",
+        "value": true
+      },
+      {
+        "name": "modelMatrix",
+        "type": "FLOAT_MAT4",
+        "value": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          470,
+          -587.7307739257812,
+          0,
+          1
+        ]
+      },
+      {
+        "name": "projectionMatrix",
+        "type": "FLOAT_MAT4",
+        "value": [
+          0.0013888889225199819,
+          0,
+          0,
+          0,
+          0,
+          0.002222222276031971,
+          0,
+          0,
+          0,
+          0,
+          -0.0020002000965178013,
+          0,
+          0,
+          0,
+          -1.0002000331878662,
+          1
+        ]
+      },
+      {
+        "name": "viewMatrix",
+        "type": "FLOAT_MAT4",
+        "value": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          -720,
+          450,
+          -6,
+          1
+        ]
+      },
+      {
+        "name": "uShow1",
+        "type": "FLOAT",
+        "value": 1
+      },
+      {
+        "name": "uShow2",
+        "type": "FLOAT",
+        "value": 1
+      },
+      {
+        "name": "uColor",
+        "type": "FLOAT_VEC3",
+        "value": [
+          0.13563333451747894,
+          0.16202937066555023,
+          0.20863686501979828
+        ]
+      },
+      {
+        "name": "uOpacity",
+        "type": "FLOAT",
+        "value": 1
+      },
+      {
+        "name": "uFadeMargin",
+        "type": "FLOAT",
+        "value": 65
+      },
+      {
+        "name": "tSim",
+        "type": "SAMPLER_2D",
+        "value": 0
+      },
+      {
+        "name": "tMap",
+        "type": "SAMPLER_2D",
+        "value": 1
+      },
+      {
+        "name": "resolution",
+        "type": "FLOAT_VEC2",
+        "value": [
+          1440,
+          900
+        ]
+      },
+      {
+        "name": "resolutionUI",
+        "type": "FLOAT_VEC2",
+        "value": [
+          1440,
+          900
+        ]
+      },
+      {
+        "name": "aspect",
+        "type": "FLOAT",
+        "value": [
+          1.600000023841858
+        ]
+      },
+      {
+        "name": "time",
+        "type": "FLOAT",
+        "value": [
+          36.67100143432617
+        ]
+      },
+      {
+        "name": "dtRatio",
+        "type": "FLOAT",
+        "value": [
+          3.119999885559082
+        ]
+      }
+    ],
+    "uniformBlocks": [
+      {
+        "name": "Global",
+        "bindingPoint": 0,
+        "size": 28,
+        "activeUniformCount": 5,
+        "vertex": true,
+        "fragment": true,
+        "buffer": {
+          "__SPECTOR_Object_TAG": {
+            "typeName": "WebGLBuffer",
+            "id": 6,
+            "displayText": "WebGLBuffer - ID: 6"
+          },
+          "__SPECTOR_Object_CustomData": {
+            "target": "UNIFORM_BUFFER",
+            "length": 32,
+            "usage": 35044
+          }
+        },
+        "bufferUsage": "STATIC_DRAW",
+        "bufferLength": 32
+      }
+    ]
+  },
+  {
+    "commandId": 113,
+    "command": "drawElements",
+    "args": [
+      4,
+      18,
+      5123,
+      0
+    ],
+    "program": 14,
+    "viewport": [
+      0,
+      0,
+      1440,
+      900
+    ],
+    "depth": false,
+    "blend": true,
+    "target": 32,
+    "attachments": [
+      {
+        "format": "RGBA16F",
+        "type": "HALF_FLOAT",
+        "width": 1440,
+        "height": 900
+      }
+    ],
+    "depthFormat": "DEPTH_COMPONENT24",
+    "uniforms": [
+      {
+        "name": "uHighlights",
+        "type": "BOOL",
+        "value": true
+      },
+      {
+        "name": "modelMatrix",
+        "type": "FLOAT_MAT4",
+        "value": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          470,
+          -633.5,
+          0,
+          1
+        ]
+      },
+      {
+        "name": "projectionMatrix",
+        "type": "FLOAT_MAT4",
+        "value": [
+          0.0013888889225199819,
+          0,
+          0,
+          0,
+          0,
+          0.002222222276031971,
+          0,
+          0,
+          0,
+          0,
+          -0.0020002000965178013,
+          0,
+          0,
+          0,
+          -1.0002000331878662,
+          1
+        ]
+      },
+      {
+        "name": "viewMatrix",
+        "type": "FLOAT_MAT4",
+        "value": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          -720,
+          450,
+          -6,
+          1
+        ]
+      },
+      {
+        "name": "uShow1",
+        "type": "FLOAT",
+        "value": 1
+      },
+      {
+        "name": "uShow2",
+        "type": "FLOAT",
+        "value": 1
+      },
+      {
+        "name": "uColor",
+        "type": "FLOAT_VEC3",
+        "value": [
+          0.35640013217926025,
+          0.4019777774810791,
+          0.47353148460388184
+        ]
+      },
+      {
+        "name": "uOpacity",
+        "type": "FLOAT",
+        "value": 1
+      },
+      {
+        "name": "uFadeMargin",
+        "type": "FLOAT",
+        "value": 65
+      },
+      {
+        "name": "tSim",
+        "type": "SAMPLER_2D",
+        "value": 0
+      },
+      {
+        "name": "tMap",
+        "type": "SAMPLER_2D",
+        "value": 1
+      },
+      {
+        "name": "resolution",
+        "type": "FLOAT_VEC2",
+        "value": [
+          1440,
+          900
+        ]
+      },
+      {
+        "name": "resolutionUI",
+        "type": "FLOAT_VEC2",
+        "value": [
+          1440,
+          900
+        ]
+      },
+      {
+        "name": "aspect",
+        "type": "FLOAT",
+        "value": [
+          1.600000023841858
+        ]
+      },
+      {
+        "name": "time",
+        "type": "FLOAT",
+        "value": [
+          36.67100143432617
+        ]
+      },
+      {
+        "name": "dtRatio",
+        "type": "FLOAT",
+        "value": [
+          3.119999885559082
+        ]
+      }
+    ],
+    "uniformBlocks": [
+      {
+        "name": "Global",
+        "bindingPoint": 0,
+        "size": 28,
+        "activeUniformCount": 5,
+        "vertex": true,
+        "fragment": true,
+        "buffer": {
+          "__SPECTOR_Object_TAG": {
+            "typeName": "WebGLBuffer",
+            "id": 6,
+            "displayText": "WebGLBuffer - ID: 6"
+          },
+          "__SPECTOR_Object_CustomData": {
+            "target": "UNIFORM_BUFFER",
+            "length": 32,
+            "usage": 35044
+          }
+        },
+        "bufferUsage": "STATIC_DRAW",
+        "bufferLength": 32
+      }
+    ]
+  },
+  {
+    "commandId": 119,
+    "command": "drawElements",
+    "args": [
+      4,
+      6,
+      5123,
+      0
+    ],
+    "program": 15,
+    "viewport": [
+      0,
+      0,
+      1440,
+      900
+    ],
+    "depth": false,
+    "blend": true,
+    "target": 32,
+    "attachments": [
+      {
+        "format": "RGBA16F",
+        "type": "HALF_FLOAT",
+        "width": 1440,
+        "height": 900
+      }
+    ],
+    "depthFormat": "DEPTH_COMPONENT24",
+    "uniforms": [
+      {
+        "name": "uHighlights",
+        "type": "BOOL",
+        "value": true
+      },
+      {
+        "name": "modelMatrix",
+        "type": "FLOAT_MAT4",
+        "value": [
+          12,
+          0,
+          0,
+          0,
+          0,
+          12,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          500.3846130371094,
+          -633.5,
+          0,
+          1
+        ]
+      },
+      {
+        "name": "projectionMatrix",
+        "type": "FLOAT_MAT4",
+        "value": [
+          0.0013888889225199819,
+          0,
+          0,
+          0,
+          0,
+          0.002222222276031971,
+          0,
+          0,
+          0,
+          0,
+          -0.0020002000965178013,
+          0,
+          0,
+          0,
+          -1.0002000331878662,
+          1
+        ]
+      },
+      {
+        "name": "viewMatrix",
+        "type": "FLOAT_MAT4",
+        "value": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          -720,
+          450,
+          -6,
+          1
+        ]
+      },
+      {
+        "name": "uColor",
+        "type": "FLOAT_VEC3",
+        "value": [
+          0.35640013217926025,
+          0.4019777774810791,
+          0.47353148460388184
+        ]
+      },
+      {
+        "name": "uShow",
+        "type": "FLOAT",
+        "value": 1
+      },
+      {
+        "name": "uRand",
+        "type": "FLOAT",
+        "value": 0.3836163282394409
+      },
+      {
+        "name": "uOpacity",
+        "type": "FLOAT",
+        "value": 1
+      },
+      {
+        "name": "uFadeMargin",
+        "type": "FLOAT",
+        "value": 65
+      },
+      {
+        "name": "tSim",
+        "type": "SAMPLER_2D",
+        "value": 0
+      },
+      {
+        "name": "tMap",
+        "type": "SAMPLER_2D",
+        "value": 1
+      },
+      {
+        "name": "resolution",
+        "type": "FLOAT_VEC2",
+        "value": [
+          1440,
+          900
+        ]
+      },
+      {
+        "name": "resolutionUI",
+        "type": "FLOAT_VEC2",
+        "value": [
+          1440,
+          900
+        ]
+      },
+      {
+        "name": "aspect",
+        "type": "FLOAT",
+        "value": [
+          1.600000023841858
+        ]
+      },
+      {
+        "name": "time",
+        "type": "FLOAT",
+        "value": [
+          36.67100143432617
+        ]
+      },
+      {
+        "name": "dtRatio",
+        "type": "FLOAT",
+        "value": [
+          3.119999885559082
+        ]
+      }
+    ],
+    "uniformBlocks": [
+      {
+        "name": "Global",
+        "bindingPoint": 0,
+        "size": 28,
+        "activeUniformCount": 5,
+        "vertex": true,
+        "fragment": true,
+        "buffer": {
+          "__SPECTOR_Object_TAG": {
+            "typeName": "WebGLBuffer",
+            "id": 6,
+            "displayText": "WebGLBuffer - ID: 6"
+          },
+          "__SPECTOR_Object_CustomData": {
+            "target": "UNIFORM_BUFFER",
+            "length": 32,
+            "usage": 35044
+          }
+        },
+        "bufferUsage": "STATIC_DRAW",
+        "bufferLength": 32
+      }
+    ]
+  },
+  {
+    "commandId": 124,
+    "command": "drawElements",
+    "args": [
+      4,
+      24,
+      5123,
+      0
+    ],
+    "program": 14,
+    "viewport": [
+      0,
+      0,
+      1440,
+      900
+    ],
+    "depth": false,
+    "blend": true,
+    "target": 32,
+    "attachments": [
+      {
+        "format": "RGBA16F",
+        "type": "HALF_FLOAT",
+        "width": 1440,
+        "height": 900
+      }
+    ],
+    "depthFormat": "DEPTH_COMPONENT24",
+    "uniforms": [
+      {
+        "name": "uHighlights",
+        "type": "BOOL",
+        "value": true
+      },
+      {
+        "name": "modelMatrix",
+        "type": "FLOAT_MAT4",
+        "value": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          534.3846435546875,
+          -633.5,
+          0,
+          1
+        ]
+      },
+      {
+        "name": "projectionMatrix",
+        "type": "FLOAT_MAT4",
+        "value": [
+          0.0013888889225199819,
+          0,
+          0,
+          0,
+          0,
+          0.002222222276031971,
+          0,
+          0,
+          0,
+          0,
+          -0.0020002000965178013,
+          0,
+          0,
+          0,
+          -1.0002000331878662,
+          1
+        ]
+      },
+      {
+        "name": "viewMatrix",
+        "type": "FLOAT_MAT4",
+        "value": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          -720,
+          450,
+          -6,
+          1
+        ]
+      },
+      {
+        "name": "uShow1",
+        "type": "FLOAT",
+        "value": 1
+      },
+      {
+        "name": "uShow2",
+        "type": "FLOAT",
+        "value": 1
+      },
+      {
+        "name": "uColor",
+        "type": "FLOAT_VEC3",
+        "value": [
+          0.35640013217926025,
+          0.4019777774810791,
+          0.47353148460388184
+        ]
+      },
+      {
+        "name": "uOpacity",
+        "type": "FLOAT",
+        "value": 1
+      },
+      {
+        "name": "uFadeMargin",
+        "type": "FLOAT",
+        "value": 65
+      },
+      {
+        "name": "tSim",
+        "type": "SAMPLER_2D",
+        "value": 0
+      },
+      {
+        "name": "tMap",
+        "type": "SAMPLER_2D",
+        "value": 1
+      },
+      {
+        "name": "resolution",
+        "type": "FLOAT_VEC2",
+        "value": [
+          1440,
+          900
+        ]
+      },
+      {
+        "name": "resolutionUI",
+        "type": "FLOAT_VEC2",
+        "value": [
+          1440,
+          900
+        ]
+      },
+      {
+        "name": "aspect",
+        "type": "FLOAT",
+        "value": [
+          1.600000023841858
+        ]
+      },
+      {
+        "name": "time",
+        "type": "FLOAT",
+        "value": [
+          36.67100143432617
+        ]
+      },
+      {
+        "name": "dtRatio",
+        "type": "FLOAT",
+        "value": [
+          3.119999885559082
+        ]
+      }
+    ],
+    "uniformBlocks": [
+      {
+        "name": "Global",
+        "bindingPoint": 0,
+        "size": 28,
+        "activeUniformCount": 5,
+        "vertex": true,
+        "fragment": true,
+        "buffer": {
+          "__SPECTOR_Object_TAG": {
+            "typeName": "WebGLBuffer",
+            "id": 6,
+            "displayText": "WebGLBuffer - ID: 6"
+          },
+          "__SPECTOR_Object_CustomData": {
+            "target": "UNIFORM_BUFFER",
+            "length": 32,
+            "usage": 35044
+          }
+        },
+        "bufferUsage": "STATIC_DRAW",
+        "bufferLength": 32
+      }
+    ]
+  },
+  {
+    "commandId": 130,
+    "command": "drawElements",
+    "args": [
+      4,
+      6,
+      5123,
+      0
+    ],
+    "program": 15,
+    "viewport": [
+      0,
+      0,
+      1440,
+      900
+    ],
+    "depth": false,
+    "blend": true,
+    "target": 32,
+    "attachments": [
+      {
+        "format": "RGBA16F",
+        "type": "HALF_FLOAT",
+        "width": 1440,
+        "height": 900
+      }
+    ],
+    "depthFormat": "DEPTH_COMPONENT24",
+    "uniforms": [
+      {
+        "name": "uHighlights",
+        "type": "BOOL",
+        "value": true
+      },
+      {
+        "name": "modelMatrix",
+        "type": "FLOAT_MAT4",
+        "value": [
+          12,
+          0,
+          0,
+          0,
+          0,
+          12,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          573.076904296875,
+          -633.5,
+          0,
+          1
+        ]
+      },
+      {
+        "name": "projectionMatrix",
+        "type": "FLOAT_MAT4",
+        "value": [
+          0.0013888889225199819,
+          0,
+          0,
+          0,
+          0,
+          0.002222222276031971,
+          0,
+          0,
+          0,
+          0,
+          -0.0020002000965178013,
+          0,
+          0,
+          0,
+          -1.0002000331878662,
+          1
+        ]
+      },
+      {
+        "name": "viewMatrix",
+        "type": "FLOAT_MAT4",
+        "value": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          -720,
+          450,
+          -6,
+          1
+        ]
+      },
+      {
+        "name": "uColor",
+        "type": "FLOAT_VEC3",
+        "value": [
+          0.35640013217926025,
+          0.4019777774810791,
+          0.47353148460388184
+        ]
+      },
+      {
+        "name": "uShow",
+        "type": "FLOAT",
+        "value": 1
+      },
+      {
+        "name": "uRand",
+        "type": "FLOAT",
+        "value": 0.2046688050031662
+      },
+      {
+        "name": "uOpacity",
+        "type": "FLOAT",
+        "value": 1
+      },
+      {
+        "name": "uFadeMargin",
+        "type": "FLOAT",
+        "value": 65
+      },
+      {
+        "name": "tSim",
+        "type": "SAMPLER_2D",
+        "value": 0
+      },
+      {
+        "name": "tMap",
+        "type": "SAMPLER_2D",
+        "value": 1
+      },
+      {
+        "name": "resolution",
+        "type": "FLOAT_VEC2",
+        "value": [
+          1440,
+          900
+        ]
+      },
+      {
+        "name": "resolutionUI",
+        "type": "FLOAT_VEC2",
+        "value": [
+          1440,
+          900
+        ]
+      },
+      {
+        "name": "aspect",
+        "type": "FLOAT",
+        "value": [
+          1.600000023841858
+        ]
+      },
+      {
+        "name": "time",
+        "type": "FLOAT",
+        "value": [
+          36.67100143432617
+        ]
+      },
+      {
+        "name": "dtRatio",
+        "type": "FLOAT",
+        "value": [
+          3.119999885559082
+        ]
+      }
+    ],
+    "uniformBlocks": [
+      {
+        "name": "Global",
+        "bindingPoint": 0,
+        "size": 28,
+        "activeUniformCount": 5,
+        "vertex": true,
+        "fragment": true,
+        "buffer": {
+          "__SPECTOR_Object_TAG": {
+            "typeName": "WebGLBuffer",
+            "id": 6,
+            "displayText": "WebGLBuffer - ID: 6"
+          },
+          "__SPECTOR_Object_CustomData": {
+            "target": "UNIFORM_BUFFER",
+            "length": 32,
+            "usage": 35044
+          }
+        },
+        "bufferUsage": "STATIC_DRAW",
+        "bufferLength": 32
+      }
+    ]
+  },
+  {
+    "commandId": 135,
+    "command": "drawElements",
+    "args": [
+      4,
+      24,
+      5123,
+      0
+    ],
+    "program": 14,
+    "viewport": [
+      0,
+      0,
+      1440,
+      900
+    ],
+    "depth": false,
+    "blend": true,
+    "target": 32,
+    "attachments": [
+      {
+        "format": "RGBA16F",
+        "type": "HALF_FLOAT",
+        "width": 1440,
+        "height": 900
+      }
+    ],
+    "depthFormat": "DEPTH_COMPONENT24",
+    "uniforms": [
+      {
+        "name": "uHighlights",
+        "type": "BOOL",
+        "value": true
+      },
+      {
+        "name": "modelMatrix",
+        "type": "FLOAT_MAT4",
+        "value": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          607.076904296875,
+          -633.5,
+          0,
+          1
+        ]
+      },
+      {
+        "name": "projectionMatrix",
+        "type": "FLOAT_MAT4",
+        "value": [
+          0.0013888889225199819,
+          0,
+          0,
+          0,
+          0,
+          0.002222222276031971,
+          0,
+          0,
+          0,
+          0,
+          -0.0020002000965178013,
+          0,
+          0,
+          0,
+          -1.0002000331878662,
+          1
+        ]
+      },
+      {
+        "name": "viewMatrix",
+        "type": "FLOAT_MAT4",
+        "value": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          -720,
+          450,
+          -6,
+          1
+        ]
+      },
+      {
+        "name": "uShow1",
+        "type": "FLOAT",
+        "value": 1
+      },
+      {
+        "name": "uShow2",
+        "type": "FLOAT",
+        "value": 1
+      },
+      {
+        "name": "uColor",
+        "type": "FLOAT_VEC3",
+        "value": [
+          0.35640013217926025,
+          0.4019777774810791,
+          0.47353148460388184
+        ]
+      },
+      {
+        "name": "uOpacity",
+        "type": "FLOAT",
+        "value": 1
+      },
+      {
+        "name": "uFadeMargin",
+        "type": "FLOAT",
+        "value": 65
+      },
+      {
+        "name": "tSim",
+        "type": "SAMPLER_2D",
+        "value": 0
+      },
+      {
+        "name": "tMap",
+        "type": "SAMPLER_2D",
+        "value": 1
+      },
+      {
+        "name": "resolution",
+        "type": "FLOAT_VEC2",
+        "value": [
+          1440,
+          900
+        ]
+      },
+      {
+        "name": "resolutionUI",
+        "type": "FLOAT_VEC2",
+        "value": [
+          1440,
+          900
+        ]
+      },
+      {
+        "name": "aspect",
+        "type": "FLOAT",
+        "value": [
+          1.600000023841858
+        ]
+      },
+      {
+        "name": "time",
+        "type": "FLOAT",
+        "value": [
+          36.67100143432617
+        ]
+      },
+      {
+        "name": "dtRatio",
+        "type": "FLOAT",
+        "value": [
+          3.119999885559082
+        ]
+      }
+    ],
+    "uniformBlocks": [
+      {
+        "name": "Global",
+        "bindingPoint": 0,
+        "size": 28,
+        "activeUniformCount": 5,
+        "vertex": true,
+        "fragment": true,
+        "buffer": {
+          "__SPECTOR_Object_TAG": {
+            "typeName": "WebGLBuffer",
+            "id": 6,
+            "displayText": "WebGLBuffer - ID: 6"
+          },
+          "__SPECTOR_Object_CustomData": {
+            "target": "UNIFORM_BUFFER",
+            "length": 32,
+            "usage": 35044
+          }
+        },
+        "bufferUsage": "STATIC_DRAW",
+        "bufferLength": 32
+      }
+    ]
+  },
+  {
+    "commandId": 141,
+    "command": "drawElements",
+    "args": [
+      4,
+      6,
+      5123,
+      0
+    ],
+    "program": 15,
+    "viewport": [
+      0,
+      0,
+      1440,
+      900
+    ],
+    "depth": false,
+    "blend": true,
+    "target": 32,
+    "attachments": [
+      {
+        "format": "RGBA16F",
+        "type": "HALF_FLOAT",
+        "width": 1440,
+        "height": 900
+      }
+    ],
+    "depthFormat": "DEPTH_COMPONENT24",
+    "uniforms": [
+      {
+        "name": "uHighlights",
+        "type": "BOOL",
+        "value": true
+      },
+      {
+        "name": "modelMatrix",
+        "type": "FLOAT_MAT4",
+        "value": [
+          12,
+          0,
+          0,
+          0,
+          0,
+          12,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          645.7692260742188,
+          -633.5,
+          0,
+          1
+        ]
+      },
+      {
+        "name": "projectionMatrix",
+        "type": "FLOAT_MAT4",
+        "value": [
+          0.0013888889225199819,
+          0,
+          0,
+          0,
+          0,
+          0.002222222276031971,
+          0,
+          0,
+          0,
+          0,
+          -0.0020002000965178013,
+          0,
+          0,
+          0,
+          -1.0002000331878662,
+          1
+        ]
+      },
+      {
+        "name": "viewMatrix",
+        "type": "FLOAT_MAT4",
+        "value": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          -720,
+          450,
+          -6,
+          1
+        ]
+      },
+      {
+        "name": "uColor",
+        "type": "FLOAT_VEC3",
+        "value": [
+          0.35640013217926025,
+          0.4019777774810791,
+          0.47353148460388184
+        ]
+      },
+      {
+        "name": "uShow",
+        "type": "FLOAT",
+        "value": 1
+      },
+      {
+        "name": "uRand",
+        "type": "FLOAT",
+        "value": 0.8395152688026428
+      },
+      {
+        "name": "uOpacity",
+        "type": "FLOAT",
+        "value": 1
+      },
+      {
+        "name": "uFadeMargin",
+        "type": "FLOAT",
+        "value": 65
+      },
+      {
+        "name": "tSim",
+        "type": "SAMPLER_2D",
+        "value": 0
+      },
+      {
+        "name": "tMap",
+        "type": "SAMPLER_2D",
+        "value": 1
+      },
+      {
+        "name": "resolution",
+        "type": "FLOAT_VEC2",
+        "value": [
+          1440,
+          900
+        ]
+      },
+      {
+        "name": "resolutionUI",
+        "type": "FLOAT_VEC2",
+        "value": [
+          1440,
+          900
+        ]
+      },
+      {
+        "name": "aspect",
+        "type": "FLOAT",
+        "value": [
+          1.600000023841858
+        ]
+      },
+      {
+        "name": "time",
+        "type": "FLOAT",
+        "value": [
+          36.67100143432617
+        ]
+      },
+      {
+        "name": "dtRatio",
+        "type": "FLOAT",
+        "value": [
+          3.119999885559082
+        ]
+      }
+    ],
+    "uniformBlocks": [
+      {
+        "name": "Global",
+        "bindingPoint": 0,
+        "size": 28,
+        "activeUniformCount": 5,
+        "vertex": true,
+        "fragment": true,
+        "buffer": {
+          "__SPECTOR_Object_TAG": {
+            "typeName": "WebGLBuffer",
+            "id": 6,
+            "displayText": "WebGLBuffer - ID: 6"
+          },
+          "__SPECTOR_Object_CustomData": {
+            "target": "UNIFORM_BUFFER",
+            "length": 32,
+            "usage": 35044
+          }
+        },
+        "bufferUsage": "STATIC_DRAW",
+        "bufferLength": 32
+      }
+    ]
+  },
+  {
+    "commandId": 146,
+    "command": "drawElements",
+    "args": [
+      4,
+      24,
+      5123,
+      0
+    ],
+    "program": 14,
+    "viewport": [
+      0,
+      0,
+      1440,
+      900
+    ],
+    "depth": false,
+    "blend": true,
+    "target": 32,
+    "attachments": [
+      {
+        "format": "RGBA16F",
+        "type": "HALF_FLOAT",
+        "width": 1440,
+        "height": 900
+      }
+    ],
+    "depthFormat": "DEPTH_COMPONENT24",
+    "uniforms": [
+      {
+        "name": "uHighlights",
+        "type": "BOOL",
+        "value": true
+      },
+      {
+        "name": "modelMatrix",
+        "type": "FLOAT_MAT4",
+        "value": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          679.7692260742188,
+          -633.5,
+          0,
+          1
+        ]
+      },
+      {
+        "name": "projectionMatrix",
+        "type": "FLOAT_MAT4",
+        "value": [
+          0.0013888889225199819,
+          0,
+          0,
+          0,
+          0,
+          0.002222222276031971,
+          0,
+          0,
+          0,
+          0,
+          -0.0020002000965178013,
+          0,
+          0,
+          0,
+          -1.0002000331878662,
+          1
+        ]
+      },
+      {
+        "name": "viewMatrix",
+        "type": "FLOAT_MAT4",
+        "value": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          -720,
+          450,
+          -6,
+          1
+        ]
+      },
+      {
+        "name": "uShow1",
+        "type": "FLOAT",
+        "value": 1
+      },
+      {
+        "name": "uShow2",
+        "type": "FLOAT",
+        "value": 1
+      },
+      {
+        "name": "uColor",
+        "type": "FLOAT_VEC3",
+        "value": [
+          0.35640013217926025,
+          0.4019777774810791,
+          0.47353148460388184
+        ]
+      },
+      {
+        "name": "uOpacity",
+        "type": "FLOAT",
+        "value": 1
+      },
+      {
+        "name": "uFadeMargin",
+        "type": "FLOAT",
+        "value": 65
+      },
+      {
+        "name": "tSim",
+        "type": "SAMPLER_2D",
+        "value": 0
+      },
+      {
+        "name": "tMap",
+        "type": "SAMPLER_2D",
+        "value": 1
+      },
+      {
+        "name": "resolution",
+        "type": "FLOAT_VEC2",
+        "value": [
+          1440,
+          900
+        ]
+      },
+      {
+        "name": "resolutionUI",
+        "type": "FLOAT_VEC2",
+        "value": [
+          1440,
+          900
+        ]
+      },
+      {
+        "name": "aspect",
+        "type": "FLOAT",
+        "value": [
+          1.600000023841858
+        ]
+      },
+      {
+        "name": "time",
+        "type": "FLOAT",
+        "value": [
+          36.67100143432617
+        ]
+      },
+      {
+        "name": "dtRatio",
+        "type": "FLOAT",
+        "value": [
+          3.119999885559082
+        ]
+      }
+    ],
+    "uniformBlocks": [
+      {
+        "name": "Global",
+        "bindingPoint": 0,
+        "size": 28,
+        "activeUniformCount": 5,
+        "vertex": true,
+        "fragment": true,
+        "buffer": {
+          "__SPECTOR_Object_TAG": {
+            "typeName": "WebGLBuffer",
+            "id": 6,
+            "displayText": "WebGLBuffer - ID: 6"
+          },
+          "__SPECTOR_Object_CustomData": {
+            "target": "UNIFORM_BUFFER",
+            "length": 32,
+            "usage": 35044
+          }
+        },
+        "bufferUsage": "STATIC_DRAW",
+        "bufferLength": 32
+      }
+    ]
+  },
+  {
+    "commandId": 152,
+    "command": "drawElements",
+    "args": [
+      4,
+      6,
+      5123,
+      0
+    ],
+    "program": 15,
+    "viewport": [
+      0,
+      0,
+      1440,
+      900
+    ],
+    "depth": false,
+    "blend": true,
+    "target": 32,
+    "attachments": [
+      {
+        "format": "RGBA16F",
+        "type": "HALF_FLOAT",
+        "width": 1440,
+        "height": 900
+      }
+    ],
+    "depthFormat": "DEPTH_COMPONENT24",
+    "uniforms": [
+      {
+        "name": "uHighlights",
+        "type": "BOOL",
+        "value": true
+      },
+      {
+        "name": "modelMatrix",
+        "type": "FLOAT_MAT4",
+        "value": [
+          12,
+          0,
+          0,
+          0,
+          0,
+          12,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          718.4615478515625,
+          -633.5,
+          0,
+          1
+        ]
+      },
+      {
+        "name": "projectionMatrix",
+        "type": "FLOAT_MAT4",
+        "value": [
+          0.0013888889225199819,
+          0,
+          0,
+          0,
+          0,
+          0.002222222276031971,
+          0,
+          0,
+          0,
+          0,
+          -0.0020002000965178013,
+          0,
+          0,
+          0,
+          -1.0002000331878662,
+          1
+        ]
+      },
+      {
+        "name": "viewMatrix",
+        "type": "FLOAT_MAT4",
+        "value": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          -720,
+          450,
+          -6,
+          1
+        ]
+      },
+      {
+        "name": "uColor",
+        "type": "FLOAT_VEC3",
+        "value": [
+          0.35640013217926025,
+          0.4019777774810791,
+          0.47353148460388184
+        ]
+      },
+      {
+        "name": "uShow",
+        "type": "FLOAT",
+        "value": 1
+      },
+      {
+        "name": "uRand",
+        "type": "FLOAT",
+        "value": 0.5210131406784058
+      },
+      {
+        "name": "uOpacity",
+        "type": "FLOAT",
+        "value": 1
+      },
+      {
+        "name": "uFadeMargin",
+        "type": "FLOAT",
+        "value": 65
+      },
+      {
+        "name": "tSim",
+        "type": "SAMPLER_2D",
+        "value": 0
+      },
+      {
+        "name": "tMap",
+        "type": "SAMPLER_2D",
+        "value": 1
+      },
+      {
+        "name": "resolution",
+        "type": "FLOAT_VEC2",
+        "value": [
+          1440,
+          900
+        ]
+      },
+      {
+        "name": "resolutionUI",
+        "type": "FLOAT_VEC2",
+        "value": [
+          1440,
+          900
+        ]
+      },
+      {
+        "name": "aspect",
+        "type": "FLOAT",
+        "value": [
+          1.600000023841858
+        ]
+      },
+      {
+        "name": "time",
+        "type": "FLOAT",
+        "value": [
+          36.67100143432617
+        ]
+      },
+      {
+        "name": "dtRatio",
+        "type": "FLOAT",
+        "value": [
+          3.119999885559082
+        ]
+      }
+    ],
+    "uniformBlocks": [
+      {
+        "name": "Global",
+        "bindingPoint": 0,
+        "size": 28,
+        "activeUniformCount": 5,
+        "vertex": true,
+        "fragment": true,
+        "buffer": {
+          "__SPECTOR_Object_TAG": {
+            "typeName": "WebGLBuffer",
+            "id": 6,
+            "displayText": "WebGLBuffer - ID: 6"
+          },
+          "__SPECTOR_Object_CustomData": {
+            "target": "UNIFORM_BUFFER",
+            "length": 32,
+            "usage": 35044
+          }
+        },
+        "bufferUsage": "STATIC_DRAW",
+        "bufferLength": 32
+      }
+    ]
+  },
+  {
+    "commandId": 157,
+    "command": "drawElements",
+    "args": [
+      4,
+      48,
+      5123,
+      0
+    ],
+    "program": 13,
+    "viewport": [
+      0,
+      0,
+      1440,
+      900
+    ],
+    "depth": false,
+    "blend": true,
+    "target": 32,
+    "attachments": [
+      {
+        "format": "RGBA16F",
+        "type": "HALF_FLOAT",
+        "width": 1440,
+        "height": 900
+      }
+    ],
+    "depthFormat": "DEPTH_COMPONENT24",
+    "uniforms": [
+      {
+        "name": "uHighlights",
+        "type": "BOOL",
+        "value": true
+      },
+      {
+        "name": "modelMatrix",
+        "type": "FLOAT_MAT4",
+        "value": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          470,
+          -679.2692260742188,
+          0,
+          1
+        ]
+      },
+      {
+        "name": "projectionMatrix",
+        "type": "FLOAT_MAT4",
+        "value": [
+          0.0013888889225199819,
+          0,
+          0,
+          0,
+          0,
+          0.002222222276031971,
+          0,
+          0,
+          0,
+          0,
+          -0.0020002000965178013,
+          0,
+          0,
+          0,
+          -1.0002000331878662,
+          1
+        ]
+      },
+      {
+        "name": "viewMatrix",
+        "type": "FLOAT_MAT4",
+        "value": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          -720,
+          450,
+          -6,
+          1
+        ]
+      },
+      {
+        "name": "uShow1",
+        "type": "FLOAT",
+        "value": 1
+      },
+      {
+        "name": "uShow2",
+        "type": "FLOAT",
+        "value": 1
+      },
+      {
+        "name": "uColor",
+        "type": "FLOAT_VEC3",
+        "value": [
+          0.13563333451747894,
+          0.16202937066555023,
+          0.20863686501979828
+        ]
+      },
+      {
+        "name": "uOpacity",
+        "type": "FLOAT",
+        "value": 1
+      },
+      {
+        "name": "uFadeMargin",
+        "type": "FLOAT",
+        "value": 65
+      },
+      {
+        "name": "tSim",
+        "type": "SAMPLER_2D",
+        "value": 0
+      },
+      {
+        "name": "tMap",
+        "type": "SAMPLER_2D",
+        "value": 1
+      },
+      {
+        "name": "resolution",
+        "type": "FLOAT_VEC2",
+        "value": [
+          1440,
+          900
+        ]
+      },
+      {
+        "name": "resolutionUI",
+        "type": "FLOAT_VEC2",
+        "value": [
+          1440,
+          900
+        ]
+      },
+      {
+        "name": "aspect",
+        "type": "FLOAT",
+        "value": [
+          1.600000023841858
+        ]
+      },
+      {
+        "name": "time",
+        "type": "FLOAT",
+        "value": [
+          36.67100143432617
+        ]
+      },
+      {
+        "name": "dtRatio",
+        "type": "FLOAT",
+        "value": [
+          3.119999885559082
+        ]
+      }
+    ],
+    "uniformBlocks": [
+      {
+        "name": "Global",
+        "bindingPoint": 0,
+        "size": 28,
+        "activeUniformCount": 5,
+        "vertex": true,
+        "fragment": true,
+        "buffer": {
+          "__SPECTOR_Object_TAG": {
+            "typeName": "WebGLBuffer",
+            "id": 6,
+            "displayText": "WebGLBuffer - ID: 6"
+          },
+          "__SPECTOR_Object_CustomData": {
+            "target": "UNIFORM_BUFFER",
+            "length": 32,
+            "usage": 35044
+          }
+        },
+        "bufferUsage": "STATIC_DRAW",
+        "bufferLength": 32
+      }
+    ]
+  },
+  {
+    "commandId": 161,
+    "command": "drawElements",
+    "args": [
+      4,
+      54,
+      5123,
+      0
+    ],
+    "program": 14,
+    "viewport": [
+      0,
+      0,
+      1440,
+      900
+    ],
+    "depth": false,
+    "blend": true,
+    "target": 32,
+    "attachments": [
+      {
+        "format": "RGBA16F",
+        "type": "HALF_FLOAT",
+        "width": 1440,
+        "height": 900
+      }
+    ],
+    "depthFormat": "DEPTH_COMPONENT24",
+    "uniforms": [
+      {
+        "name": "uHighlights",
+        "type": "BOOL",
+        "value": true
+      },
+      {
+        "name": "modelMatrix",
+        "type": "FLOAT_MAT4",
+        "value": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          470,
+          -725.0384521484375,
+          0,
+          1
+        ]
+      },
+      {
+        "name": "projectionMatrix",
+        "type": "FLOAT_MAT4",
+        "value": [
+          0.0013888889225199819,
+          0,
+          0,
+          0,
+          0,
+          0.002222222276031971,
+          0,
+          0,
+          0,
+          0,
+          -0.0020002000965178013,
+          0,
+          0,
+          0,
+          -1.0002000331878662,
+          1
+        ]
+      },
+      {
+        "name": "viewMatrix",
+        "type": "FLOAT_MAT4",
+        "value": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          -720,
+          450,
+          -6,
+          1
+        ]
+      },
+      {
+        "name": "uShow1",
+        "type": "FLOAT",
+        "value": 1
+      },
+      {
+        "name": "uShow2",
+        "type": "FLOAT",
+        "value": 1
+      },
+      {
+        "name": "uColor",
+        "type": "FLOAT_VEC3",
+        "value": [
+          0.35640013217926025,
+          0.4019777774810791,
+          0.47353148460388184
+        ]
+      },
+      {
+        "name": "uOpacity",
+        "type": "FLOAT",
+        "value": 1
+      },
+      {
+        "name": "uFadeMargin",
+        "type": "FLOAT",
+        "value": 65
+      },
+      {
+        "name": "tSim",
+        "type": "SAMPLER_2D",
+        "value": 0
+      },
+      {
+        "name": "tMap",
+        "type": "SAMPLER_2D",
+        "value": 1
+      },
+      {
+        "name": "resolution",
+        "type": "FLOAT_VEC2",
+        "value": [
+          1440,
+          900
+        ]
+      },
+      {
+        "name": "resolutionUI",
+        "type": "FLOAT_VEC2",
+        "value": [
+          1440,
+          900
+        ]
+      },
+      {
+        "name": "aspect",
+        "type": "FLOAT",
+        "value": [
+          1.600000023841858
+        ]
+      },
+      {
+        "name": "time",
+        "type": "FLOAT",
+        "value": [
+          36.67100143432617
+        ]
+      },
+      {
+        "name": "dtRatio",
+        "type": "FLOAT",
+        "value": [
+          3.119999885559082
+        ]
+      }
+    ],
+    "uniformBlocks": [
+      {
+        "name": "Global",
+        "bindingPoint": 0,
+        "size": 28,
+        "activeUniformCount": 5,
+        "vertex": true,
+        "fragment": true,
+        "buffer": {
+          "__SPECTOR_Object_TAG": {
+            "typeName": "WebGLBuffer",
+            "id": 6,
+            "displayText": "WebGLBuffer - ID: 6"
+          },
+          "__SPECTOR_Object_CustomData": {
+            "target": "UNIFORM_BUFFER",
+            "length": 32,
+            "usage": 35044
+          }
+        },
+        "bufferUsage": "STATIC_DRAW",
+        "bufferLength": 32
+      }
+    ]
+  },
+  {
+    "commandId": 167,
+    "command": "drawElements",
+    "args": [
+      4,
+      6,
+      5123,
+      0
+    ],
+    "program": 15,
+    "viewport": [
+      0,
+      0,
+      1440,
+      900
+    ],
+    "depth": false,
+    "blend": true,
+    "target": 32,
+    "attachments": [
+      {
+        "format": "RGBA16F",
+        "type": "HALF_FLOAT",
+        "width": 1440,
+        "height": 900
+      }
+    ],
+    "depthFormat": "DEPTH_COMPONENT24",
+    "uniforms": [
+      {
+        "name": "uHighlights",
+        "type": "BOOL",
+        "value": true
+      },
+      {
+        "name": "modelMatrix",
+        "type": "FLOAT_MAT4",
+        "value": [
+          12,
+          0,
+          0,
+          0,
+          0,
+          12,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          550.2307739257812,
+          -725.0384521484375,
+          0,
+          1
+        ]
+      },
+      {
+        "name": "projectionMatrix",
+        "type": "FLOAT_MAT4",
+        "value": [
+          0.0013888889225199819,
+          0,
+          0,
+          0,
+          0,
+          0.002222222276031971,
+          0,
+          0,
+          0,
+          0,
+          -0.0020002000965178013,
+          0,
+          0,
+          0,
+          -1.0002000331878662,
+          1
+        ]
+      },
+      {
+        "name": "viewMatrix",
+        "type": "FLOAT_MAT4",
+        "value": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          -720,
+          450,
+          -6,
+          1
+        ]
+      },
+      {
+        "name": "uColor",
+        "type": "FLOAT_VEC3",
+        "value": [
+          0.35640013217926025,
+          0.4019777774810791,
+          0.47353148460388184
+        ]
+      },
+      {
+        "name": "uShow",
+        "type": "FLOAT",
+        "value": 1
+      },
+      {
+        "name": "uRand",
+        "type": "FLOAT",
+        "value": 0.07923468202352524
+      },
+      {
+        "name": "uOpacity",
+        "type": "FLOAT",
+        "value": 1
+      },
+      {
+        "name": "uFadeMargin",
+        "type": "FLOAT",
+        "value": 65
+      },
+      {
+        "name": "tSim",
+        "type": "SAMPLER_2D",
+        "value": 0
+      },
+      {
+        "name": "tMap",
+        "type": "SAMPLER_2D",
+        "value": 1
+      },
+      {
+        "name": "resolution",
+        "type": "FLOAT_VEC2",
+        "value": [
+          1440,
+          900
+        ]
+      },
+      {
+        "name": "resolutionUI",
+        "type": "FLOAT_VEC2",
+        "value": [
+          1440,
+          900
+        ]
+      },
+      {
+        "name": "aspect",
+        "type": "FLOAT",
+        "value": [
+          1.600000023841858
+        ]
+      },
+      {
+        "name": "time",
+        "type": "FLOAT",
+        "value": [
+          36.67100143432617
+        ]
+      },
+      {
+        "name": "dtRatio",
+        "type": "FLOAT",
+        "value": [
+          3.119999885559082
+        ]
+      }
+    ],
+    "uniformBlocks": [
+      {
+        "name": "Global",
+        "bindingPoint": 0,
+        "size": 28,
+        "activeUniformCount": 5,
+        "vertex": true,
+        "fragment": true,
+        "buffer": {
+          "__SPECTOR_Object_TAG": {
+            "typeName": "WebGLBuffer",
+            "id": 6,
+            "displayText": "WebGLBuffer - ID: 6"
+          },
+          "__SPECTOR_Object_CustomData": {
+            "target": "UNIFORM_BUFFER",
+            "length": 32,
+            "usage": 35044
+          }
+        },
+        "bufferUsage": "STATIC_DRAW",
+        "bufferLength": 32
+      }
+    ]
+  },
+  {
+    "commandId": 174,
+    "command": "drawElements",
+    "args": [
+      4,
+      6,
+      5123,
+      0
+    ],
+    "program": 9,
+    "viewport": [
+      0,
+      0,
+      1440,
+      900
+    ],
+    "depth": false,
+    "blend": true,
+    "target": 32,
+    "attachments": [
+      {
+        "format": "RGBA16F",
+        "type": "HALF_FLOAT",
+        "width": 1440,
+        "height": 900
+      }
+    ],
+    "depthFormat": "DEPTH_COMPONENT24",
+    "uniforms": [
+      {
+        "name": "modelMatrix",
+        "type": "FLOAT_MAT4",
+        "value": [
+          160,
+          0,
+          0,
+          0,
+          0,
+          33.599998474121094,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          50,
+          -45,
+          0,
+          1
+        ]
+      },
+      {
+        "name": "modelViewMatrix",
+        "type": "FLOAT_MAT4",
+        "value": [
+          160,
+          0,
+          0,
+          0,
+          0,
+          33.599998474121094,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          -670,
+          405,
+          -6,
+          1
+        ]
+      },
+      {
+        "name": "projectionMatrix",
+        "type": "FLOAT_MAT4",
+        "value": [
+          0.0013888889225199819,
+          0,
+          0,
+          0,
+          0,
+          0.002222222276031971,
+          0,
+          0,
+          0,
+          0,
+          -0.0020002000965178013,
+          0,
+          0,
+          0,
+          -1.0002000331878662,
+          1
+        ]
+      },
+      {
+        "name": "uColor",
+        "type": "FLOAT_VEC3",
+        "value": [
+          1,
+          1,
+          1
+        ]
+      },
+      {
+        "name": "uShow",
+        "type": "FLOAT",
+        "value": 1
+      },
+      {
+        "name": "uRand",
+        "type": "FLOAT",
+        "value": 0.9746729135513306
+      },
+      {
+        "name": "tMap",
+        "type": "SAMPLER_2D",
+        "value": 0
+      },
+      {
+        "name": "tBlocks",
+        "type": "SAMPLER_2D",
+        "value": 1
+      }
+    ],
+    "uniformBlocks": []
+  },
+  {
+    "commandId": 179,
+    "command": "drawElements",
+    "args": [
+      4,
+      6,
+      5123,
+      0
+    ],
+    "program": 12,
+    "viewport": [
+      0,
+      0,
+      1440,
+      900
+    ],
+    "depth": false,
+    "blend": true,
+    "target": 32,
+    "attachments": [
+      {
+        "format": "RGBA16F",
+        "type": "HALF_FLOAT",
+        "width": 1440,
+        "height": 900
+      }
+    ],
+    "depthFormat": "DEPTH_COMPONENT24",
+    "uniforms": [
+      {
+        "name": "modelMatrix",
+        "type": "FLOAT_MAT4",
+        "value": [
+          95,
+          0,
+          0,
+          0,
+          0,
+          42.75,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          1390,
+          -39.869998931884766,
+          0,
+          1
+        ]
+      },
+      {
+        "name": "modelViewMatrix",
+        "type": "FLOAT_MAT4",
+        "value": [
+          95,
+          0,
+          0,
+          0,
+          0,
+          42.75,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          670,
+          410.1300048828125,
+          -6,
+          1
+        ]
+      },
+      {
+        "name": "projectionMatrix",
+        "type": "FLOAT_MAT4",
+        "value": [
+          0.0013888889225199819,
+          0,
+          0,
+          0,
+          0,
+          0.002222222276031971,
+          0,
+          0,
+          0,
+          0,
+          -0.0020002000965178013,
+          0,
+          0,
+          0,
+          -1.0002000331878662,
+          1
+        ]
+      },
+      {
+        "name": "uColor",
+        "type": "FLOAT_VEC3",
+        "value": [
+          1,
+          1,
+          1
+        ]
+      },
+      {
+        "name": "uShow",
+        "type": "FLOAT",
+        "value": 1
+      },
+      {
+        "name": "uRand",
+        "type": "FLOAT",
+        "value": 0.9874143600463867
+      },
+      {
+        "name": "tMap",
+        "type": "SAMPLER_2D",
+        "value": 0
+      },
+      {
+        "name": "tBlocks",
+        "type": "SAMPLER_2D",
+        "value": 1
+      }
+    ],
+    "uniformBlocks": []
+  },
+  {
+    "commandId": 184,
+    "command": "drawElements",
+    "args": [
+      4,
+      36,
+      5123,
+      0
+    ],
+    "program": 10,
+    "viewport": [
+      0,
+      0,
+      1440,
+      900
+    ],
+    "depth": false,
+    "blend": true,
+    "target": 32,
+    "attachments": [
+      {
+        "format": "RGBA16F",
+        "type": "HALF_FLOAT",
+        "width": 1440,
+        "height": 900
+      }
+    ],
+    "depthFormat": "DEPTH_COMPONENT24",
+    "uniforms": [
+      {
+        "name": "modelMatrix",
+        "type": "FLOAT_MAT4",
+        "value": [
+          180,
+          0,
+          0,
+          0,
+          0,
+          180,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          75.19999694824219,
+          -846.5884399414062,
+          0,
+          1
+        ]
+      },
+      {
+        "name": "projectionMatrix",
+        "type": "FLOAT_MAT4",
+        "value": [
+          0.0013888889225199819,
+          0,
+          0,
+          0,
+          0,
+          0.002222222276031971,
+          0,
+          0,
+          0,
+          0,
+          -0.0020002000965178013,
+          0,
+          0,
+          0,
+          -1.0002000331878662,
+          1
+        ]
+      },
+      {
+        "name": "viewMatrix",
+        "type": "FLOAT_MAT4",
+        "value": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          -720,
+          450,
+          -6,
+          1
+        ]
+      },
+      {
+        "name": "uShow1",
+        "type": "FLOAT",
+        "value": 1
+      },
+      {
+        "name": "uShow2",
+        "type": "FLOAT",
+        "value": 1
+      },
+      {
+        "name": "uColor",
+        "type": "FLOAT_VEC3",
+        "value": [
+          1,
+          1,
+          1
+        ]
+      },
+      {
+        "name": "tMap",
+        "type": "SAMPLER_2D",
+        "value": 0
+      }
+    ],
+    "uniformBlocks": []
+  },
+  {
+    "commandId": 187,
+    "command": "drawElements",
+    "args": [
+      4,
+      12,
+      5123,
+      0
+    ],
+    "program": 10,
+    "viewport": [
+      0,
+      0,
+      1440,
+      900
+    ],
+    "depth": false,
+    "blend": true,
+    "target": 32,
+    "attachments": [
+      {
+        "format": "RGBA16F",
+        "type": "HALF_FLOAT",
+        "width": 1440,
+        "height": 900
+      }
+    ],
+    "depthFormat": "DEPTH_COMPONENT24",
+    "uniforms": [
+      {
+        "name": "modelMatrix",
+        "type": "FLOAT_MAT4",
+        "value": [
+          180,
+          0,
+          0,
+          0,
+          0,
+          180,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          123.80000305175781,
+          -846.5884399414062,
+          0,
+          1
+        ]
+      },
+      {
+        "name": "projectionMatrix",
+        "type": "FLOAT_MAT4",
+        "value": [
+          0.0013888889225199819,
+          0,
+          0,
+          0,
+          0,
+          0.002222222276031971,
+          0,
+          0,
+          0,
+          0,
+          -0.0020002000965178013,
+          0,
+          0,
+          0,
+          -1.0002000331878662,
+          1
+        ]
+      },
+      {
+        "name": "viewMatrix",
+        "type": "FLOAT_MAT4",
+        "value": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          -720,
+          450,
+          -6,
+          1
+        ]
+      },
+      {
+        "name": "uShow1",
+        "type": "FLOAT",
+        "value": 1
+      },
+      {
+        "name": "uShow2",
+        "type": "FLOAT",
+        "value": 1
+      },
+      {
+        "name": "uColor",
+        "type": "FLOAT_VEC3",
+        "value": [
+          1,
+          1,
+          1
+        ]
+      },
+      {
+        "name": "tMap",
+        "type": "SAMPLER_2D",
+        "value": 0
+      }
+    ],
+    "uniformBlocks": []
+  },
+  {
+    "commandId": 191,
+    "command": "drawElements",
+    "args": [
+      4,
+      6,
+      5123,
+      0
+    ],
+    "program": 11,
+    "viewport": [
+      0,
+      0,
+      1440,
+      900
+    ],
+    "depth": false,
+    "blend": true,
+    "target": 32,
+    "attachments": [
+      {
+        "format": "RGBA16F",
+        "type": "HALF_FLOAT",
+        "width": 1440,
+        "height": 900
+      }
+    ],
+    "depthFormat": "DEPTH_COMPONENT24",
+    "uniforms": [
+      {
+        "name": "modelMatrix",
+        "type": "FLOAT_MAT4",
+        "value": [
+          18,
+          0,
+          0,
+          0,
+          0,
+          18,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          50,
+          -842.4000244140625,
+          0,
+          1
+        ]
+      },
+      {
+        "name": "modelViewMatrix",
+        "type": "FLOAT_MAT4",
+        "value": [
+          18,
+          0,
+          0,
+          0,
+          0,
+          18,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          -670,
+          -392.3999938964844,
+          -6,
+          1
+        ]
+      },
+      {
+        "name": "projectionMatrix",
+        "type": "FLOAT_MAT4",
+        "value": [
+          0.0013888889225199819,
+          0,
+          0,
+          0,
+          0,
+          0.002222222276031971,
+          0,
+          0,
+          0,
+          0,
+          -0.0020002000965178013,
+          0,
+          0,
+          0,
+          -1.0002000331878662,
+          1
+        ]
+      },
+      {
+        "name": "uColor",
+        "type": "FLOAT_VEC3",
+        "value": [
+          1,
+          1,
+          1
+        ]
+      },
+      {
+        "name": "uShow",
+        "type": "FLOAT",
+        "value": 1
+      },
+      {
+        "name": "uRand",
+        "type": "FLOAT",
+        "value": 0.7588289380073547
+      },
+      {
+        "name": "uActive",
+        "type": "FLOAT",
+        "value": 1
+      },
+      {
+        "name": "tMap",
+        "type": "SAMPLER_2D",
+        "value": 0
+      },
+      {
+        "name": "resolution",
+        "type": "FLOAT_VEC2",
+        "value": [
+          1440,
+          900
+        ]
+      },
+      {
+        "name": "resolutionUI",
+        "type": "FLOAT_VEC2",
+        "value": [
+          1440,
+          900
+        ]
+      },
+      {
+        "name": "aspect",
+        "type": "FLOAT",
+        "value": [
+          1.600000023841858
+        ]
+      },
+      {
+        "name": "time",
+        "type": "FLOAT",
+        "value": [
+          36.67100143432617
+        ]
+      },
+      {
+        "name": "dtRatio",
+        "type": "FLOAT",
+        "value": [
+          3.119999885559082
+        ]
+      }
+    ],
+    "uniformBlocks": [
+      {
+        "name": "Global",
+        "bindingPoint": 0,
+        "size": 28,
+        "activeUniformCount": 5,
+        "vertex": false,
+        "fragment": false,
+        "buffer": {
+          "__SPECTOR_Object_TAG": {
+            "typeName": "WebGLBuffer",
+            "id": 6,
+            "displayText": "WebGLBuffer - ID: 6"
+          },
+          "__SPECTOR_Object_CustomData": {
+            "target": "UNIFORM_BUFFER",
+            "length": 32,
+            "usage": 35044
+          }
+        },
+        "bufferUsage": "STATIC_DRAW",
+        "bufferLength": 32
+      }
+    ]
+  },
+  {
+    "commandId": 196,
+    "command": "drawElements",
+    "args": [
+      4,
+      30,
+      5123,
+      0
+    ],
+    "program": 10,
+    "viewport": [
+      0,
+      0,
+      1440,
+      900
+    ],
+    "depth": false,
+    "blend": true,
+    "target": 32,
+    "attachments": [
+      {
+        "format": "RGBA16F",
+        "type": "HALF_FLOAT",
+        "width": 1440,
+        "height": 900
+      }
+    ],
+    "depthFormat": "DEPTH_COMPONENT24",
+    "uniforms": [
+      {
+        "name": "modelMatrix",
+        "type": "FLOAT_MAT4",
+        "value": [
+          204.25,
+          0,
+          0,
+          0,
+          0,
+          204.25,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          1342.5,
+          -65.69921875,
+          0,
+          1
+        ]
+      },
+      {
+        "name": "projectionMatrix",
+        "type": "FLOAT_MAT4",
+        "value": [
+          0.0013888889225199819,
+          0,
+          0,
+          0,
+          0,
+          0.002222222276031971,
+          0,
+          0,
+          0,
+          0,
+          -0.0020002000965178013,
+          0,
+          0,
+          0,
+          -1.0002000331878662,
+          1
+        ]
+      },
+      {
+        "name": "viewMatrix",
+        "type": "FLOAT_MAT4",
+        "value": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          -720,
+          450,
+          -6,
+          1
+        ]
+      },
+      {
+        "name": "uShow1",
+        "type": "FLOAT",
+        "value": 1
+      },
+      {
+        "name": "uShow2",
+        "type": "FLOAT",
+        "value": 1
+      },
+      {
+        "name": "uColor",
+        "type": "FLOAT_VEC3",
+        "value": [
+          1,
+          1,
+          1
+        ]
+      },
+      {
+        "name": "tMap",
+        "type": "SAMPLER_2D",
+        "value": 0
+      }
+    ],
+    "uniformBlocks": []
+  },
+  {
+    "commandId": 207,
+    "command": "drawArrays",
+    "args": [
+      4,
+      0,
+      3
+    ],
+    "program": 83,
+    "viewport": [
+      0,
+      0,
+      1440,
+      900
+    ],
+    "depth": false,
+    "blend": false,
+    "target": 33,
+    "attachments": [
+      {
+        "format": "RGBA16F",
+        "type": "HALF_FLOAT",
+        "width": 1440,
+        "height": 900
+      }
+    ],
+    "uniforms": [
+      {
+        "name": "threshold",
+        "type": "FLOAT",
+        "value": 0.20000000298023224
+      },
+      {
+        "name": "smoothing",
+        "type": "FLOAT",
+        "value": 0.02500000037252903
+      },
+      {
+        "name": "inputBuffer",
+        "type": "SAMPLER_2D",
+        "value": 0
+      }
+    ],
+    "uniformBlocks": []
+  },
+  {
+    "commandId": 219,
+    "command": "drawArrays",
+    "args": [
+      4,
+      0,
+      3
+    ],
+    "program": 84,
+    "viewport": [
+      0,
+      0,
+      720,
+      450
+    ],
+    "depth": false,
+    "blend": false,
+    "target": 34,
+    "attachments": [
+      {
+        "format": "RGBA16F",
+        "type": "HALF_FLOAT",
+        "width": 720,
+        "height": 450
+      }
+    ],
+    "uniforms": [
+      {
+        "name": "texelSize",
+        "type": "FLOAT_VEC2",
+        "value": [
+          0.0006944444612599909,
+          0.0011111111380159855
+        ]
+      },
+      {
+        "name": "inputBuffer",
+        "type": "SAMPLER_2D",
+        "value": 0
+      }
+    ],
+    "uniformBlocks": []
+  },
+  {
+    "commandId": 229,
+    "command": "drawArrays",
+    "args": [
+      4,
+      0,
+      3
+    ],
+    "program": 84,
+    "viewport": [
+      0,
+      0,
+      360,
+      225
+    ],
+    "depth": false,
+    "blend": false,
+    "target": 35,
+    "attachments": [
+      {
+        "format": "RGBA16F",
+        "type": "HALF_FLOAT",
+        "width": 360,
+        "height": 225
+      }
+    ],
+    "uniforms": [
+      {
+        "name": "texelSize",
+        "type": "FLOAT_VEC2",
+        "value": [
+          0.0013888889225199819,
+          0.002222222276031971
+        ]
+      },
+      {
+        "name": "inputBuffer",
+        "type": "SAMPLER_2D",
+        "value": 0
+      }
+    ],
+    "uniformBlocks": []
+  },
+  {
+    "commandId": 239,
+    "command": "drawArrays",
+    "args": [
+      4,
+      0,
+      3
+    ],
+    "program": 84,
+    "viewport": [
+      0,
+      0,
+      180,
+      113
+    ],
+    "depth": false,
+    "blend": false,
+    "target": 36,
+    "attachments": [
+      {
+        "format": "RGBA16F",
+        "type": "HALF_FLOAT",
+        "width": 180,
+        "height": 113
+      }
+    ],
+    "uniforms": [
+      {
+        "name": "texelSize",
+        "type": "FLOAT_VEC2",
+        "value": [
+          0.0027777778450399637,
+          0.004444444552063942
+        ]
+      },
+      {
+        "name": "inputBuffer",
+        "type": "SAMPLER_2D",
+        "value": 0
+      }
+    ],
+    "uniformBlocks": []
+  },
+  {
+    "commandId": 249,
+    "command": "drawArrays",
+    "args": [
+      4,
+      0,
+      3
+    ],
+    "program": 84,
+    "viewport": [
+      0,
+      0,
+      90,
+      57
+    ],
+    "depth": false,
+    "blend": false,
+    "target": 37,
+    "attachments": [
+      {
+        "format": "RGBA16F",
+        "type": "HALF_FLOAT",
+        "width": 90,
+        "height": 57
+      }
+    ],
+    "uniforms": [
+      {
+        "name": "texelSize",
+        "type": "FLOAT_VEC2",
+        "value": [
+          0.0055555556900799274,
+          0.008849557489156723
+        ]
+      },
+      {
+        "name": "inputBuffer",
+        "type": "SAMPLER_2D",
+        "value": 0
+      }
+    ],
+    "uniformBlocks": []
+  },
+  {
+    "commandId": 259,
+    "command": "drawArrays",
+    "args": [
+      4,
+      0,
+      3
+    ],
+    "program": 84,
+    "viewport": [
+      0,
+      0,
+      45,
+      29
+    ],
+    "depth": false,
+    "blend": false,
+    "target": 38,
+    "attachments": [
+      {
+        "format": "RGBA16F",
+        "type": "HALF_FLOAT",
+        "width": 45,
+        "height": 29
+      }
+    ],
+    "uniforms": [
+      {
+        "name": "texelSize",
+        "type": "FLOAT_VEC2",
+        "value": [
+          0.011111111380159855,
+          0.017543859779834747
+        ]
+      },
+      {
+        "name": "inputBuffer",
+        "type": "SAMPLER_2D",
+        "value": 0
+      }
+    ],
+    "uniformBlocks": []
+  },
+  {
+    "commandId": 269,
+    "command": "drawArrays",
+    "args": [
+      4,
+      0,
+      3
+    ],
+    "program": 84,
+    "viewport": [
+      0,
+      0,
+      23,
+      15
+    ],
+    "depth": false,
+    "blend": false,
+    "target": 39,
+    "attachments": [
+      {
+        "format": "RGBA16F",
+        "type": "HALF_FLOAT",
+        "width": 23,
+        "height": 15
+      }
+    ],
+    "uniforms": [
+      {
+        "name": "texelSize",
+        "type": "FLOAT_VEC2",
+        "value": [
+          0.02222222276031971,
+          0.03448275849223137
+        ]
+      },
+      {
+        "name": "inputBuffer",
+        "type": "SAMPLER_2D",
+        "value": 0
+      }
+    ],
+    "uniformBlocks": []
+  },
+  {
+    "commandId": 283,
+    "command": "drawArrays",
+    "args": [
+      4,
+      0,
+      3
+    ],
+    "program": 85,
+    "viewport": [
+      0,
+      0,
+      45,
+      29
+    ],
+    "depth": false,
+    "blend": false,
+    "target": 40,
+    "attachments": [
+      {
+        "format": "RGBA16F",
+        "type": "HALF_FLOAT",
+        "width": 45,
+        "height": 29
+      }
+    ],
+    "uniforms": [
+      {
+        "name": "texelSize",
+        "type": "FLOAT_VEC2",
+        "value": [
+          0.043478261679410934,
+          0.06666667014360428
+        ]
+      },
+      {
+        "name": "radius",
+        "type": "FLOAT",
+        "value": 0.8500000238418579
+      },
+      {
+        "name": "inputBuffer",
+        "type": "SAMPLER_2D",
+        "value": 0
+      },
+      {
+        "name": "supportBuffer",
+        "type": "SAMPLER_2D",
+        "value": 1
+      }
+    ],
+    "uniformBlocks": []
+  },
+  {
+    "commandId": 296,
+    "command": "drawArrays",
+    "args": [
+      4,
+      0,
+      3
+    ],
+    "program": 85,
+    "viewport": [
+      0,
+      0,
+      90,
+      57
+    ],
+    "depth": false,
+    "blend": false,
+    "target": 41,
+    "attachments": [
+      {
+        "format": "RGBA16F",
+        "type": "HALF_FLOAT",
+        "width": 90,
+        "height": 57
+      }
+    ],
+    "uniforms": [
+      {
+        "name": "texelSize",
+        "type": "FLOAT_VEC2",
+        "value": [
+          0.02222222276031971,
+          0.03448275849223137
+        ]
+      },
+      {
+        "name": "radius",
+        "type": "FLOAT",
+        "value": 0.8500000238418579
+      },
+      {
+        "name": "inputBuffer",
+        "type": "SAMPLER_2D",
+        "value": 0
+      },
+      {
+        "name": "supportBuffer",
+        "type": "SAMPLER_2D",
+        "value": 1
+      }
+    ],
+    "uniformBlocks": []
+  },
+  {
+    "commandId": 309,
+    "command": "drawArrays",
+    "args": [
+      4,
+      0,
+      3
+    ],
+    "program": 85,
+    "viewport": [
+      0,
+      0,
+      180,
+      113
+    ],
+    "depth": false,
+    "blend": false,
+    "target": 42,
+    "attachments": [
+      {
+        "format": "RGBA16F",
+        "type": "HALF_FLOAT",
+        "width": 180,
+        "height": 113
+      }
+    ],
+    "uniforms": [
+      {
+        "name": "texelSize",
+        "type": "FLOAT_VEC2",
+        "value": [
+          0.011111111380159855,
+          0.017543859779834747
+        ]
+      },
+      {
+        "name": "radius",
+        "type": "FLOAT",
+        "value": 0.8500000238418579
+      },
+      {
+        "name": "inputBuffer",
+        "type": "SAMPLER_2D",
+        "value": 0
+      },
+      {
+        "name": "supportBuffer",
+        "type": "SAMPLER_2D",
+        "value": 1
+      }
+    ],
+    "uniformBlocks": []
+  },
+  {
+    "commandId": 322,
+    "command": "drawArrays",
+    "args": [
+      4,
+      0,
+      3
+    ],
+    "program": 85,
+    "viewport": [
+      0,
+      0,
+      360,
+      225
+    ],
+    "depth": false,
+    "blend": false,
+    "target": 43,
+    "attachments": [
+      {
+        "format": "RGBA16F",
+        "type": "HALF_FLOAT",
+        "width": 360,
+        "height": 225
+      }
+    ],
+    "uniforms": [
+      {
+        "name": "texelSize",
+        "type": "FLOAT_VEC2",
+        "value": [
+          0.0055555556900799274,
+          0.008849557489156723
+        ]
+      },
+      {
+        "name": "radius",
+        "type": "FLOAT",
+        "value": 0.8500000238418579
+      },
+      {
+        "name": "inputBuffer",
+        "type": "SAMPLER_2D",
+        "value": 0
+      },
+      {
+        "name": "supportBuffer",
+        "type": "SAMPLER_2D",
+        "value": 1
+      }
+    ],
+    "uniformBlocks": []
+  },
+  {
+    "commandId": 335,
+    "command": "drawArrays",
+    "args": [
+      4,
+      0,
+      3
+    ],
+    "program": 85,
+    "viewport": [
+      0,
+      0,
+      720,
+      450
+    ],
+    "depth": false,
+    "blend": false,
+    "target": 44,
+    "attachments": [
+      {
+        "format": "RGBA16F",
+        "type": "HALF_FLOAT",
+        "width": 720,
+        "height": 450
+      }
+    ],
+    "uniforms": [
+      {
+        "name": "texelSize",
+        "type": "FLOAT_VEC2",
+        "value": [
+          0.0027777778450399637,
+          0.004444444552063942
+        ]
+      },
+      {
+        "name": "radius",
+        "type": "FLOAT",
+        "value": 0.8500000238418579
+      },
+      {
+        "name": "inputBuffer",
+        "type": "SAMPLER_2D",
+        "value": 0
+      },
+      {
+        "name": "supportBuffer",
+        "type": "SAMPLER_2D",
+        "value": 1
+      }
+    ],
+    "uniformBlocks": []
+  },
+  {
+    "commandId": 349,
+    "command": "drawArrays",
+    "args": [
+      4,
+      0,
+      3
+    ],
+    "program": 86,
+    "viewport": [
+      0,
+      0,
+      1440,
+      900
+    ],
+    "depth": false,
+    "blend": false,
+    "target": 45,
+    "attachments": [
+      {
+        "format": "RGBA16F",
+        "type": "HALF_FLOAT",
+        "width": 1440,
+        "height": 900
+      }
+    ],
+    "depthFormat": "DEPTH_COMPONENT24",
+    "uniforms": [
+      {
+        "name": "e0BlendOpacity",
+        "type": "FLOAT",
+        "value": 1
+      },
+      {
+        "name": "e0Intensity",
+        "type": "FLOAT",
+        "value": 1
+      },
+      {
+        "name": "inputBuffer",
+        "type": "SAMPLER_2D",
+        "value": 0
+      },
+      {
+        "name": "e0Map",
+        "type": "SAMPLER_2D",
+        "value": 1
+      }
+    ],
+    "uniformBlocks": []
+  },
+  {
+    "commandId": 360,
+    "command": "drawArrays",
+    "args": [
+      4,
+      0,
+      3
+    ],
+    "program": 87,
+    "viewport": [
+      0,
+      0,
+      1440,
+      900
+    ],
+    "depth": false,
+    "blend": false,
+    "target": 46,
+    "attachments": [
+      {
+        "format": "RGBA8",
+        "type": "UNSIGNED_BYTE",
+        "width": 1440,
+        "height": 900
+      }
+    ],
+    "uniforms": [
+      {
+        "name": "texelSize",
+        "type": "FLOAT_VEC2",
+        "value": [
+          0.0006944444612599909,
+          0.0011111111380159855
+        ]
+      },
+      {
+        "name": "inputBuffer",
+        "type": "SAMPLER_2D",
+        "value": 0
+      }
+    ],
+    "uniformBlocks": []
+  },
+  {
+    "commandId": 373,
+    "command": "drawArrays",
+    "args": [
+      4,
+      0,
+      3
+    ],
+    "program": 88,
+    "viewport": [
+      0,
+      0,
+      1440,
+      900
+    ],
+    "depth": false,
+    "blend": false,
+    "target": 47,
+    "attachments": [
+      {
+        "format": "RGBA8",
+        "type": "UNSIGNED_BYTE",
+        "width": 1440,
+        "height": 900
+      }
+    ],
+    "uniforms": [
+      {
+        "name": "texelSize",
+        "type": "FLOAT_VEC2",
+        "value": [
+          0.0006944444612599909,
+          0.0011111111380159855
+        ]
+      },
+      {
+        "name": "resolution",
+        "type": "FLOAT_VEC2",
+        "value": [
+          1440,
+          900
+        ]
+      },
+      {
+        "name": "inputBuffer",
+        "type": "SAMPLER_2D",
+        "value": 0
+      },
+      {
+        "name": "areaTexture",
+        "type": "SAMPLER_2D",
+        "value": 1
+      },
+      {
+        "name": "searchTexture",
+        "type": "SAMPLER_2D",
+        "value": 2
+      }
+    ],
+    "uniformBlocks": []
+  },
+  {
+    "commandId": 386,
+    "command": "drawArrays",
+    "args": [
+      4,
+      0,
+      3
+    ],
+    "program": 89,
+    "viewport": [
+      0,
+      0,
+      1440,
+      900
+    ],
+    "depth": false,
+    "blend": false,
+    "target": "default",
+    "uniforms": [
+      {
+        "name": "texelSize",
+        "type": "FLOAT_VEC2",
+        "value": [
+          0.0006944444612599909,
+          0.0011111111380159855
+        ]
+      },
+      {
+        "name": "e0BlendOpacity",
+        "type": "FLOAT",
+        "value": 1
+      },
+      {
+        "name": "inputBuffer",
+        "type": "SAMPLER_2D",
+        "value": 0
+      },
+      {
+        "name": "e0WeightMap",
+        "type": "SAMPLER_2D",
+        "value": 1
+      }
+    ],
+    "uniformBlocks": []
+  }
+]

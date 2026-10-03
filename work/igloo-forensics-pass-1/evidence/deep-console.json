@@ -1,0 +1,34 @@
+[
+  {
+    "type": "log",
+    "text": "🧊 by https://abeto.co"
+  },
+  {
+    "type": "warning",
+    "text": "[.WebGL-0x1a7c0042fe00] GL_INVALID_OPERATION: glReadPixelsRobustANGLE: Invalid format and type combination."
+  },
+  {
+    "type": "warning",
+    "text": "[.WebGL-0x1a7c0042fe00] GL_INVALID_OPERATION: glReadPixelsRobustANGLE: Invalid format and type combination."
+  },
+  {
+    "type": "warning",
+    "text": "[.WebGL-0x1a7c0042fe00] GL_INVALID_OPERATION: glReadPixelsRobustANGLE: Invalid format and type combination."
+  },
+  {
+    "type": "warning",
+    "text": "[.WebGL-0x1a7c0042fe00] GL_INVALID_OPERATION: glReadPixelsRobustANGLE: Invalid format and type combination."
+  },
+  {
+    "type": "warning",
+    "text": "[.WebGL-0x1a7c0042fe00] GL_INVALID_OPERATION: glReadPixelsRobustANGLE: Invalid format and type combination."
+  },
+  {
+    "type": "warning",
+    "text": "[.WebGL-0x1a7c0042fe00] GL_INVALID_OPERATION: glReadPixelsRobustANGLE: Invalid format and type combination."
+  },
+  {
+    "type": "warning",
+    "text": "[.WebGL-0x1a7c0042fe00] GL_INVALID_OPERATION: glReadPixelsRobustANGLE: Invalid format and type combination."
+  }
+]

@@ -1,0 +1,25 @@
+{
+  "source": "https://github.com/BabylonJS/Spector.js",
+  "archive": "https://codeload.github.com/BabylonJS/Spector.js/zip/refs/heads/master",
+  "sourceDownloaded": true,
+  "sourcePath": "work/igloo-forensics-pass-1/tooling/spector-server/Spector.js-master",
+  "mcpSourcePath": "work/igloo-forensics-pass-1/tooling/spector-server/Spector.js-master/mcp",
+  "includedSpectorBundle": "work/igloo-forensics-pass-1/tooling/spector-server/Spector.js-master/dist/spector.bundle.js",
+  "setupStatus": "incomplete",
+  "dependencyInstallation": {
+    "sandboxAttempt": "failed",
+    "sandboxError": "npm error Exit handler never called! Log files were not written due to an error writing to the default npm-cache logs directory.",
+    "escalatedAttempt": "canceled by user while awaiting approval",
+    "dependencyInstallCompleted": false
+  },
+  "builtServer": false,
+  "mcpProtocolToolsInvoked": false,
+  "globalCodexConfigurationChanged": false,
+  "officialSourceModified": false,
+  "bridgeInspection": {
+    "canvasDiscovery": "Official BrowserManager and spector-bridge use document.querySelectorAll('canvas'), which does not enumerate canvases inside closed shadow roots.",
+    "browserManager": "Server entry point creates its own BrowserManager; BrowserManager exposes public getPage() and ensureBrowser() methods.",
+    "potentialSecondPassAdapter": "An explicitly documented external preload could patch BrowserManager.prototype.ensureBrowser to add early canvas/closed-root instrumentation without modifying official source. Browser launch would also require an available Chromium installation. This adapter was not verified through MCP in this setup attempt."
+  },
+  "note": "Direct Spector.js captures performed separately by the root agent are distinct from use of the official Spector.js MCP server. This file does not claim MCP tools were installed or used successfully."
+}

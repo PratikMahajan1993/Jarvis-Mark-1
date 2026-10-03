@@ -1,0 +1,338 @@
+//_______________________________EXTENSION POLYFILL_____________________________________
+window.browser = (function () {
+    return window.msBrowser ||
+        window.browser ||
+        window.chrome ||
+        browser;
+})();
+
+var uniqueId = new Date().getTime() + Math.abs(Math.random() * 1000000);
+
+// Expose the worker bundle URL to the MAIN-world content script via a hidden
+// DOM element. The MAIN world cannot call chrome.runtime.getURL(), so we
+// bridge it here.  DOM is shared across worlds, and this runs before the
+// MAIN-world entry (manifest ordering), so the element is ready by the time
+// the Worker constructor proxy reads it.
+(function injectWorkerBundleUrl() {
+    var url = window.browser.runtime.getURL('spector.worker.bundle.js');
+    var el = document.createElement('input');
+    el.type = 'hidden';
+    el.id = 'TexturesId_SpectorWorkerBundleUrl';
+    el.value = url;
+    // document.body may not exist at document_start, but documentElement does.
+    (document.body || document.documentElement).appendChild(el);
+})();
+function sendMessage(message, cb) {
+    message["uniqueId"] = uniqueId;
+    window.browser.runtime.sendMessage(message, function (response) {
+        if (window.browser.runtime && window.browser.runtime.lastError) {
+            return;
+        }
+        if (cb) {
+            cb(response);
+        }
+    });
+};
+
+function listenForMessage(callback) {
+    window.browser.runtime.onMessage.addListener(callback);
+};
+
+//_____________________________________________________________________________________
+
+var spectorLoadedKey = "SPECTOR_LOADED";
+var spectorCaptureOnLoadKey = "SPECTOR_CAPTUREONLOAD";
+var spectorCaptureOnLoadCommandCountKey = "SPECTOR_CAPTUREONLOAD_COMMANDCOUNT";
+var spectorCaptureOnLoadTransientKey = "SPECTOR_CAPTUREONLOAD_TRANSIENT";
+var spectorCaptureOnLoadQuickCaptureKey = "SPECTOR_CAPTUREONLOAD_QUICKCAPTURE";
+var spectorCaptureOnLoadFullCaptureKey = "SPECTOR_CAPTUREONLOAD_FULLCAPTURE";
+var captureOffScreenKey = "SPECTOR_CAPTUREOFFSCREEN";
+var workerAutoInjectKey = "SPECTOR_WORKERAUTOINJECT";
+var spectorCommunicationElementId = "SPECTOR_COMMUNICATION";
+var spectorCommunicationQuickCaptureElementId = "SPECTOR_COMMUNICATION_QUICKCAPTURE";
+var spectorCommunicationFullCaptureElementId = "SPECTOR_COMMUNICATION_FULLCAPTURE";
+var spectorCommunicationCommandCountElementId = "SPECTOR_COMMUNICATION_COMMANDCOUNT";
+var spectorCommunicationRebuildProgramElementId = "SPECTOR_COMMUNICATION_REBUILDPROGRAM";
+var spectorCommunicationShaderDelayElementId = "SPECTOR_COMMUNICATION_SHADERDELAY";
+var spectorShaderCompileDelayKey = "SPECTOR_SHADERCOMPILEDELAY";
+
+var spectorContextTypeKey = "__spector_context_type";
+
+var captureOffScreen = (sessionStorage.getItem(captureOffScreenKey) === "true");
+var workerAutoInject = (sessionStorage.getItem(workerAutoInjectKey) === "true");
+
+var frameId = null;
+
+// In case the spector injection has been requested, inject the library in the page.
+if (sessionStorage.getItem(spectorLoadedKey)) {
+
+    document.addEventListener('SpectorOnCaptureEvent', function (e) {
+        var capture = e.detail.capture;
+        // Keep a rolling history of recent captures (most recent first) so the
+        // result view's Compare tab (#155) has a previous capture to diff
+        // against. `unlimitedStorage` is granted, but the history is still
+        // capped to keep result-tab loads fast.
+        var MAX_CAPTURE_HISTORY = 5;
+        try {
+            browser.storage.local.get("captureHistory", function (items) {
+                var history = (items && items.captureHistory) || [];
+                history.unshift(capture);
+                if (history.length > MAX_CAPTURE_HISTORY) {
+                    history = history.slice(0, MAX_CAPTURE_HISTORY);
+                }
+                browser.storage.local.set({
+                    "currentCapture": capture,
+                    "captureHistory": history,
+                }, function () {
+                    sendMessage({ captureDone: true });
+                });
+            });
+        } catch (err) {
+            // Fallback: at least store the just-taken capture.
+            browser.storage.local.set({ "currentCapture": capture }, function () {
+                sendMessage({ captureDone: true });
+            });
+        }
+    }, false);
+
+    document.addEventListener('SpectorOnErrorEvent', function (e) {
+        sendMessage({ errorString: e.detail.errorString });
+    }, false);
+
+    document.addEventListener('SpectorFPSEvent', function (e) {
+        sendMessage({ fps: e.detail.fps });
+    }, false);
+
+    document.addEventListener('SpectorOnProgramRebuilt', function (e) {
+        sendMessage({ 
+            programRebuilt: {
+                programId: e.detail.programId, 
+                errorString: e.detail.errorString 
+            },
+            tabId: e.detail.tabId
+        });
+    }, false);
+
+    document.addEventListener('SpectorOnCanvasListEvent', function(e) {
+        var canvasList = e.detail.canvasList;
+
+        var uiInformation = [];
+        for (var i = 0; i < canvasList.length; i++) {
+            var canvasInformation = canvasList[i];
+            uiInformation.push({
+                id: canvasInformation.id,
+                width: canvasInformation.width,
+                height: canvasInformation.height,
+                ref: canvasInformation.ref
+            });
+        }
+
+        // Inform the extension that canvases are present (2 means injection has been done, 1 means ready to inject)
+        sendMessage({ canvases: uiInformation, captureOffScreen: true, workerAutoInject: workerAutoInject }, function (response) {
+            frameId = response.frameId;
+        });
+    });
+}
+else {
+    document.addEventListener('SpectorWebGLCanvasAvailableEvent', function(e) {
+        // Inform the extension that canvases are present (2 means injection has been done, 1 means ready to inject)
+        sendMessage({ present: 1 }, function (response) {
+            frameId = response.frameId;
+        });
+    }, false);
+}
+
+// Worker capture events are handled by contentScript.js in the page world.
+// It tracks Workers via window.__SPECTOR_Canvases and handles capture routing.
+
+var refreshCanvases = function() {
+    if (sessionStorage.getItem(spectorLoadedKey)) {
+        // Spector is loaded — the SpectorRequestCanvasListEvent handler in
+        // contentScript.js builds a complete list (DOM + Worker + transferred
+        // canvases) and sends it back via SpectorOnCanvasListEvent.  No
+        // separate DOM scan needed.
+        var myEvent = new CustomEvent("SpectorRequestCanvasListEvent");
+        document.dispatchEvent(myEvent);
+    } else {
+        // Spector not loaded — fall back to DOM scan only.
+        var canvasesInformation = [];
+        if (document.body) {
+            var canvasElements = document.body.querySelectorAll("canvas");
+            if (canvasElements.length > 0) {
+                for (var i = 0; i < canvasElements.length; i++) {
+                    var canvas = canvasElements[i];
+                    var context = null;
+                    try {
+                        context = canvas.getContext(canvas.getAttribute(spectorContextTypeKey));
+                    }
+                    catch (e) {
+                        // Do Nothing.
+                    }
+                    if (context) {
+                        canvasesInformation.push({
+                            id: canvas.id,
+                            width: canvas.width,
+                            height: canvas.height,
+                            ref: i
+                        });
+                    }
+                }
+            }
+        }
+        // Settings belong to the frame, not its canvases. Always report an
+        // empty list too, so a canvas-free top frame can clear stale popup state.
+        sendMessage({ canvases: canvasesInformation, captureOffScreen: false, workerAutoInject: workerAutoInject }, function (response) {
+            frameId = response.frameId;
+        });
+    }
+}
+
+// Check for existing canvas a bit after the end of the loading.
+document.addEventListener("DOMContentLoaded", function () {
+    if (sessionStorage.getItem(spectorLoadedKey)) {
+        // Inform the extension that canvases are present (2 means injection has been done, 1 means ready to inject)
+        sendMessage({ present: 2 }, function (response) {
+            frameId = response.frameId;
+        });
+
+        // Refresh the canvas list.
+        setTimeout(function () {
+            sendMessage({ pageReload: true }, function (response) {
+                frameId = response.frameId;
+            });
+        }, 500);
+    }
+});
+
+listenForMessage(function (message) {
+    var action = message.action;
+    // Only answer to actions.
+    if (!action) {
+        return;
+    }
+
+    // We need to reload to inject the scripts.
+    if (action === "pageAction") {
+        if (!sessionStorage.getItem(spectorLoadedKey)) {
+            sessionStorage.setItem(spectorLoadedKey, "true");
+            // Delay for all frames.
+            setTimeout(function () { window.location.reload(); }, 50);
+            return;
+        }
+    }
+
+    // Set offscreen canvas mode.
+    if (action === "changeOffScreen") {
+        sessionStorage.setItem(captureOffScreenKey, message.captureOffScreen ? "true" : "false");
+        // Delay for all frames.
+        setTimeout(function () { window.location.reload(); }, 50);
+        return;
+    }
+
+    // Like offscreen capture, persist per tab/origin session before reloading
+    // all frames. MAIN reads this synchronously; no async storage bridge needed.
+    if (action === "changeWorkerAutoInject") {
+        sessionStorage.setItem(workerAutoInjectKey, message.workerAutoInject === true ? "true" : "false");
+        setTimeout(function () { window.location.reload(); }, 50);
+        return;
+    }
+
+    // We need to reload to inject the capture loading sequence.
+    if (action === "captureOnLoad") {
+        sessionStorage.setItem(spectorCaptureOnLoadTransientKey, message.transient);
+        sessionStorage.setItem(spectorCaptureOnLoadQuickCaptureKey, message.quickCapture);
+        sessionStorage.setItem(spectorCaptureOnLoadFullCaptureKey, message.fullCapture);
+        sessionStorage.setItem(spectorCaptureOnLoadCommandCountKey, message.commandCount);
+        sessionStorage.setItem(spectorCaptureOnLoadKey, "true");
+
+        // Delay for all frames.
+        setTimeout(function () { window.location.reload(); }, 50);
+        return;
+    }
+
+    // Let the paused canvas play again. 
+    if (action === "playAll") {
+        var myEvent = new CustomEvent("SpectorRequestPlayEvent");
+        document.dispatchEvent(myEvent);
+        return;
+    }
+
+    // Simulate slow parallel shader compilation. Applies live (no reload) and
+    // is persisted for the tab session so it re-applies after a page reload.
+    if (action === "setShaderCompileDelay") {
+        var delayMs = parseInt(message.delayMs, 10);
+        if (isNaN(delayMs) || delayMs < 0) {
+            delayMs = 0;
+        }
+        sessionStorage.setItem(spectorShaderCompileDelayKey, String(delayMs));
+
+        var delayElement = document.getElementById(spectorCommunicationShaderDelayElementId);
+        if (delayElement) {
+            delayElement.value = String(delayMs);
+        }
+        var myEvent = new CustomEvent("SpectorRequestSetShaderCompileDelayEvent");
+        document.dispatchEvent(myEvent);
+        return;
+    }
+
+    // Let s refresh the canvases list. 
+    if (action === "requestCanvases") {
+        setTimeout(function () { refreshCanvases(); }, 0);
+        setTimeout(function () { refreshCanvases(); }, 1000);
+        return;
+    }
+
+    // Following actions are only valid for the selected frame.
+    var canvasRef = message.canvasRef;
+    if (canvasRef.frameId !== frameId) {
+        return;
+    }
+
+    if (action === "pause") {
+        var myEvent = new CustomEvent("SpectorRequestPauseEvent");
+        document.dispatchEvent(myEvent);
+    }
+    else if (action === "play") {
+        var myEvent = new CustomEvent("SpectorRequestPlayEvent");
+        document.dispatchEvent(myEvent);
+    }
+    else if (action === "playNextFrame") {
+        var myEvent = new CustomEvent("SpectorRequestPlayNextFrameEvent");
+        document.dispatchEvent(myEvent);
+    }
+    else if (action === "capture") {
+        var input = document.getElementById(spectorCommunicationElementId);
+        if (input) {
+            input.value = canvasRef.index;
+
+            var inputQuickCapture = document.getElementById(spectorCommunicationQuickCaptureElementId);
+            if (inputQuickCapture) {
+                inputQuickCapture.value = message.quickCapture ? "true" : "false";
+            }
+            var inputFullCapture = document.getElementById(spectorCommunicationFullCaptureElementId);
+            if (inputFullCapture) {
+                inputFullCapture.value = message.fullCapture ? "true" : "false";
+            }
+            var inputCommandCount = document.getElementById(spectorCommunicationCommandCountElementId);
+            if (inputCommandCount) {
+                inputCommandCount.value = message.commandCount;
+            }
+
+            var myEvent = new CustomEvent("SpectorRequestCaptureEvent");
+            document.dispatchEvent(myEvent);
+        }
+    }
+    else if (action === "rebuildProgram") {
+        var input = document.getElementById(spectorCommunicationRebuildProgramElementId);
+        var tabIdInput = document.getElementById(spectorCommunicationElementId);
+        if (input && tabIdInput) {
+            var buildInfo = message.buildInfo;
+            var buildInfoInText = JSON.stringify(buildInfo);
+            input.value = buildInfoInText;
+            tabIdInput.value = canvasRef.tabId;
+
+            var myEvent = new CustomEvent("SpectorRequestRebuildProgramEvent");
+            document.dispatchEvent(myEvent);
+        }
+    }
+});
