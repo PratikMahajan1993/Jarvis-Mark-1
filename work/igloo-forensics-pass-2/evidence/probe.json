@@ -1,0 +1,5958 @@
+{
+  "method": "Browser-local response adapter exposes root; source identical check required. No Spector. Direct progress placements are interventions, not natural scroll.",
+  "states": [
+    {
+      "time": 17871.899999976158,
+      "url": "https://www.igloo.inc/",
+      "scrollY": 0,
+      "scroll": {
+        "total": 10.85,
+        "targetY1": 0.66,
+        "targetY2": 0.66,
+        "y": 0.66,
+        "velocity": 0
+      },
+      "autoCenter": {
+        "needed": false,
+        "animating": false,
+        "lastTarget": 0.66,
+        "lastTime": 0
+      },
+      "detailIndex": 0,
+      "isDetailOpen": false,
+      "root": {
+        "uProgress": 0,
+        "uProgressVel": 0,
+        "uInCubes": false,
+        "uDetailProgress": 0,
+        "uDetailProgress2": 0
+      },
+      "scenes": [
+        {
+          "name": "F3",
+          "progress": 0.4955223880597015,
+          "visible": true,
+          "camera": {
+            "position": [
+              -13.486748,
+              2.652266000000001,
+              14.433738
+            ],
+            "basePosition": [
+              -13.486748,
+              2.652266000000001,
+              14.433738
+            ],
+            "target": [
+              0,
+              1.236859,
+              0
+            ],
+            "up": [
+              -0.00036189329350655447,
+              0.9999998770517146,
+              -0.00033901297914217134
+            ],
+            "fov": 30
+          },
+          "timelineDuration": 21,
+          "post": {},
+          "particleCompute": {}
+        },
+        {
+          "name": "aF",
+          "progress": 0,
+          "visible": false,
+          "camera": {
+            "position": [
+              0,
+              0,
+              5
+            ],
+            "basePosition": [
+              0,
+              0,
+              5
+            ],
+            "target": [
+              0,
+              0,
+              0
+            ],
+            "up": [
+              0.009032024587862597,
+              0.999959206766118,
+              -0.00008564765142367928
+            ],
+            "fov": 45
+          },
+          "post": {},
+          "particleCompute": {}
+        },
+        {
+          "name": "UF",
+          "progress": 0,
+          "visible": false,
+          "camera": {
+            "position": [
+              0,
+              5.5,
+              0
+            ],
+            "basePosition": [
+              0,
+              1.5,
+              -2
+            ],
+            "target": [
+              0,
+              -2.5,
+              -1
+            ],
+            "up": [
+              -0.00005664631044815667,
+              0.9999999956361855,
+              -0.0000742887911070025
+            ],
+            "fov": 22
+          },
+          "timelineDuration": 9.2,
+          "post": {
+            "uGradientAlpha": 0,
+            "uRingProximity": 0
+          },
+          "currentLink": 0,
+          "uiEnabled": false,
+          "particleCompute": {
+            "uRotation": -0.00675,
+            "uCubeSize": 0.65,
+            "uVolumeScale": 1.2,
+            "uInteractForce": 0,
+            "uAdditionalNoise": 0,
+            "uShowNoise": 1
+          },
+          "floorAdditionalTime": 0
+        }
+      ],
+      "detailCamera": {
+        "position": [
+          0,
+          0,
+          2.5
+        ],
+        "basePosition": [
+          0,
+          0,
+          2.5
+        ],
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "up": [
+          0.01659632253030459,
+          0.999862220009381,
+          -0.0003210551081858277
+        ],
+        "fov": 45
+      },
+      "label": "hero-settled"
+    },
+    {
+      "time": 19541.700000047684,
+      "url": "https://www.igloo.inc/",
+      "scrollY": 0,
+      "scroll": {
+        "total": 10.85,
+        "targetY1": 0.7505013410306179,
+        "targetY2": 0.885,
+        "y": 0.7043362729872824,
+        "velocity": 0.0411673160623022
+      },
+      "autoCenter": {
+        "needed": true,
+        "animating": false,
+        "lastTarget": 0.885,
+        "lastTime": 15.357
+      },
+      "detailIndex": 0,
+      "isDetailOpen": false,
+      "root": {
+        "uProgress": 0,
+        "uProgressVel": 0.0411673160623022,
+        "uInCubes": false,
+        "uDetailProgress": 0,
+        "uDetailProgress2": 0
+      },
+      "scenes": [
+        {
+          "name": "F3",
+          "progress": 0.5087570964141142,
+          "visible": true,
+          "camera": {
+            "position": [
+              -13.517161,
+              2.626860999999998,
+              14.585806
+            ],
+            "basePosition": [
+              -13.526961,
+              2.6196030000000015,
+              14.634807
+            ],
+            "target": [
+              0,
+              1.186049,
+              0
+            ],
+            "up": [
+              -0.003479190201820745,
+              0.9999886933840374,
+              -0.003241656925900794
+            ],
+            "fov": 30
+          },
+          "timelineDuration": 21,
+          "post": {},
+          "particleCompute": {}
+        },
+        {
+          "name": "aF",
+          "progress": 0,
+          "visible": false,
+          "camera": {
+            "position": [
+              0,
+              0,
+              5
+            ],
+            "basePosition": [
+              0,
+              0,
+              5
+            ],
+            "target": [
+              0,
+              0,
+              0
+            ],
+            "up": [
+              0.009032024587862597,
+              0.999959206766118,
+              -0.00008564765142367928
+            ],
+            "fov": 45
+          },
+          "post": {},
+          "particleCompute": {}
+        },
+        {
+          "name": "UF",
+          "progress": 0,
+          "visible": false,
+          "camera": {
+            "position": [
+              0,
+              5.5,
+              0
+            ],
+            "basePosition": [
+              0,
+              1.5,
+              -2
+            ],
+            "target": [
+              0,
+              -2.5,
+              -1
+            ],
+            "up": [
+              -0.00005664631044815667,
+              0.9999999956361855,
+              -0.0000742887911070025
+            ],
+            "fov": 22
+          },
+          "timelineDuration": 9.2,
+          "post": {
+            "uGradientAlpha": 0,
+            "uRingProximity": 0
+          },
+          "currentLink": 0,
+          "uiEnabled": false,
+          "particleCompute": {
+            "uRotation": -0.00675,
+            "uCubeSize": 0.65,
+            "uVolumeScale": 1.2,
+            "uInteractForce": 0,
+            "uAdditionalNoise": 0,
+            "uShowNoise": 1
+          },
+          "floorAdditionalTime": 0
+        }
+      ],
+      "detailCamera": {
+        "position": [
+          0,
+          0,
+          2.5
+        ],
+        "basePosition": [
+          0,
+          0,
+          2.5
+        ],
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "up": [
+          0.01659632253030459,
+          0.999862220009381,
+          -0.0003210551081858277
+        ],
+        "fov": 45
+      },
+      "label": "hero-wheel-100"
+    },
+    {
+      "time": 19758.700000047684,
+      "url": "https://www.igloo.inc/",
+      "scrollY": 0,
+      "scroll": {
+        "total": 10.85,
+        "targetY1": 0.8332044125685978,
+        "targetY2": 0.885,
+        "y": 0.800213186558646,
+        "velocity": 0.11479901596862604
+      },
+      "autoCenter": {
+        "needed": true,
+        "animating": false,
+        "lastTarget": 0.885,
+        "lastTime": 15.357
+      },
+      "detailIndex": 0,
+      "isDetailOpen": false,
+      "root": {
+        "uProgress": 0,
+        "uProgressVel": 0.11479901596862604,
+        "uInCubes": false,
+        "uDetailProgress": 0,
+        "uDetailProgress2": 0
+      },
+      "scenes": [
+        {
+          "name": "F3",
+          "progress": 0.5373770706145212,
+          "visible": true,
+          "camera": {
+            "position": [
+              -13.614786,
+              2.5698749999999997,
+              15.07393
+            ],
+            "basePosition": [
+              -13.624705,
+              2.565646000000001,
+              15.123523
+            ],
+            "target": [
+              0,
+              1.102116,
+              0
+            ],
+            "up": [
+              -0.0030088954005694072,
+              0.999991727686941,
+              -0.0027369885194116757
+            ],
+            "fov": 30
+          },
+          "timelineDuration": 21,
+          "post": {},
+          "particleCompute": {}
+        },
+        {
+          "name": "aF",
+          "progress": 0,
+          "visible": false,
+          "camera": {
+            "position": [
+              0,
+              0,
+              5
+            ],
+            "basePosition": [
+              0,
+              0,
+              5
+            ],
+            "target": [
+              0,
+              0,
+              0
+            ],
+            "up": [
+              0.009032024587862597,
+              0.999959206766118,
+              -0.00008564765142367928
+            ],
+            "fov": 45
+          },
+          "post": {},
+          "particleCompute": {}
+        },
+        {
+          "name": "UF",
+          "progress": 0,
+          "visible": false,
+          "camera": {
+            "position": [
+              0,
+              5.5,
+              0
+            ],
+            "basePosition": [
+              0,
+              1.5,
+              -2
+            ],
+            "target": [
+              0,
+              -2.5,
+              -1
+            ],
+            "up": [
+              -0.00005664631044815667,
+              0.9999999956361855,
+              -0.0000742887911070025
+            ],
+            "fov": 22
+          },
+          "timelineDuration": 9.2,
+          "post": {
+            "uGradientAlpha": 0,
+            "uRingProximity": 0
+          },
+          "currentLink": 0,
+          "uiEnabled": false,
+          "particleCompute": {
+            "uRotation": -0.00675,
+            "uCubeSize": 0.65,
+            "uVolumeScale": 1.2,
+            "uInteractForce": 0,
+            "uAdditionalNoise": 0,
+            "uShowNoise": 1
+          },
+          "floorAdditionalTime": 0
+        }
+      ],
+      "detailCamera": {
+        "position": [
+          0,
+          0,
+          2.5
+        ],
+        "basePosition": [
+          0,
+          0,
+          2.5
+        ],
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "up": [
+          0.01659632253030459,
+          0.999862220009381,
+          -0.0003210551081858277
+        ],
+        "fov": 45
+      },
+      "label": "hero-wheel-200"
+    },
+    {
+      "time": 20286.600000023842,
+      "url": "https://www.igloo.inc/",
+      "scrollY": 0,
+      "scroll": {
+        "total": 10.85,
+        "targetY1": 0.8810466074155876,
+        "targetY2": 0.885,
+        "y": 0.8779542318430382,
+        "velocity": 0.10793517703175491
+      },
+      "autoCenter": {
+        "needed": true,
+        "animating": false,
+        "lastTarget": 0.885,
+        "lastTime": 15.357
+      },
+      "detailIndex": 0,
+      "isDetailOpen": false,
+      "root": {
+        "uProgress": 0,
+        "uProgressVel": 0.10793517703175491,
+        "uInCubes": false,
+        "uDetailProgress": 0,
+        "uDetailProgress2": 0
+      },
+      "scenes": [
+        {
+          "name": "F3",
+          "progress": 0.5605833527889666,
+          "visible": true,
+          "camera": {
+            "position": [
+              -13.713925,
+              2.536477999999999,
+              15.569627
+            ],
+            "basePosition": [
+              -13.714783,
+              2.5362620000000007,
+              15.573916
+            ],
+            "target": [
+              0,
+              1.056408,
+              0
+            ],
+            "up": [
+              -0.0007983038395766813,
+              0.999999428133597,
+              -0.0007116484094872235
+            ],
+            "fov": 30
+          },
+          "timelineDuration": 21,
+          "post": {},
+          "particleCompute": {}
+        },
+        {
+          "name": "aF",
+          "progress": 0,
+          "visible": false,
+          "camera": {
+            "position": [
+              0,
+              0,
+              5
+            ],
+            "basePosition": [
+              0,
+              0,
+              5
+            ],
+            "target": [
+              0,
+              0,
+              0
+            ],
+            "up": [
+              0.009032024587862597,
+              0.999959206766118,
+              -0.00008564765142367928
+            ],
+            "fov": 45
+          },
+          "post": {},
+          "particleCompute": {}
+        },
+        {
+          "name": "UF",
+          "progress": 0,
+          "visible": false,
+          "camera": {
+            "position": [
+              0,
+              5.5,
+              0
+            ],
+            "basePosition": [
+              0,
+              1.5,
+              -2
+            ],
+            "target": [
+              0,
+              -2.5,
+              -1
+            ],
+            "up": [
+              -0.00005664631044815667,
+              0.9999999956361855,
+              -0.0000742887911070025
+            ],
+            "fov": 22
+          },
+          "timelineDuration": 9.2,
+          "post": {
+            "uGradientAlpha": 0,
+            "uRingProximity": 0
+          },
+          "currentLink": 0,
+          "uiEnabled": false,
+          "particleCompute": {
+            "uRotation": -0.00675,
+            "uCubeSize": 0.65,
+            "uVolumeScale": 1.2,
+            "uInteractForce": 0,
+            "uAdditionalNoise": 0,
+            "uShowNoise": 1
+          },
+          "floorAdditionalTime": 0
+        }
+      ],
+      "detailCamera": {
+        "position": [
+          0,
+          0,
+          2.5
+        ],
+        "basePosition": [
+          0,
+          0,
+          2.5
+        ],
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "up": [
+          0.01659632253030459,
+          0.999862220009381,
+          -0.0003210551081858277
+        ],
+        "fov": 45
+      },
+      "label": "hero-wheel-500"
+    },
+    {
+      "time": 21216.399999976158,
+      "url": "https://www.igloo.inc/",
+      "scrollY": 0,
+      "scroll": {
+        "total": 10.85,
+        "targetY1": 0.8849487480815814,
+        "targetY2": 0.885,
+        "y": 0.8849086792415031,
+        "velocity": 0.03790585565927378
+      },
+      "autoCenter": {
+        "needed": false,
+        "animating": false,
+        "lastTarget": 0.885,
+        "lastTime": 15.357
+      },
+      "detailIndex": 0,
+      "isDetailOpen": false,
+      "root": {
+        "uProgress": 0,
+        "uProgressVel": 0.03790585565927378,
+        "uInCubes": false,
+        "uDetailProgress": 0,
+        "uDetailProgress2": 0
+      },
+      "scenes": [
+        {
+          "name": "F3",
+          "progress": 0.5626593072362696,
+          "visible": true,
+          "camera": {
+            "position": [
+              -13.7233,
+              2.5341780000000007,
+              15.6165
+            ],
+            "basePosition": [
+              -13.723314,
+              2.534175000000001,
+              15.616568
+            ],
+            "target": [
+              0,
+              1.053161,
+              0
+            ],
+            "up": [
+              0.0015888703947493736,
+              0.9999977427365166,
+              0.0014106781136381692
+            ],
+            "fov": 30
+          },
+          "timelineDuration": 21,
+          "post": {},
+          "particleCompute": {}
+        },
+        {
+          "name": "aF",
+          "progress": 0,
+          "visible": false,
+          "camera": {
+            "position": [
+              0,
+              0,
+              5
+            ],
+            "basePosition": [
+              0,
+              0,
+              5
+            ],
+            "target": [
+              0,
+              0,
+              0
+            ],
+            "up": [
+              0.009032024587862597,
+              0.999959206766118,
+              -0.00008564765142367928
+            ],
+            "fov": 45
+          },
+          "post": {},
+          "particleCompute": {}
+        },
+        {
+          "name": "UF",
+          "progress": 0,
+          "visible": false,
+          "camera": {
+            "position": [
+              0,
+              5.5,
+              0
+            ],
+            "basePosition": [
+              0,
+              1.5,
+              -2
+            ],
+            "target": [
+              0,
+              -2.5,
+              -1
+            ],
+            "up": [
+              -0.00005664631044815667,
+              0.9999999956361855,
+              -0.0000742887911070025
+            ],
+            "fov": 22
+          },
+          "timelineDuration": 9.2,
+          "post": {
+            "uGradientAlpha": 0,
+            "uRingProximity": 0
+          },
+          "currentLink": 0,
+          "uiEnabled": false,
+          "particleCompute": {
+            "uRotation": -0.00675,
+            "uCubeSize": 0.65,
+            "uVolumeScale": 1.2,
+            "uInteractForce": 0,
+            "uAdditionalNoise": 0,
+            "uShowNoise": 1
+          },
+          "floorAdditionalTime": 0
+        }
+      ],
+      "detailCamera": {
+        "position": [
+          0,
+          0,
+          2.5
+        ],
+        "basePosition": [
+          0,
+          0,
+          2.5
+        ],
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "up": [
+          0.01659632253030459,
+          0.999862220009381,
+          -0.0003210551081858277
+        ],
+        "fov": 45
+      },
+      "label": "hero-wheel-900"
+    },
+    {
+      "time": 22436.700000047684,
+      "url": "https://www.igloo.inc/",
+      "scrollY": 0,
+      "scroll": {
+        "total": 10.85,
+        "targetY1": 0.885,
+        "targetY2": 0.885,
+        "y": 0.885,
+        "velocity": 0.008723802249808127
+      },
+      "autoCenter": {
+        "needed": false,
+        "animating": false,
+        "lastTarget": 0.885,
+        "lastTime": 15.357
+      },
+      "detailIndex": 0,
+      "isDetailOpen": false,
+      "root": {
+        "uProgress": 0,
+        "uProgressVel": 0.008723802249808127,
+        "uInCubes": false,
+        "uDetailProgress": 0,
+        "uDetailProgress2": 0
+      },
+      "scenes": [
+        {
+          "name": "F3",
+          "progress": 0.5626865671641791,
+          "visible": true,
+          "camera": {
+            "position": [
+              -13.723426,
+              2.534148000000002,
+              15.617131
+            ],
+            "basePosition": [
+              -13.723426,
+              2.534148000000002,
+              15.617131
+            ],
+            "target": [
+              0,
+              1.053119,
+              0
+            ],
+            "up": [
+              0.0009706586573196433,
+              0.999999168823377,
+              0.0008486308538640759
+            ],
+            "fov": 30
+          },
+          "timelineDuration": 21,
+          "post": {},
+          "particleCompute": {}
+        },
+        {
+          "name": "aF",
+          "progress": 0,
+          "visible": false,
+          "camera": {
+            "position": [
+              0,
+              0,
+              5
+            ],
+            "basePosition": [
+              0,
+              0,
+              5
+            ],
+            "target": [
+              0,
+              0,
+              0
+            ],
+            "up": [
+              0.009032024587862597,
+              0.999959206766118,
+              -0.00008564765142367928
+            ],
+            "fov": 45
+          },
+          "post": {},
+          "particleCompute": {}
+        },
+        {
+          "name": "UF",
+          "progress": 0,
+          "visible": false,
+          "camera": {
+            "position": [
+              0,
+              5.5,
+              0
+            ],
+            "basePosition": [
+              0,
+              1.5,
+              -2
+            ],
+            "target": [
+              0,
+              -2.5,
+              -1
+            ],
+            "up": [
+              -0.00005664631044815667,
+              0.9999999956361855,
+              -0.0000742887911070025
+            ],
+            "fov": 22
+          },
+          "timelineDuration": 9.2,
+          "post": {
+            "uGradientAlpha": 0,
+            "uRingProximity": 0
+          },
+          "currentLink": 0,
+          "uiEnabled": false,
+          "particleCompute": {
+            "uRotation": -0.00675,
+            "uCubeSize": 0.65,
+            "uVolumeScale": 1.2,
+            "uInteractForce": 0,
+            "uAdditionalNoise": 0,
+            "uShowNoise": 1
+          },
+          "floorAdditionalTime": 0
+        }
+      ],
+      "detailCamera": {
+        "position": [
+          0,
+          0,
+          2.5
+        ],
+        "basePosition": [
+          0,
+          0,
+          2.5
+        ],
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "up": [
+          0.01659632253030459,
+          0.999862220009381,
+          -0.0003210551081858277
+        ],
+        "fov": 45
+      },
+      "label": "hero-wheel-1200"
+    },
+    {
+      "time": 25967.700000047684,
+      "url": "https://www.igloo.inc/",
+      "scrollY": 0,
+      "scroll": {
+        "total": 10.85,
+        "targetY1": 0.885,
+        "targetY2": 0.885,
+        "y": 0.885,
+        "velocity": 0
+      },
+      "autoCenter": {
+        "needed": false,
+        "animating": false,
+        "lastTarget": 0.885,
+        "lastTime": 15.357
+      },
+      "detailIndex": 0,
+      "isDetailOpen": false,
+      "root": {
+        "uProgress": 0,
+        "uProgressVel": 0,
+        "uInCubes": false,
+        "uDetailProgress": 0,
+        "uDetailProgress2": 0
+      },
+      "scenes": [
+        {
+          "name": "F3",
+          "progress": 0.5626865671641791,
+          "visible": true,
+          "camera": {
+            "position": [
+              -13.723426,
+              2.534148000000002,
+              15.617131
+            ],
+            "basePosition": [
+              -13.723426,
+              2.534148000000002,
+              15.617131
+            ],
+            "target": [
+              0,
+              1.053119,
+              0
+            ],
+            "up": [
+              -0.0009925628081835333,
+              0.9999991315294443,
+              -0.0008670406154938342
+            ],
+            "fov": 30
+          },
+          "timelineDuration": 21,
+          "post": {},
+          "particleCompute": {}
+        },
+        {
+          "name": "aF",
+          "progress": 0,
+          "visible": false,
+          "camera": {
+            "position": [
+              0,
+              0,
+              5
+            ],
+            "basePosition": [
+              0,
+              0,
+              5
+            ],
+            "target": [
+              0,
+              0,
+              0
+            ],
+            "up": [
+              0.009032024587862597,
+              0.999959206766118,
+              -0.00008564765142367928
+            ],
+            "fov": 45
+          },
+          "post": {},
+          "particleCompute": {}
+        },
+        {
+          "name": "UF",
+          "progress": 0,
+          "visible": false,
+          "camera": {
+            "position": [
+              0,
+              5.5,
+              0
+            ],
+            "basePosition": [
+              0,
+              1.5,
+              -2
+            ],
+            "target": [
+              0,
+              -2.5,
+              -1
+            ],
+            "up": [
+              -0.00005664631044815667,
+              0.9999999956361855,
+              -0.0000742887911070025
+            ],
+            "fov": 22
+          },
+          "timelineDuration": 9.2,
+          "post": {
+            "uGradientAlpha": 0,
+            "uRingProximity": 0
+          },
+          "currentLink": 0,
+          "uiEnabled": false,
+          "particleCompute": {
+            "uRotation": -0.00675,
+            "uCubeSize": 0.65,
+            "uVolumeScale": 1.2,
+            "uInteractForce": 0,
+            "uAdditionalNoise": 0,
+            "uShowNoise": 1
+          },
+          "floorAdditionalTime": 0
+        }
+      ],
+      "detailCamera": {
+        "position": [
+          0,
+          0,
+          2.5
+        ],
+        "basePosition": [
+          0,
+          0,
+          2.5
+        ],
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "up": [
+          0.01659632253030459,
+          0.999862220009381,
+          -0.0003210551081858277
+        ],
+        "fov": 45
+      },
+      "label": "hero-wheel-1800"
+    },
+    {
+      "time": 26839.399999976158,
+      "url": "https://www.igloo.inc/",
+      "scrollY": 0,
+      "scroll": {
+        "total": 10.85,
+        "targetY1": 1.85,
+        "targetY2": 1.85,
+        "y": 1.85,
+        "velocity": 0
+      },
+      "autoCenter": {
+        "needed": false,
+        "animating": false,
+        "lastTarget": 1.85,
+        "lastTime": 15.357
+      },
+      "detailIndex": 0,
+      "isDetailOpen": false,
+      "root": {
+        "uProgress": 0.5,
+        "uProgressVel": 0,
+        "uInCubes": false,
+        "uDetailProgress": 0,
+        "uDetailProgress2": 0
+      },
+      "scenes": [
+        {
+          "name": "F3",
+          "progress": 0.8507462686567164,
+          "visible": true,
+          "camera": {
+            "position": [
+              -15.04951,
+              2.5,
+              22.24755
+            ],
+            "basePosition": [
+              -15.04951,
+              2.5,
+              22.24755
+            ],
+            "target": [
+              0,
+              1,
+              0
+            ],
+            "up": [
+              0.001762740736384899,
+              0.9999977329608332,
+              0.001194494993881341
+            ],
+            "fov": 30
+          },
+          "timelineDuration": 21,
+          "post": {},
+          "particleCompute": {}
+        },
+        {
+          "name": "aF",
+          "progress": 0.12500000000000003,
+          "visible": true,
+          "camera": {
+            "position": [
+              0,
+              -2.8750000000000004,
+              5
+            ],
+            "basePosition": [
+              0,
+              -2.8750000000000004,
+              5
+            ],
+            "target": [
+              0,
+              -2.8750000000000004,
+              0
+            ],
+            "up": [
+              -0.0017052975133894557,
+              0.9999985458802308,
+              -0.000014064658682744384
+            ],
+            "fov": 45
+          },
+          "post": {},
+          "particleCompute": {}
+        },
+        {
+          "name": "UF",
+          "progress": 0,
+          "visible": false,
+          "camera": {
+            "position": [
+              0,
+              5.5,
+              0
+            ],
+            "basePosition": [
+              0,
+              1.5,
+              -2
+            ],
+            "target": [
+              0,
+              -2.5,
+              -1
+            ],
+            "up": [
+              -0.00005664631044815667,
+              0.9999999956361855,
+              -0.0000742887911070025
+            ],
+            "fov": 22
+          },
+          "timelineDuration": 9.2,
+          "post": {
+            "uGradientAlpha": 0,
+            "uRingProximity": 0
+          },
+          "currentLink": 0,
+          "uiEnabled": false,
+          "particleCompute": {
+            "uRotation": -0.00675,
+            "uCubeSize": 0.65,
+            "uVolumeScale": 1.2,
+            "uInteractForce": 0,
+            "uAdditionalNoise": 0,
+            "uShowNoise": 1
+          },
+          "floorAdditionalTime": 0
+        }
+      ],
+      "detailCamera": {
+        "position": [
+          0,
+          0,
+          2.5
+        ],
+        "basePosition": [
+          0,
+          0,
+          2.5
+        ],
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "up": [
+          0.01659632253030459,
+          0.999862220009381,
+          -0.0003210551081858277
+        ],
+        "fov": 45
+      },
+      "label": "hero-cubes-overlap"
+    },
+    {
+      "time": 29055.5,
+      "url": "https://www.igloo.inc/",
+      "scrollY": 0,
+      "scroll": {
+        "total": 10.85,
+        "targetY1": 2.35,
+        "targetY2": 2.35,
+        "y": 2.35,
+        "velocity": 0
+      },
+      "autoCenter": {
+        "needed": false,
+        "animating": false,
+        "lastTarget": 2.35,
+        "lastTime": 15.357
+      },
+      "detailIndex": 0,
+      "isDetailOpen": false,
+      "root": {
+        "uProgress": 0,
+        "uProgressVel": 0,
+        "uInCubes": true,
+        "uDetailProgress": 0,
+        "uDetailProgress2": 0
+      },
+      "scenes": [
+        {
+          "name": "F3",
+          "progress": 0.8507462686567164,
+          "visible": false,
+          "camera": {
+            "position": [
+              -15.04951,
+              2.5,
+              22.24755
+            ],
+            "basePosition": [
+              -15.04951,
+              2.5,
+              22.24755
+            ],
+            "target": [
+              0,
+              1,
+              0
+            ],
+            "up": [
+              0.0013254264401378689,
+              0.9999987226175,
+              0.0008933130023675913
+            ],
+            "fov": 30
+          },
+          "timelineDuration": 21,
+          "post": {},
+          "particleCompute": {}
+        },
+        {
+          "name": "aF",
+          "progress": 0.25000000000000006,
+          "visible": true,
+          "camera": {
+            "position": [
+              0,
+              -5.750000000000001,
+              5
+            ],
+            "basePosition": [
+              0,
+              -5.750000000000001,
+              5
+            ],
+            "target": [
+              0,
+              -5.750000000000001,
+              0
+            ],
+            "up": [
+              -0.001252417458280935,
+              0.9999992156300368,
+              -0.000013777569797503224
+            ],
+            "fov": 45
+          },
+          "post": {},
+          "particleCompute": {}
+        },
+        {
+          "name": "UF",
+          "progress": 0,
+          "visible": false,
+          "camera": {
+            "position": [
+              0,
+              5.5,
+              0
+            ],
+            "basePosition": [
+              0,
+              1.5,
+              -2
+            ],
+            "target": [
+              0,
+              -2.5,
+              -1
+            ],
+            "up": [
+              -0.00005664631044815667,
+              0.9999999956361855,
+              -0.0000742887911070025
+            ],
+            "fov": 22
+          },
+          "timelineDuration": 9.2,
+          "post": {
+            "uGradientAlpha": 0,
+            "uRingProximity": 0
+          },
+          "currentLink": 0,
+          "uiEnabled": false,
+          "particleCompute": {
+            "uRotation": -0.00675,
+            "uCubeSize": 0.65,
+            "uVolumeScale": 1.2,
+            "uInteractForce": 0,
+            "uAdditionalNoise": 0,
+            "uShowNoise": 1
+          },
+          "floorAdditionalTime": 0
+        }
+      ],
+      "detailCamera": {
+        "position": [
+          0,
+          0,
+          2.5
+        ],
+        "basePosition": [
+          0,
+          0,
+          2.5
+        ],
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "up": [
+          0.01659632253030459,
+          0.999862220009381,
+          -0.0003210551081858277
+        ],
+        "fov": 45
+      },
+      "label": "pudgy"
+    },
+    {
+      "time": 30980.800000071526,
+      "url": "https://www.igloo.inc/",
+      "scrollY": 0,
+      "scroll": {
+        "total": 10.85,
+        "targetY1": 2.85,
+        "targetY2": 2.85,
+        "y": 2.85,
+        "velocity": 0
+      },
+      "autoCenter": {
+        "needed": false,
+        "animating": false,
+        "lastTarget": 2.85,
+        "lastTime": 15.357
+      },
+      "detailIndex": 0,
+      "isDetailOpen": false,
+      "root": {
+        "uProgress": 0,
+        "uProgressVel": 0,
+        "uInCubes": true,
+        "uDetailProgress": 0,
+        "uDetailProgress2": 0
+      },
+      "scenes": [
+        {
+          "name": "F3",
+          "progress": 0.8507462686567164,
+          "visible": false,
+          "camera": {
+            "position": [
+              -15.04951,
+              2.5,
+              22.24755
+            ],
+            "basePosition": [
+              -15.04951,
+              2.5,
+              22.24755
+            ],
+            "target": [
+              0,
+              1,
+              0
+            ],
+            "up": [
+              0.0013254264401378689,
+              0.9999987226175,
+              0.0008933130023675913
+            ],
+            "fov": 30
+          },
+          "timelineDuration": 21,
+          "post": {},
+          "particleCompute": {}
+        },
+        {
+          "name": "aF",
+          "progress": 0.37500000000000006,
+          "visible": true,
+          "camera": {
+            "position": [
+              0,
+              -8.625000000000002,
+              5
+            ],
+            "basePosition": [
+              0,
+              -8.625000000000002,
+              5
+            ],
+            "target": [
+              0,
+              -8.625000000000002,
+              0
+            ],
+            "up": [
+              -0.0026969162159088795,
+              0.9999963629158828,
+              -0.000028247659287131266
+            ],
+            "fov": 45
+          },
+          "post": {},
+          "particleCompute": {}
+        },
+        {
+          "name": "UF",
+          "progress": 0,
+          "visible": false,
+          "camera": {
+            "position": [
+              0,
+              5.5,
+              0
+            ],
+            "basePosition": [
+              0,
+              1.5,
+              -2
+            ],
+            "target": [
+              0,
+              -2.5,
+              -1
+            ],
+            "up": [
+              -0.00005664631044815667,
+              0.9999999956361855,
+              -0.0000742887911070025
+            ],
+            "fov": 22
+          },
+          "timelineDuration": 9.2,
+          "post": {
+            "uGradientAlpha": 0,
+            "uRingProximity": 0
+          },
+          "currentLink": 0,
+          "uiEnabled": false,
+          "particleCompute": {
+            "uRotation": -0.00675,
+            "uCubeSize": 0.65,
+            "uVolumeScale": 1.2,
+            "uInteractForce": 0,
+            "uAdditionalNoise": 0,
+            "uShowNoise": 1
+          },
+          "floorAdditionalTime": 0
+        }
+      ],
+      "detailCamera": {
+        "position": [
+          0,
+          0,
+          2.5
+        ],
+        "basePosition": [
+          0,
+          0,
+          2.5
+        ],
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "up": [
+          0.01659632253030459,
+          0.999862220009381,
+          -0.0003210551081858277
+        ],
+        "fov": 45
+      },
+      "label": "between-cubes"
+    },
+    {
+      "time": 32999.5,
+      "url": "https://www.igloo.inc/",
+      "scrollY": 0,
+      "scroll": {
+        "total": 10.85,
+        "targetY1": 3.35,
+        "targetY2": 3.35,
+        "y": 3.35,
+        "velocity": 0
+      },
+      "autoCenter": {
+        "needed": false,
+        "animating": false,
+        "lastTarget": 3.35,
+        "lastTime": 27.099
+      },
+      "detailIndex": 0,
+      "isDetailOpen": false,
+      "root": {
+        "uProgress": 0,
+        "uProgressVel": 0,
+        "uInCubes": true,
+        "uDetailProgress": 0,
+        "uDetailProgress2": 0
+      },
+      "scenes": [
+        {
+          "name": "F3",
+          "progress": 0.8507462686567164,
+          "visible": false,
+          "camera": {
+            "position": [
+              -15.04951,
+              2.5,
+              22.24755
+            ],
+            "basePosition": [
+              -15.04951,
+              2.5,
+              22.24755
+            ],
+            "target": [
+              0,
+              1,
+              0
+            ],
+            "up": [
+              0.0013254264401378689,
+              0.9999987226175,
+              0.0008933130023675913
+            ],
+            "fov": 30
+          },
+          "timelineDuration": 21,
+          "post": {},
+          "particleCompute": {}
+        },
+        {
+          "name": "aF",
+          "progress": 0.49999999999999994,
+          "visible": true,
+          "camera": {
+            "position": [
+              0,
+              -11.499999999999998,
+              5
+            ],
+            "basePosition": [
+              0,
+              -11.499999999999998,
+              5
+            ],
+            "target": [
+              0,
+              -11.499999999999998,
+              0
+            ],
+            "up": [
+              -0.005055771325069321,
+              0.9999872186386366,
+              -0.00004166139832194661
+            ],
+            "fov": 45
+          },
+          "post": {},
+          "particleCompute": {}
+        },
+        {
+          "name": "UF",
+          "progress": 0,
+          "visible": false,
+          "camera": {
+            "position": [
+              0,
+              5.5,
+              0
+            ],
+            "basePosition": [
+              0,
+              1.5,
+              -2
+            ],
+            "target": [
+              0,
+              -2.5,
+              -1
+            ],
+            "up": [
+              -0.00005664631044815667,
+              0.9999999956361855,
+              -0.0000742887911070025
+            ],
+            "fov": 22
+          },
+          "timelineDuration": 9.2,
+          "post": {
+            "uGradientAlpha": 0,
+            "uRingProximity": 0
+          },
+          "currentLink": 0,
+          "uiEnabled": false,
+          "particleCompute": {
+            "uRotation": -0.00675,
+            "uCubeSize": 0.65,
+            "uVolumeScale": 1.2,
+            "uInteractForce": 0,
+            "uAdditionalNoise": 0,
+            "uShowNoise": 1
+          },
+          "floorAdditionalTime": 0
+        }
+      ],
+      "detailCamera": {
+        "position": [
+          0,
+          0,
+          2.5
+        ],
+        "basePosition": [
+          0,
+          0,
+          2.5
+        ],
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "up": [
+          0.01659632253030459,
+          0.999862220009381,
+          -0.0003210551081858277
+        ],
+        "fov": 45
+      },
+      "label": "overpass"
+    },
+    {
+      "time": 35364.200000047684,
+      "url": "https://www.igloo.inc/",
+      "scrollY": 0,
+      "scroll": {
+        "total": 10.85,
+        "targetY1": 4.35,
+        "targetY2": 4.35,
+        "y": 4.35,
+        "velocity": 0
+      },
+      "autoCenter": {
+        "needed": false,
+        "animating": false,
+        "lastTarget": 4.35,
+        "lastTime": 27.099
+      },
+      "detailIndex": 0,
+      "isDetailOpen": false,
+      "root": {
+        "uProgress": 0,
+        "uProgressVel": 0,
+        "uInCubes": true,
+        "uDetailProgress": 0,
+        "uDetailProgress2": 0
+      },
+      "scenes": [
+        {
+          "name": "F3",
+          "progress": 0.8507462686567164,
+          "visible": false,
+          "camera": {
+            "position": [
+              -15.04951,
+              2.5,
+              22.24755
+            ],
+            "basePosition": [
+              -15.04951,
+              2.5,
+              22.24755
+            ],
+            "target": [
+              0,
+              1,
+              0
+            ],
+            "up": [
+              0.0013254264401378689,
+              0.9999987226175,
+              0.0008933130023675913
+            ],
+            "fov": 30
+          },
+          "timelineDuration": 21,
+          "post": {},
+          "particleCompute": {}
+        },
+        {
+          "name": "aF",
+          "progress": 0.75,
+          "visible": true,
+          "camera": {
+            "position": [
+              0,
+              -17.25,
+              5
+            ],
+            "basePosition": [
+              0,
+              -17.25,
+              5
+            ],
+            "target": [
+              0,
+              -17.25,
+              0
+            ],
+            "up": [
+              -0.006631439509064853,
+              0.9999780109505305,
+              -0.00004031697274939677
+            ],
+            "fov": 45
+          },
+          "post": {},
+          "particleCompute": {}
+        },
+        {
+          "name": "UF",
+          "progress": 0,
+          "visible": false,
+          "camera": {
+            "position": [
+              0,
+              5.5,
+              0
+            ],
+            "basePosition": [
+              0,
+              1.5,
+              -2
+            ],
+            "target": [
+              0,
+              -2.5,
+              -1
+            ],
+            "up": [
+              -0.00005664631044815667,
+              0.9999999956361855,
+              -0.0000742887911070025
+            ],
+            "fov": 22
+          },
+          "timelineDuration": 9.2,
+          "post": {
+            "uGradientAlpha": 0,
+            "uRingProximity": 0
+          },
+          "currentLink": 0,
+          "uiEnabled": false,
+          "particleCompute": {
+            "uRotation": -0.00675,
+            "uCubeSize": 0.65,
+            "uVolumeScale": 1.2,
+            "uInteractForce": 0,
+            "uAdditionalNoise": 0,
+            "uShowNoise": 1
+          },
+          "floorAdditionalTime": 0
+        }
+      ],
+      "detailCamera": {
+        "position": [
+          0,
+          0,
+          2.5
+        ],
+        "basePosition": [
+          0,
+          0,
+          2.5
+        ],
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "up": [
+          0.01659632253030459,
+          0.999862220009381,
+          -0.0003210551081858277
+        ],
+        "fov": 45
+      },
+      "label": "abstract"
+    },
+    {
+      "time": 37001.200000047684,
+      "url": "https://www.igloo.inc/portfolio/abstract",
+      "scrollY": 0,
+      "scroll": {
+        "total": 10.85,
+        "targetY1": 4.35,
+        "targetY2": 4.35,
+        "y": 4.35,
+        "velocity": 0
+      },
+      "autoCenter": {
+        "needed": false,
+        "animating": true,
+        "lastTarget": 4.35,
+        "lastTime": 27.099
+      },
+      "detailIndex": 2,
+      "isDetailOpen": true,
+      "root": {
+        "uProgress": 0,
+        "uProgressVel": 0,
+        "uInCubes": true,
+        "uDetailProgress": 0,
+        "uDetailProgress2": 0
+      },
+      "scenes": [
+        {
+          "name": "F3",
+          "progress": 0.8507462686567164,
+          "visible": false,
+          "camera": {
+            "position": [
+              -15.04951,
+              2.5,
+              22.24755
+            ],
+            "basePosition": [
+              -15.04951,
+              2.5,
+              22.24755
+            ],
+            "target": [
+              0,
+              1,
+              0
+            ],
+            "up": [
+              0.0013254264401378689,
+              0.9999987226175,
+              0.0008933130023675913
+            ],
+            "fov": 30
+          },
+          "timelineDuration": 21,
+          "post": {},
+          "particleCompute": {}
+        },
+        {
+          "name": "aF",
+          "progress": 0.75,
+          "visible": true,
+          "camera": {
+            "position": [
+              0,
+              -17.25,
+              4.998959
+            ],
+            "basePosition": [
+              0,
+              -17.25,
+              4.998111
+            ],
+            "target": [
+              0,
+              -17.25,
+              0
+            ],
+            "up": [
+              -0.0060170885982425825,
+              0.9999818965406954,
+              -0.0000351521664724976
+            ],
+            "fov": 45
+          },
+          "post": {},
+          "particleCompute": {}
+        },
+        {
+          "name": "UF",
+          "progress": 0,
+          "visible": false,
+          "camera": {
+            "position": [
+              0,
+              5.5,
+              0
+            ],
+            "basePosition": [
+              0,
+              1.5,
+              -2
+            ],
+            "target": [
+              0,
+              -2.5,
+              -1
+            ],
+            "up": [
+              -0.00005664631044815667,
+              0.9999999956361855,
+              -0.0000742887911070025
+            ],
+            "fov": 22
+          },
+          "timelineDuration": 9.2,
+          "post": {
+            "uGradientAlpha": 0,
+            "uRingProximity": 0
+          },
+          "currentLink": 0,
+          "uiEnabled": false,
+          "particleCompute": {
+            "uRotation": -0.00675,
+            "uCubeSize": 0.65,
+            "uVolumeScale": 1.2,
+            "uInteractForce": 0,
+            "uAdditionalNoise": 0,
+            "uShowNoise": 1
+          },
+          "floorAdditionalTime": 0
+        }
+      ],
+      "detailCamera": {
+        "position": [
+          0,
+          0,
+          2.5
+        ],
+        "basePosition": [
+          0,
+          0,
+          4
+        ],
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "up": [
+          0.01659632253030459,
+          0.999862220009381,
+          -0.0003210551081858277
+        ],
+        "fov": 45
+      },
+      "label": "abstract-open-150"
+    },
+    {
+      "time": 38571.200000047684,
+      "url": "https://www.igloo.inc/portfolio/abstract",
+      "scrollY": 0,
+      "scroll": {
+        "total": 10.85,
+        "targetY1": 4.35,
+        "targetY2": 4.35,
+        "y": 4.35,
+        "velocity": 0
+      },
+      "autoCenter": {
+        "needed": false,
+        "animating": false,
+        "lastTarget": 4.35,
+        "lastTime": 27.099
+      },
+      "detailIndex": 2,
+      "isDetailOpen": true,
+      "root": {
+        "uProgress": 0,
+        "uProgressVel": 0,
+        "uInCubes": true,
+        "uDetailProgress": 1,
+        "uDetailProgress2": 0.859029
+      },
+      "scenes": [
+        {
+          "name": "F3",
+          "progress": 0.8507462686567164,
+          "visible": false,
+          "camera": {
+            "position": [
+              -15.04951,
+              2.5,
+              22.24755
+            ],
+            "basePosition": [
+              -15.04951,
+              2.5,
+              22.24755
+            ],
+            "target": [
+              0,
+              1,
+              0
+            ],
+            "up": [
+              0.0013254264401378689,
+              0.9999987226175,
+              0.0008933130023675913
+            ],
+            "fov": 30
+          },
+          "timelineDuration": 21,
+          "post": {},
+          "particleCompute": {}
+        },
+        {
+          "name": "aF",
+          "progress": 0.75,
+          "visible": true,
+          "camera": {
+            "position": [
+              0,
+              -17.25,
+              2.191352
+            ],
+            "basePosition": [
+              0,
+              -17.25,
+              1.8009879999999998
+            ],
+            "target": [
+              0,
+              -17.25,
+              0
+            ],
+            "up": [
+              -2.1671598890127366e-7,
+              0.9999999999999765,
+              -6.228596821018516e-14
+            ],
+            "fov": 45
+          },
+          "post": {},
+          "particleCompute": {}
+        },
+        {
+          "name": "UF",
+          "progress": 0,
+          "visible": false,
+          "camera": {
+            "position": [
+              0,
+              5.5,
+              0
+            ],
+            "basePosition": [
+              0,
+              1.5,
+              -2
+            ],
+            "target": [
+              0,
+              -2.5,
+              -1
+            ],
+            "up": [
+              -0.00005664631044815667,
+              0.9999999956361855,
+              -0.0000742887911070025
+            ],
+            "fov": 22
+          },
+          "timelineDuration": 9.2,
+          "post": {
+            "uGradientAlpha": 0,
+            "uRingProximity": 0
+          },
+          "currentLink": 0,
+          "uiEnabled": false,
+          "particleCompute": {
+            "uRotation": -0.00675,
+            "uCubeSize": 0.65,
+            "uVolumeScale": 1.2,
+            "uInteractForce": 0,
+            "uAdditionalNoise": 0,
+            "uShowNoise": 1
+          },
+          "floorAdditionalTime": 0
+        }
+      ],
+      "detailCamera": {
+        "position": [
+          0,
+          0,
+          2.731842
+        ],
+        "basePosition": [
+          0,
+          0,
+          2.731842
+        ],
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "up": [
+          -0.011664516523726319,
+          0.9999319505358438,
+          0.00018262489060803363
+        ],
+        "fov": 45
+      },
+      "label": "abstract-open-300"
+    },
+    {
+      "time": 40237.200000047684,
+      "url": "https://www.igloo.inc/portfolio/abstract",
+      "scrollY": 0,
+      "scroll": {
+        "total": 10.85,
+        "targetY1": 4.35,
+        "targetY2": 4.35,
+        "y": 4.35,
+        "velocity": 0
+      },
+      "autoCenter": {
+        "needed": false,
+        "animating": false,
+        "lastTarget": 4.35,
+        "lastTime": 27.099
+      },
+      "detailIndex": 2,
+      "isDetailOpen": true,
+      "root": {
+        "uProgress": 0,
+        "uProgressVel": 0,
+        "uInCubes": true,
+        "uDetailProgress": 1,
+        "uDetailProgress2": 1
+      },
+      "scenes": [
+        {
+          "name": "F3",
+          "progress": 0.8507462686567164,
+          "visible": false,
+          "camera": {
+            "position": [
+              -15.04951,
+              2.5,
+              22.24755
+            ],
+            "basePosition": [
+              -15.04951,
+              2.5,
+              22.24755
+            ],
+            "target": [
+              0,
+              1,
+              0
+            ],
+            "up": [
+              0.0013254264401378689,
+              0.9999987226175,
+              0.0008933130023675913
+            ],
+            "fov": 30
+          },
+          "timelineDuration": 21,
+          "post": {},
+          "particleCompute": {}
+        },
+        {
+          "name": "aF",
+          "progress": 0.75,
+          "visible": true,
+          "camera": {
+            "position": [
+              0,
+              -17.25,
+              2.191352
+            ],
+            "basePosition": [
+              0,
+              -17.25,
+              1.8009879999999998
+            ],
+            "target": [
+              0,
+              -17.25,
+              0
+            ],
+            "up": [
+              -2.1671598890127366e-7,
+              0.9999999999999765,
+              -6.228596821018516e-14
+            ],
+            "fov": 45
+          },
+          "post": {},
+          "particleCompute": {}
+        },
+        {
+          "name": "UF",
+          "progress": 0,
+          "visible": false,
+          "camera": {
+            "position": [
+              0,
+              5.5,
+              0
+            ],
+            "basePosition": [
+              0,
+              1.5,
+              -2
+            ],
+            "target": [
+              0,
+              -2.5,
+              -1
+            ],
+            "up": [
+              -0.00005664631044815667,
+              0.9999999956361855,
+              -0.0000742887911070025
+            ],
+            "fov": 22
+          },
+          "timelineDuration": 9.2,
+          "post": {
+            "uGradientAlpha": 0,
+            "uRingProximity": 0
+          },
+          "currentLink": 0,
+          "uiEnabled": false,
+          "particleCompute": {
+            "uRotation": -0.00675,
+            "uCubeSize": 0.65,
+            "uVolumeScale": 1.2,
+            "uInteractForce": 0,
+            "uAdditionalNoise": 0,
+            "uShowNoise": 1
+          },
+          "floorAdditionalTime": 0
+        }
+      ],
+      "detailCamera": {
+        "position": [
+          0,
+          0,
+          2.5
+        ],
+        "basePosition": [
+          0,
+          0,
+          2.5
+        ],
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "up": [
+          -0.012481163123103777,
+          0.9999220976686175,
+          0.0001384235757673214
+        ],
+        "fov": 45
+      },
+      "label": "abstract-open-500"
+    },
+    {
+      "time": 42422.700000047684,
+      "url": "https://www.igloo.inc/portfolio/abstract",
+      "scrollY": 0,
+      "scroll": {
+        "total": 10.85,
+        "targetY1": 4.35,
+        "targetY2": 4.35,
+        "y": 4.35,
+        "velocity": 0
+      },
+      "autoCenter": {
+        "needed": false,
+        "animating": false,
+        "lastTarget": 4.35,
+        "lastTime": 27.099
+      },
+      "detailIndex": 2,
+      "isDetailOpen": true,
+      "root": {
+        "uProgress": 0,
+        "uProgressVel": 0,
+        "uInCubes": true,
+        "uDetailProgress": 1,
+        "uDetailProgress2": 1
+      },
+      "scenes": [
+        {
+          "name": "F3",
+          "progress": 0.8507462686567164,
+          "visible": false,
+          "camera": {
+            "position": [
+              -15.04951,
+              2.5,
+              22.24755
+            ],
+            "basePosition": [
+              -15.04951,
+              2.5,
+              22.24755
+            ],
+            "target": [
+              0,
+              1,
+              0
+            ],
+            "up": [
+              0.0013254264401378689,
+              0.9999987226175,
+              0.0008933130023675913
+            ],
+            "fov": 30
+          },
+          "timelineDuration": 21,
+          "post": {},
+          "particleCompute": {}
+        },
+        {
+          "name": "aF",
+          "progress": 0.75,
+          "visible": true,
+          "camera": {
+            "position": [
+              0,
+              -17.25,
+              2.191352
+            ],
+            "basePosition": [
+              0,
+              -17.25,
+              1.8009879999999998
+            ],
+            "target": [
+              0,
+              -17.25,
+              0
+            ],
+            "up": [
+              -2.1671598890127366e-7,
+              0.9999999999999765,
+              -6.228596821018516e-14
+            ],
+            "fov": 45
+          },
+          "post": {},
+          "particleCompute": {}
+        },
+        {
+          "name": "UF",
+          "progress": 0,
+          "visible": false,
+          "camera": {
+            "position": [
+              0,
+              5.5,
+              0
+            ],
+            "basePosition": [
+              0,
+              1.5,
+              -2
+            ],
+            "target": [
+              0,
+              -2.5,
+              -1
+            ],
+            "up": [
+              -0.00005664631044815667,
+              0.9999999956361855,
+              -0.0000742887911070025
+            ],
+            "fov": 22
+          },
+          "timelineDuration": 9.2,
+          "post": {
+            "uGradientAlpha": 0,
+            "uRingProximity": 0
+          },
+          "currentLink": 0,
+          "uiEnabled": false,
+          "particleCompute": {
+            "uRotation": -0.00675,
+            "uCubeSize": 0.65,
+            "uVolumeScale": 1.2,
+            "uInteractForce": 0,
+            "uAdditionalNoise": 0,
+            "uShowNoise": 1
+          },
+          "floorAdditionalTime": 0
+        }
+      ],
+      "detailCamera": {
+        "position": [
+          0,
+          0,
+          2.5
+        ],
+        "basePosition": [
+          0,
+          0,
+          2.5
+        ],
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "up": [
+          -0.011884883158981695,
+          0.9999293712542014,
+          0.00004533734237076093
+        ],
+        "fov": 45
+      },
+      "label": "abstract-open-900"
+    },
+    {
+      "time": 44606.300000071526,
+      "url": "https://www.igloo.inc/portfolio/abstract",
+      "scrollY": 0,
+      "scroll": {
+        "total": 10.85,
+        "targetY1": 4.35,
+        "targetY2": 4.35,
+        "y": 4.35,
+        "velocity": 0
+      },
+      "autoCenter": {
+        "needed": false,
+        "animating": false,
+        "lastTarget": 4.35,
+        "lastTime": 27.099
+      },
+      "detailIndex": 2,
+      "isDetailOpen": true,
+      "root": {
+        "uProgress": 0,
+        "uProgressVel": 0,
+        "uInCubes": true,
+        "uDetailProgress": 1,
+        "uDetailProgress2": 1
+      },
+      "scenes": [
+        {
+          "name": "F3",
+          "progress": 0.8507462686567164,
+          "visible": false,
+          "camera": {
+            "position": [
+              -15.04951,
+              2.5,
+              22.24755
+            ],
+            "basePosition": [
+              -15.04951,
+              2.5,
+              22.24755
+            ],
+            "target": [
+              0,
+              1,
+              0
+            ],
+            "up": [
+              0.0013254264401378689,
+              0.9999987226175,
+              0.0008933130023675913
+            ],
+            "fov": 30
+          },
+          "timelineDuration": 21,
+          "post": {},
+          "particleCompute": {}
+        },
+        {
+          "name": "aF",
+          "progress": 0.75,
+          "visible": true,
+          "camera": {
+            "position": [
+              0,
+              -17.25,
+              2.191352
+            ],
+            "basePosition": [
+              0,
+              -17.25,
+              1.8009879999999998
+            ],
+            "target": [
+              0,
+              -17.25,
+              0
+            ],
+            "up": [
+              -2.1671598890127366e-7,
+              0.9999999999999765,
+              -6.228596821018516e-14
+            ],
+            "fov": 45
+          },
+          "post": {},
+          "particleCompute": {}
+        },
+        {
+          "name": "UF",
+          "progress": 0,
+          "visible": false,
+          "camera": {
+            "position": [
+              0,
+              5.5,
+              0
+            ],
+            "basePosition": [
+              0,
+              1.5,
+              -2
+            ],
+            "target": [
+              0,
+              -2.5,
+              -1
+            ],
+            "up": [
+              -0.00005664631044815667,
+              0.9999999956361855,
+              -0.0000742887911070025
+            ],
+            "fov": 22
+          },
+          "timelineDuration": 9.2,
+          "post": {
+            "uGradientAlpha": 0,
+            "uRingProximity": 0
+          },
+          "currentLink": 0,
+          "uiEnabled": false,
+          "particleCompute": {
+            "uRotation": -0.00675,
+            "uCubeSize": 0.65,
+            "uVolumeScale": 1.2,
+            "uInteractForce": 0,
+            "uAdditionalNoise": 0,
+            "uShowNoise": 1
+          },
+          "floorAdditionalTime": 0
+        }
+      ],
+      "detailCamera": {
+        "position": [
+          0,
+          0,
+          2.5
+        ],
+        "basePosition": [
+          0,
+          0,
+          2.5
+        ],
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "up": [
+          -0.009892186294253244,
+          0.9999510702482057,
+          -0.00004194982417097133
+        ],
+        "fov": 45
+      },
+      "label": "abstract-open-1200"
+    },
+    {
+      "time": 45914.5,
+      "url": "https://www.igloo.inc/",
+      "scrollY": 0,
+      "scroll": {
+        "total": 10.85,
+        "targetY1": 4.35,
+        "targetY2": 4.35,
+        "y": 4.35,
+        "velocity": 0
+      },
+      "autoCenter": {
+        "needed": false,
+        "animating": false,
+        "lastTarget": 4.35,
+        "lastTime": 27.099
+      },
+      "detailIndex": 0,
+      "isDetailOpen": true,
+      "root": {
+        "uProgress": 0,
+        "uProgressVel": 0,
+        "uInCubes": true,
+        "uDetailProgress": 0.525949,
+        "uDetailProgress2": 0.214205
+      },
+      "scenes": [
+        {
+          "name": "F3",
+          "progress": 0.8507462686567164,
+          "visible": false,
+          "camera": {
+            "position": [
+              -15.04951,
+              2.5,
+              22.24755
+            ],
+            "basePosition": [
+              -15.04951,
+              2.5,
+              22.24755
+            ],
+            "target": [
+              0,
+              1,
+              0
+            ],
+            "up": [
+              0.0013254264401378689,
+              0.9999987226175,
+              0.0008933130023675913
+            ],
+            "fov": 30
+          },
+          "timelineDuration": 21,
+          "post": {},
+          "particleCompute": {}
+        },
+        {
+          "name": "aF",
+          "progress": 0.75,
+          "visible": true,
+          "camera": {
+            "position": [
+              0.0013285694540728186,
+              -17.249350477125883,
+              3.0731586441809737
+            ],
+            "basePosition": [
+              0,
+              -17.25,
+              3.308386
+            ],
+            "target": [
+              0,
+              -17.25,
+              0
+            ],
+            "up": [
+              -0.00005612041374556855,
+              0.9999999984252493,
+              1.919936313184273e-8
+            ],
+            "fov": 45
+          },
+          "post": {},
+          "particleCompute": {}
+        },
+        {
+          "name": "UF",
+          "progress": 0,
+          "visible": false,
+          "camera": {
+            "position": [
+              0,
+              5.5,
+              0
+            ],
+            "basePosition": [
+              0,
+              1.5,
+              -2
+            ],
+            "target": [
+              0,
+              -2.5,
+              -1
+            ],
+            "up": [
+              -0.00005664631044815667,
+              0.9999999956361855,
+              -0.0000742887911070025
+            ],
+            "fov": 22
+          },
+          "timelineDuration": 9.2,
+          "post": {
+            "uGradientAlpha": 0,
+            "uRingProximity": 0
+          },
+          "currentLink": 0,
+          "uiEnabled": false,
+          "particleCompute": {
+            "uRotation": -0.00675,
+            "uCubeSize": 0.65,
+            "uVolumeScale": 1.2,
+            "uInteractForce": 0,
+            "uAdditionalNoise": 0,
+            "uShowNoise": 1
+          },
+          "floorAdditionalTime": 0
+        }
+      ],
+      "detailCamera": {
+        "position": [
+          0,
+          0,
+          3.1025
+        ],
+        "basePosition": [
+          0,
+          0,
+          3.1025
+        ],
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "up": [
+          -0.008342549073456393,
+          0.9999651974812306,
+          -0.00007550682529832303
+        ],
+        "fov": 45
+      },
+      "label": "abstract-close-200"
+    },
+    {
+      "time": 47525.89999997616,
+      "url": "https://www.igloo.inc/",
+      "scrollY": 0,
+      "scroll": {
+        "total": 10.85,
+        "targetY1": 4.35,
+        "targetY2": 4.35,
+        "y": 4.35,
+        "velocity": 0
+      },
+      "autoCenter": {
+        "needed": false,
+        "animating": false,
+        "lastTarget": 4.35,
+        "lastTime": 27.099
+      },
+      "detailIndex": 0,
+      "isDetailOpen": false,
+      "root": {
+        "uProgress": 0,
+        "uProgressVel": 0,
+        "uInCubes": true,
+        "uDetailProgress": 0,
+        "uDetailProgress2": 0
+      },
+      "scenes": [
+        {
+          "name": "F3",
+          "progress": 0.8507462686567164,
+          "visible": false,
+          "camera": {
+            "position": [
+              -15.04951,
+              2.5,
+              22.24755
+            ],
+            "basePosition": [
+              -15.04951,
+              2.5,
+              22.24755
+            ],
+            "target": [
+              0,
+              1,
+              0
+            ],
+            "up": [
+              0.0013254264401378689,
+              0.9999987226175,
+              0.0008933130023675913
+            ],
+            "fov": 30
+          },
+          "timelineDuration": 21,
+          "post": {},
+          "particleCompute": {}
+        },
+        {
+          "name": "aF",
+          "progress": 0.75,
+          "visible": true,
+          "camera": {
+            "position": [
+              0.6206371768944983,
+              -16.94541248526328,
+              4.9519729341468475
+            ],
+            "basePosition": [
+              0,
+              -17.25,
+              5
+            ],
+            "target": [
+              0,
+              -17.25,
+              0
+            ],
+            "up": [
+              -0.005340297041771467,
+              0.9999855232896123,
+              0.0006591196447156243
+            ],
+            "fov": 45
+          },
+          "post": {},
+          "particleCompute": {}
+        },
+        {
+          "name": "UF",
+          "progress": 0,
+          "visible": false,
+          "camera": {
+            "position": [
+              0,
+              5.5,
+              0
+            ],
+            "basePosition": [
+              0,
+              1.5,
+              -2
+            ],
+            "target": [
+              0,
+              -2.5,
+              -1
+            ],
+            "up": [
+              -0.00005664631044815667,
+              0.9999999956361855,
+              -0.0000742887911070025
+            ],
+            "fov": 22
+          },
+          "timelineDuration": 9.2,
+          "post": {
+            "uGradientAlpha": 0,
+            "uRingProximity": 0
+          },
+          "currentLink": 0,
+          "uiEnabled": false,
+          "particleCompute": {
+            "uRotation": -0.00675,
+            "uCubeSize": 0.65,
+            "uVolumeScale": 1.2,
+            "uInteractForce": 0,
+            "uAdditionalNoise": 0,
+            "uShowNoise": 1
+          },
+          "floorAdditionalTime": 0
+        }
+      ],
+      "detailCamera": {
+        "position": [
+          0,
+          0,
+          4
+        ],
+        "basePosition": [
+          0,
+          0,
+          4
+        ],
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "up": [
+          -0.007134629824624584,
+          0.9999745442210525,
+          -0.00008925897225320177
+        ],
+        "fov": 45
+      },
+      "label": "abstract-close-500"
+    },
+    {
+      "time": 50067.39999997616,
+      "url": "https://www.igloo.inc/",
+      "scrollY": 0,
+      "scroll": {
+        "total": 10.85,
+        "targetY1": 4.35,
+        "targetY2": 4.35,
+        "y": 4.35,
+        "velocity": 0
+      },
+      "autoCenter": {
+        "needed": false,
+        "animating": false,
+        "lastTarget": 4.35,
+        "lastTime": 27.099
+      },
+      "detailIndex": 0,
+      "isDetailOpen": false,
+      "root": {
+        "uProgress": 0,
+        "uProgressVel": 0,
+        "uInCubes": true,
+        "uDetailProgress": 0,
+        "uDetailProgress2": 0
+      },
+      "scenes": [
+        {
+          "name": "F3",
+          "progress": 0.8507462686567164,
+          "visible": false,
+          "camera": {
+            "position": [
+              -15.04951,
+              2.5,
+              22.24755
+            ],
+            "basePosition": [
+              -15.04951,
+              2.5,
+              22.24755
+            ],
+            "target": [
+              0,
+              1,
+              0
+            ],
+            "up": [
+              0.0013254264401378689,
+              0.9999987226175,
+              0.0008933130023675913
+            ],
+            "fov": 30
+          },
+          "timelineDuration": 21,
+          "post": {},
+          "particleCompute": {}
+        },
+        {
+          "name": "aF",
+          "progress": 0.75,
+          "visible": true,
+          "camera": {
+            "position": [
+              0.6832344353411182,
+              -16.91441634347797,
+              4.941717749511743
+            ],
+            "basePosition": [
+              0,
+              -17.25,
+              5
+            ],
+            "target": [
+              0,
+              -17.25,
+              0
+            ],
+            "up": [
+              -0.007413160278436353,
+              0.999971987431866,
+              0.0010341210036550683
+            ],
+            "fov": 45
+          },
+          "post": {},
+          "particleCompute": {}
+        },
+        {
+          "name": "UF",
+          "progress": 0,
+          "visible": false,
+          "camera": {
+            "position": [
+              0,
+              5.5,
+              0
+            ],
+            "basePosition": [
+              0,
+              1.5,
+              -2
+            ],
+            "target": [
+              0,
+              -2.5,
+              -1
+            ],
+            "up": [
+              -0.00005664631044815667,
+              0.9999999956361855,
+              -0.0000742887911070025
+            ],
+            "fov": 22
+          },
+          "timelineDuration": 9.2,
+          "post": {
+            "uGradientAlpha": 0,
+            "uRingProximity": 0
+          },
+          "currentLink": 0,
+          "uiEnabled": false,
+          "particleCompute": {
+            "uRotation": -0.00675,
+            "uCubeSize": 0.65,
+            "uVolumeScale": 1.2,
+            "uInteractForce": 0,
+            "uAdditionalNoise": 0,
+            "uShowNoise": 1
+          },
+          "floorAdditionalTime": 0
+        }
+      ],
+      "detailCamera": {
+        "position": [
+          0,
+          0,
+          4
+        ],
+        "basePosition": [
+          0,
+          0,
+          4
+        ],
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "up": [
+          -0.007134629824624584,
+          0.9999745442210525,
+          -0.00008925897225320177
+        ],
+        "fov": 45
+      },
+      "label": "abstract-close-1000"
+    },
+    {
+      "time": 52312.700000047684,
+      "url": "https://www.igloo.inc/",
+      "scrollY": 0,
+      "scroll": {
+        "total": 10.85,
+        "targetY1": 4.85,
+        "targetY2": 4.85,
+        "y": 4.85,
+        "velocity": 0
+      },
+      "autoCenter": {
+        "needed": false,
+        "animating": false,
+        "lastTarget": 4.85,
+        "lastTime": 27.099
+      },
+      "detailIndex": 0,
+      "isDetailOpen": false,
+      "root": {
+        "uProgress": 0.5,
+        "uProgressVel": 0,
+        "uInCubes": true,
+        "uDetailProgress": 0,
+        "uDetailProgress2": 0
+      },
+      "scenes": [
+        {
+          "name": "F3",
+          "progress": 0.8507462686567164,
+          "visible": false,
+          "camera": {
+            "position": [
+              -15.04951,
+              2.5,
+              22.24755
+            ],
+            "basePosition": [
+              -15.04951,
+              2.5,
+              22.24755
+            ],
+            "target": [
+              0,
+              1,
+              0
+            ],
+            "up": [
+              0.0013254264401378689,
+              0.9999987226175,
+              0.0008933130023675913
+            ],
+            "fov": 30
+          },
+          "timelineDuration": 21,
+          "post": {},
+          "particleCompute": {}
+        },
+        {
+          "name": "aF",
+          "progress": 0.875,
+          "visible": true,
+          "camera": {
+            "position": [
+              0.6835131540195519,
+              -19.789278155698664,
+              4.941669820166171
+            ],
+            "basePosition": [
+              0,
+              -20.125,
+              5
+            ],
+            "target": [
+              0,
+              -20.125,
+              0
+            ],
+            "up": [
+              -0.006030566451394483,
+              0.9999814630689403,
+              0.0008401111693998226
+            ],
+            "fov": 45
+          },
+          "post": {},
+          "particleCompute": {}
+        },
+        {
+          "name": "UF",
+          "progress": 0.07692307692307693,
+          "visible": true,
+          "camera": {
+            "position": [
+              0.0371484588153075,
+              1.3769452858638203,
+              -0.7550448829485841
+            ],
+            "basePosition": [
+              0,
+              1.37869,
+              -0.736966
+            ],
+            "target": [
+              0,
+              -2.929586,
+              -0.368483
+            ],
+            "up": [
+              0.0031802243913249917,
+              -0.000038075575449360225,
+              -0.9999949423487458
+            ],
+            "fov": 22.154577
+          },
+          "timelineDuration": 9.2,
+          "post": {
+            "uGradientAlpha": 0,
+            "uRingProximity": 0
+          },
+          "currentLink": 0,
+          "uiEnabled": false,
+          "particleCompute": {
+            "uRotation": -0.6322500000000002,
+            "uCubeSize": 0.65,
+            "uVolumeScale": 1.2,
+            "uInteractForce": 0,
+            "uAdditionalNoise": 0,
+            "uShowNoise": 1
+          },
+          "floorAdditionalTime": 0
+        }
+      ],
+      "detailCamera": {
+        "position": [
+          0,
+          0,
+          4
+        ],
+        "basePosition": [
+          0,
+          0,
+          4
+        ],
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "up": [
+          -0.007134629824624584,
+          0.9999745442210525,
+          -0.00008925897225320177
+        ],
+        "fov": 45
+      },
+      "label": "cubes-entry-overlap"
+    },
+    {
+      "time": 55566,
+      "url": "https://www.igloo.inc/",
+      "scrollY": 0,
+      "scroll": {
+        "total": 10.85,
+        "targetY1": 5.6499999999999995,
+        "targetY2": 5.6499999999999995,
+        "y": 5.6499999999999995,
+        "velocity": 0
+      },
+      "autoCenter": {
+        "needed": false,
+        "animating": false,
+        "lastTarget": 5.6499999999999995,
+        "lastTime": 27.099
+      },
+      "detailIndex": 0,
+      "isDetailOpen": false,
+      "root": {
+        "uProgress": 0,
+        "uProgressVel": 0,
+        "uInCubes": false,
+        "uDetailProgress": 0,
+        "uDetailProgress2": 0
+      },
+      "scenes": [
+        {
+          "name": "F3",
+          "progress": 0.8507462686567164,
+          "visible": false,
+          "camera": {
+            "position": [
+              -15.04951,
+              2.5,
+              22.24755
+            ],
+            "basePosition": [
+              -15.04951,
+              2.5,
+              22.24755
+            ],
+            "target": [
+              0,
+              1,
+              0
+            ],
+            "up": [
+              0.0013254264401378689,
+              0.9999987226175,
+              0.0008933130023675913
+            ],
+            "fov": 30
+          },
+          "timelineDuration": 21,
+          "post": {},
+          "particleCompute": {}
+        },
+        {
+          "name": "aF",
+          "progress": 0.875,
+          "visible": false,
+          "camera": {
+            "position": [
+              0.6835156778161572,
+              -19.78927690440149,
+              4.94166938607403
+            ],
+            "basePosition": [
+              0,
+              -20.125,
+              5
+            ],
+            "target": [
+              0,
+              -20.125,
+              0
+            ],
+            "up": [
+              -0.002079277249021513,
+              0.9999977977512087,
+              0.00028477860630517237
+            ],
+            "fov": 45
+          },
+          "post": {},
+          "particleCompute": {}
+        },
+        {
+          "name": "UF",
+          "progress": 0.19999999999999998,
+          "visible": true,
+          "camera": {
+            "position": [
+              0.09703389415078299,
+              0.252921224445676,
+              -0.08623422933786594
+            ],
+            "basePosition": [
+              0,
+              0.253875,
+              -0.036799
+            ],
+            "target": [
+              0,
+              -6.917333,
+              -0.0184
+            ],
+            "up": [
+              -0.007323724555069019,
+              -0.00009861855254996541,
+              -0.999973176306756
+            ],
+            "fov": 23.044938
+          },
+          "timelineDuration": 9.2,
+          "post": {
+            "uGradientAlpha": 0,
+            "uRingProximity": 0
+          },
+          "currentLink": 0,
+          "uiEnabled": false,
+          "particleCompute": {
+            "uRotation": -3.0765000000000016,
+            "uCubeSize": 0.65,
+            "uVolumeScale": 1.2,
+            "uInteractForce": 0,
+            "uAdditionalNoise": 0,
+            "uShowNoise": 1
+          },
+          "floorAdditionalTime": 0
+        }
+      ],
+      "detailCamera": {
+        "position": [
+          0,
+          0,
+          4
+        ],
+        "basePosition": [
+          0,
+          0,
+          4
+        ],
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "up": [
+          -0.007134629824624584,
+          0.9999745442210525,
+          -0.00008925897225320177
+        ],
+        "fov": 45
+      },
+      "label": "entry-p0-2"
+    },
+    {
+      "time": 58166.39999997616,
+      "url": "https://www.igloo.inc/",
+      "scrollY": 0,
+      "scroll": {
+        "total": 10.85,
+        "targetY1": 6.17,
+        "targetY2": 6.17,
+        "y": 6.17,
+        "velocity": 0
+      },
+      "autoCenter": {
+        "needed": false,
+        "animating": false,
+        "lastTarget": 6.17,
+        "lastTime": 51.97
+      },
+      "detailIndex": 0,
+      "isDetailOpen": false,
+      "root": {
+        "uProgress": 0,
+        "uProgressVel": 0,
+        "uInCubes": false,
+        "uDetailProgress": 0,
+        "uDetailProgress2": 0
+      },
+      "scenes": [
+        {
+          "name": "F3",
+          "progress": 0.8507462686567164,
+          "visible": false,
+          "camera": {
+            "position": [
+              -15.04951,
+              2.5,
+              22.24755
+            ],
+            "basePosition": [
+              -15.04951,
+              2.5,
+              22.24755
+            ],
+            "target": [
+              0,
+              1,
+              0
+            ],
+            "up": [
+              0.0013254264401378689,
+              0.9999987226175,
+              0.0008933130023675913
+            ],
+            "fov": 30
+          },
+          "timelineDuration": 21,
+          "post": {},
+          "particleCompute": {}
+        },
+        {
+          "name": "aF",
+          "progress": 0.875,
+          "visible": false,
+          "camera": {
+            "position": [
+              0.6835156778161572,
+              -19.78927690440149,
+              4.94166938607403
+            ],
+            "basePosition": [
+              0,
+              -20.125,
+              5
+            ],
+            "target": [
+              0,
+              -20.125,
+              0
+            ],
+            "up": [
+              -0.002079277249021513,
+              0.9999977977512087,
+              0.00028477860630517237
+            ],
+            "fov": 45
+          },
+          "post": {},
+          "particleCompute": {}
+        },
+        {
+          "name": "UF",
+          "progress": 0.28,
+          "visible": true,
+          "camera": {
+            "position": [
+              0.09968481852640726,
+              -1.1086730903224886,
+              -0.07717926385723828
+            ],
+            "basePosition": [
+              0,
+              -1.107709,
+              0
+            ],
+            "target": [
+              0,
+              -9.35104,
+              0
+            ],
+            "up": [
+              -0.20334130010478726,
+              0.000010708254275695377,
+              -0.9791079182383463
+            ],
+            "fov": 24.048079
+          },
+          "timelineDuration": 9.2,
+          "post": {
+            "uGradientAlpha": 0,
+            "uRingProximity": 0.6561
+          },
+          "currentLink": 0,
+          "uiEnabled": false,
+          "particleCompute": {
+            "uRotation": -5.040000000000002,
+            "uCubeSize": 0.65,
+            "uVolumeScale": 1.2,
+            "uInteractForce": 0,
+            "uAdditionalNoise": 0,
+            "uShowNoise": 1
+          },
+          "floorAdditionalTime": 0
+        }
+      ],
+      "detailCamera": {
+        "position": [
+          0,
+          0,
+          4
+        ],
+        "basePosition": [
+          0,
+          0,
+          4
+        ],
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "up": [
+          -0.007134629824624584,
+          0.9999745442210525,
+          -0.00008925897225320177
+        ],
+        "fov": 45
+      },
+      "label": "entry-p0-28"
+    },
+    {
+      "time": 60716.89999997616,
+      "url": "https://www.igloo.inc/",
+      "scrollY": 0,
+      "scroll": {
+        "total": 10.85,
+        "targetY1": 6.7875,
+        "targetY2": 6.7875,
+        "y": 6.7875,
+        "velocity": 0
+      },
+      "autoCenter": {
+        "needed": false,
+        "animating": false,
+        "lastTarget": 6.7875,
+        "lastTime": 51.97
+      },
+      "detailIndex": 0,
+      "isDetailOpen": false,
+      "root": {
+        "uProgress": 0,
+        "uProgressVel": 0,
+        "uInCubes": false,
+        "uDetailProgress": 0,
+        "uDetailProgress2": 0
+      },
+      "scenes": [
+        {
+          "name": "F3",
+          "progress": 0.8507462686567164,
+          "visible": false,
+          "camera": {
+            "position": [
+              -15.04951,
+              2.5,
+              22.24755
+            ],
+            "basePosition": [
+              -15.04951,
+              2.5,
+              22.24755
+            ],
+            "target": [
+              0,
+              1,
+              0
+            ],
+            "up": [
+              0.0013254264401378689,
+              0.9999987226175,
+              0.0008933130023675913
+            ],
+            "fov": 30
+          },
+          "timelineDuration": 21,
+          "post": {},
+          "particleCompute": {}
+        },
+        {
+          "name": "aF",
+          "progress": 0.875,
+          "visible": false,
+          "camera": {
+            "position": [
+              0.6835156778161572,
+              -19.78927690440149,
+              4.94166938607403
+            ],
+            "basePosition": [
+              0,
+              -20.125,
+              5
+            ],
+            "target": [
+              0,
+              -20.125,
+              0
+            ],
+            "up": [
+              -0.002079277249021513,
+              0.9999977977512087,
+              0.00028477860630517237
+            ],
+            "fov": 45
+          },
+          "post": {},
+          "particleCompute": {}
+        },
+        {
+          "name": "UF",
+          "progress": 0.375,
+          "visible": true,
+          "camera": {
+            "position": [
+              -0.007633425015109115,
+              -3.417943904755929,
+              -0.1003572861468294
+            ],
+            "basePosition": [
+              0,
+              -3.417174,
+              0
+            ],
+            "target": [
+              0,
+              -9.9962,
+              0
+            ],
+            "up": [
+              -0.9275487410942431,
+              -0.00004320842480310487,
+              -0.37370219564181995
+            ],
+            "fov": 25.673611
+          },
+          "timelineDuration": 9.2,
+          "post": {
+            "uGradientAlpha": 0,
+            "uRingProximity": 1
+          },
+          "currentLink": 0,
+          "uiEnabled": false,
+          "particleCompute": {
+            "uRotation": -6.954750000000001,
+            "uCubeSize": 0.65,
+            "uVolumeScale": 1.2,
+            "uInteractForce": 0,
+            "uAdditionalNoise": 0,
+            "uShowNoise": 1
+          },
+          "floorAdditionalTime": 0
+        }
+      ],
+      "detailCamera": {
+        "position": [
+          0,
+          0,
+          4
+        ],
+        "basePosition": [
+          0,
+          0,
+          4
+        ],
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "up": [
+          -0.007134629824624584,
+          0.9999745442210525,
+          -0.00008925897225320177
+        ],
+        "fov": 45
+      },
+      "label": "entry-p0-375"
+    },
+    {
+      "time": 62820.300000071526,
+      "url": "https://www.igloo.inc/",
+      "scrollY": 0,
+      "scroll": {
+        "total": 10.85,
+        "targetY1": 7.372499999999999,
+        "targetY2": 7.372499999999999,
+        "y": 7.372499999999999,
+        "velocity": 0
+      },
+      "autoCenter": {
+        "needed": false,
+        "animating": false,
+        "lastTarget": 7.372499999999999,
+        "lastTime": 51.97
+      },
+      "detailIndex": 0,
+      "isDetailOpen": false,
+      "root": {
+        "uProgress": 0,
+        "uProgressVel": 0,
+        "uInCubes": false,
+        "uDetailProgress": 0,
+        "uDetailProgress2": 0
+      },
+      "scenes": [
+        {
+          "name": "F3",
+          "progress": 0.8507462686567164,
+          "visible": false,
+          "camera": {
+            "position": [
+              -15.04951,
+              2.5,
+              22.24755
+            ],
+            "basePosition": [
+              -15.04951,
+              2.5,
+              22.24755
+            ],
+            "target": [
+              0,
+              1,
+              0
+            ],
+            "up": [
+              0.0013254264401378689,
+              0.9999987226175,
+              0.0008933130023675913
+            ],
+            "fov": 30
+          },
+          "timelineDuration": 21,
+          "post": {},
+          "particleCompute": {}
+        },
+        {
+          "name": "aF",
+          "progress": 0.875,
+          "visible": false,
+          "camera": {
+            "position": [
+              0.6835156778161572,
+              -19.78927690440149,
+              4.94166938607403
+            ],
+            "basePosition": [
+              0,
+              -20.125,
+              5
+            ],
+            "target": [
+              0,
+              -20.125,
+              0
+            ],
+            "up": [
+              -0.002079277249021513,
+              0.9999977977512087,
+              0.00028477860630517237
+            ],
+            "fov": 45
+          },
+          "post": {},
+          "particleCompute": {}
+        },
+        {
+          "name": "UF",
+          "progress": 0.46499999999999986,
+          "visible": true,
+          "camera": {
+            "position": [
+              -0.05637892173286156,
+              -6.025434224563913,
+              -0.0627169382084888
+            ],
+            "basePosition": [
+              0,
+              -6.024987,
+              -0.060166
+            ],
+            "target": [
+              0,
+              -9.929345,
+              0
+            ],
+            "up": [
+              -0.4809150351386068,
+              0.04170806455240796,
+              0.8757746093196154
+            ],
+            "fov": 27.364789
+          },
+          "timelineDuration": 9.2,
+          "post": {
+            "uGradientAlpha": 0,
+            "uRingProximity": 0.913936
+          },
+          "currentLink": 0,
+          "uiEnabled": false,
+          "particleCompute": {
+            "uRotation": -8.535750000000005,
+            "uCubeSize": 0.65,
+            "uVolumeScale": 1.2,
+            "uInteractForce": 0.01603124999999968,
+            "uAdditionalNoise": 0,
+            "uShowNoise": 0.463364
+          },
+          "floorAdditionalTime": 0
+        }
+      ],
+      "detailCamera": {
+        "position": [
+          0,
+          0,
+          4
+        ],
+        "basePosition": [
+          0,
+          0,
+          4
+        ],
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "up": [
+          -0.007134629824624584,
+          0.9999745442210525,
+          -0.00008925897225320177
+        ],
+        "fov": 45
+      },
+      "label": "entry-p0-465"
+    },
+    {
+      "time": 64889.5,
+      "url": "https://www.igloo.inc/",
+      "scrollY": 0,
+      "scroll": {
+        "total": 10.85,
+        "targetY1": 7.925000000000001,
+        "targetY2": 7.925000000000001,
+        "y": 7.925000000000001,
+        "velocity": 0
+      },
+      "autoCenter": {
+        "needed": false,
+        "animating": false,
+        "lastTarget": 7.925000000000001,
+        "lastTime": 51.97
+      },
+      "detailIndex": 0,
+      "isDetailOpen": false,
+      "root": {
+        "uProgress": 0,
+        "uProgressVel": 0,
+        "uInCubes": false,
+        "uDetailProgress": 0,
+        "uDetailProgress2": 0
+      },
+      "scenes": [
+        {
+          "name": "F3",
+          "progress": 0.8507462686567164,
+          "visible": false,
+          "camera": {
+            "position": [
+              -15.04951,
+              2.5,
+              22.24755
+            ],
+            "basePosition": [
+              -15.04951,
+              2.5,
+              22.24755
+            ],
+            "target": [
+              0,
+              1,
+              0
+            ],
+            "up": [
+              0.0013254264401378689,
+              0.9999987226175,
+              0.0008933130023675913
+            ],
+            "fov": 30
+          },
+          "timelineDuration": 21,
+          "post": {},
+          "particleCompute": {}
+        },
+        {
+          "name": "aF",
+          "progress": 0.875,
+          "visible": false,
+          "camera": {
+            "position": [
+              0.6835156778161572,
+              -19.78927690440149,
+              4.94166938607403
+            ],
+            "basePosition": [
+              0,
+              -20.125,
+              5
+            ],
+            "target": [
+              0,
+              -20.125,
+              0
+            ],
+            "up": [
+              -0.002079277249021513,
+              0.9999977977512087,
+              0.00028477860630517237
+            ],
+            "fov": 45
+          },
+          "post": {},
+          "particleCompute": {}
+        },
+        {
+          "name": "UF",
+          "progress": 0.5500000000000002,
+          "visible": true,
+          "camera": {
+            "position": [
+              0,
+              -8.266524,
+              -0.683844
+            ],
+            "basePosition": [
+              0,
+              -8.266524,
+              -0.683844
+            ],
+            "target": [
+              0,
+              -9.834904,
+              0
+            ],
+            "up": [
+              -0.04781289562985048,
+              0.6422929101942836,
+              0.764966498956423
+            ],
+            "fov": 28.586543
+          },
+          "timelineDuration": 9.2,
+          "post": {
+            "uGradientAlpha": 0,
+            "uRingProximity": 0
+          },
+          "currentLink": 0,
+          "uiEnabled": false,
+          "particleCompute": {
+            "uRotation": -10.080000000000032,
+            "uCubeSize": 0.65,
+            "uVolumeScale": 1.2,
+            "uInteractForce": 0.500000000000001,
+            "uAdditionalNoise": 0,
+            "uShowNoise": 0
+          },
+          "floorAdditionalTime": 0
+        }
+      ],
+      "detailCamera": {
+        "position": [
+          0,
+          0,
+          4
+        ],
+        "basePosition": [
+          0,
+          0,
+          4
+        ],
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "up": [
+          -0.007134629824624584,
+          0.9999745442210525,
+          -0.00008925897225320177
+        ],
+        "fov": 45
+      },
+      "label": "entry-p0-55"
+    },
+    {
+      "time": 67122.5,
+      "url": "https://www.igloo.inc/",
+      "scrollY": 0,
+      "scroll": {
+        "total": 10.85,
+        "targetY1": 8.51,
+        "targetY2": 8.51,
+        "y": 8.51,
+        "velocity": 0
+      },
+      "autoCenter": {
+        "needed": false,
+        "animating": false,
+        "lastTarget": 8.51,
+        "lastTime": 51.97
+      },
+      "detailIndex": 0,
+      "isDetailOpen": false,
+      "root": {
+        "uProgress": 0,
+        "uProgressVel": 0,
+        "uInCubes": false,
+        "uDetailProgress": 0,
+        "uDetailProgress2": 0
+      },
+      "scenes": [
+        {
+          "name": "F3",
+          "progress": 0.8507462686567164,
+          "visible": false,
+          "camera": {
+            "position": [
+              -15.04951,
+              2.5,
+              22.24755
+            ],
+            "basePosition": [
+              -15.04951,
+              2.5,
+              22.24755
+            ],
+            "target": [
+              0,
+              1,
+              0
+            ],
+            "up": [
+              0.0013254264401378689,
+              0.9999987226175,
+              0.0008933130023675913
+            ],
+            "fov": 30
+          },
+          "timelineDuration": 21,
+          "post": {},
+          "particleCompute": {}
+        },
+        {
+          "name": "aF",
+          "progress": 0.875,
+          "visible": false,
+          "camera": {
+            "position": [
+              0.6835156778161572,
+              -19.78927690440149,
+              4.94166938607403
+            ],
+            "basePosition": [
+              0,
+              -20.125,
+              5
+            ],
+            "target": [
+              0,
+              -20.125,
+              0
+            ],
+            "up": [
+              -0.002079277249021513,
+              0.9999977977512087,
+              0.00028477860630517237
+            ],
+            "fov": 45
+          },
+          "post": {},
+          "particleCompute": {}
+        },
+        {
+          "name": "UF",
+          "progress": 0.64,
+          "visible": true,
+          "camera": {
+            "position": [
+              0,
+              -9.412339,
+              -1.289802
+            ],
+            "basePosition": [
+              0,
+              -9.412339,
+              -1.289802
+            ],
+            "target": [
+              0,
+              -9.81,
+              0
+            ],
+            "up": [
+              0.0006341845696622065,
+              0.9869756938993542,
+              0.16086819903827995
+            ],
+            "fov": 29.468721
+          },
+          "timelineDuration": 9.2,
+          "post": {
+            "uGradientAlpha": 0,
+            "uRingProximity": 0
+          },
+          "currentLink": 0,
+          "uiEnabled": false,
+          "particleCompute": {
+            "uRotation": -11.760000000000057,
+            "uCubeSize": 0.65,
+            "uVolumeScale": 1.2,
+            "uInteractForce": 0.99275,
+            "uAdditionalNoise": 0,
+            "uShowNoise": 0
+          },
+          "floorAdditionalTime": 0
+        }
+      ],
+      "detailCamera": {
+        "position": [
+          0,
+          0,
+          4
+        ],
+        "basePosition": [
+          0,
+          0,
+          4
+        ],
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "up": [
+          -0.007134629824624584,
+          0.9999745442210525,
+          -0.00008925897225320177
+        ],
+        "fov": 45
+      },
+      "label": "entry-p0-64"
+    },
+    {
+      "time": 70028.10000002384,
+      "url": "https://www.igloo.inc/",
+      "scrollY": 0,
+      "scroll": {
+        "total": 10.85,
+        "targetY1": 9.29,
+        "targetY2": 9.29,
+        "y": 9.29,
+        "velocity": 0
+      },
+      "autoCenter": {
+        "needed": false,
+        "animating": false,
+        "lastTarget": 9.29,
+        "lastTime": 51.97
+      },
+      "detailIndex": 0,
+      "isDetailOpen": false,
+      "root": {
+        "uProgress": 0,
+        "uProgressVel": 0,
+        "uInCubes": false,
+        "uDetailProgress": 0,
+        "uDetailProgress2": 0
+      },
+      "scenes": [
+        {
+          "name": "F3",
+          "progress": 0.8507462686567164,
+          "visible": false,
+          "camera": {
+            "position": [
+              -15.04951,
+              2.5,
+              22.24755
+            ],
+            "basePosition": [
+              -15.04951,
+              2.5,
+              22.24755
+            ],
+            "target": [
+              0,
+              1,
+              0
+            ],
+            "up": [
+              0.0013254264401378689,
+              0.9999987226175,
+              0.0008933130023675913
+            ],
+            "fov": 30
+          },
+          "timelineDuration": 21,
+          "post": {},
+          "particleCompute": {}
+        },
+        {
+          "name": "aF",
+          "progress": 0.875,
+          "visible": false,
+          "camera": {
+            "position": [
+              0.6835156778161572,
+              -19.78927690440149,
+              4.94166938607403
+            ],
+            "basePosition": [
+              0,
+              -20.125,
+              5
+            ],
+            "target": [
+              0,
+              -20.125,
+              0
+            ],
+            "up": [
+              -0.002079277249021513,
+              0.9999977977512087,
+              0.00028477860630517237
+            ],
+            "fov": 45
+          },
+          "post": {},
+          "particleCompute": {}
+        },
+        {
+          "name": "UF",
+          "progress": 0.7599999999999999,
+          "visible": true,
+          "camera": {
+            "position": [
+              0,
+              -9.822434,
+              -1.472726
+            ],
+            "basePosition": [
+              0,
+              -9.822434,
+              -1.472726
+            ],
+            "target": [
+              0,
+              -9.81,
+              0
+            ],
+            "up": [
+              0.008202451095962413,
+              0.99978883045572,
+              0.018841822947947628
+            ],
+            "fov": 29.986647
+          },
+          "timelineDuration": 9.2,
+          "post": {
+            "uGradientAlpha": 0,
+            "uRingProximity": 0
+          },
+          "currentLink": 0,
+          "uiEnabled": true,
+          "particleCompute": {
+            "uRotation": -13.935000000000072,
+            "uCubeSize": 0.65,
+            "uVolumeScale": 1.2,
+            "uInteractForce": 1,
+            "uAdditionalNoise": 0,
+            "uShowNoise": 0
+          },
+          "floorAdditionalTime": 0
+        }
+      ],
+      "detailCamera": {
+        "position": [
+          0,
+          0,
+          4
+        ],
+        "basePosition": [
+          0,
+          0,
+          4
+        ],
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "up": [
+          -0.007134629824624584,
+          0.9999745442210525,
+          -0.00008925897225320177
+        ],
+        "fov": 45
+      },
+      "label": "entry-p0-76"
+    },
+    {
+      "time": 73027.89999997616,
+      "url": "https://www.igloo.inc/",
+      "scrollY": 0,
+      "scroll": {
+        "total": 10.85,
+        "targetY1": 9.29,
+        "targetY2": 9.29,
+        "y": 9.29,
+        "velocity": 0
+      },
+      "autoCenter": {
+        "needed": false,
+        "animating": false,
+        "lastTarget": 9.29,
+        "lastTime": 51.97
+      },
+      "detailIndex": 0,
+      "isDetailOpen": false,
+      "root": {
+        "uProgress": 0,
+        "uProgressVel": 0,
+        "uInCubes": false,
+        "uDetailProgress": 0,
+        "uDetailProgress2": 0
+      },
+      "scenes": [
+        {
+          "name": "F3",
+          "progress": 0.8507462686567164,
+          "visible": false,
+          "camera": {
+            "position": [
+              -15.04951,
+              2.5,
+              22.24755
+            ],
+            "basePosition": [
+              -15.04951,
+              2.5,
+              22.24755
+            ],
+            "target": [
+              0,
+              1,
+              0
+            ],
+            "up": [
+              0.0013254264401378689,
+              0.9999987226175,
+              0.0008933130023675913
+            ],
+            "fov": 30
+          },
+          "timelineDuration": 21,
+          "post": {},
+          "particleCompute": {}
+        },
+        {
+          "name": "aF",
+          "progress": 0.875,
+          "visible": false,
+          "camera": {
+            "position": [
+              0.6835156778161572,
+              -19.78927690440149,
+              4.94166938607403
+            ],
+            "basePosition": [
+              0,
+              -20.125,
+              5
+            ],
+            "target": [
+              0,
+              -20.125,
+              0
+            ],
+            "up": [
+              -0.002079277249021513,
+              0.9999977977512087,
+              0.00028477860630517237
+            ],
+            "fov": 45
+          },
+          "post": {},
+          "particleCompute": {}
+        },
+        {
+          "name": "UF",
+          "progress": 0.7599999999999999,
+          "visible": true,
+          "camera": {
+            "position": [
+              0,
+              -9.822434,
+              -1.472726
+            ],
+            "basePosition": [
+              0,
+              -9.822434,
+              -1.472726
+            ],
+            "target": [
+              0,
+              -9.81,
+              0
+            ],
+            "up": [
+              -0.012728494861860335,
+              0.9997551465970071,
+              0.018100615220156362
+            ],
+            "fov": 29.986647
+          },
+          "timelineDuration": 9.2,
+          "post": {
+            "uGradientAlpha": 0,
+            "uRingProximity": 0
+          },
+          "currentLink": 0,
+          "uiEnabled": true,
+          "particleCompute": {
+            "uRotation": -16.17300000000009,
+            "uCubeSize": 0.65,
+            "uVolumeScale": 1.2,
+            "uInteractForce": 1,
+            "uAdditionalNoise": 0,
+            "uShowNoise": 0
+          },
+          "floorAdditionalTime": 0
+        }
+      ],
+      "detailCamera": {
+        "position": [
+          0,
+          0,
+          4
+        ],
+        "basePosition": [
+          0,
+          0,
+          4
+        ],
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "up": [
+          -0.007134629824624584,
+          0.9999745442210525,
+          -0.00008925897225320177
+        ],
+        "fov": 45
+      },
+      "label": "finale-visit-hover"
+    },
+    {
+      "time": 75132.60000002384,
+      "url": "https://www.igloo.inc/",
+      "scrollY": 0,
+      "scroll": {
+        "total": 10.85,
+        "targetY1": 9.29,
+        "targetY2": 9.29,
+        "y": 9.29,
+        "velocity": 0
+      },
+      "autoCenter": {
+        "needed": false,
+        "animating": false,
+        "lastTarget": 9.29,
+        "lastTime": 51.97
+      },
+      "detailIndex": 0,
+      "isDetailOpen": false,
+      "root": {
+        "uProgress": 0,
+        "uProgressVel": 0,
+        "uInCubes": false,
+        "uDetailProgress": 0,
+        "uDetailProgress2": 0
+      },
+      "scenes": [
+        {
+          "name": "F3",
+          "progress": 0.8507462686567164,
+          "visible": false,
+          "camera": {
+            "position": [
+              -15.04951,
+              2.5,
+              22.24755
+            ],
+            "basePosition": [
+              -15.04951,
+              2.5,
+              22.24755
+            ],
+            "target": [
+              0,
+              1,
+              0
+            ],
+            "up": [
+              0.0013254264401378689,
+              0.9999987226175,
+              0.0008933130023675913
+            ],
+            "fov": 30
+          },
+          "timelineDuration": 21,
+          "post": {},
+          "particleCompute": {}
+        },
+        {
+          "name": "aF",
+          "progress": 0.875,
+          "visible": false,
+          "camera": {
+            "position": [
+              0.6835156778161572,
+              -19.78927690440149,
+              4.94166938607403
+            ],
+            "basePosition": [
+              0,
+              -20.125,
+              5
+            ],
+            "target": [
+              0,
+              -20.125,
+              0
+            ],
+            "up": [
+              -0.002079277249021513,
+              0.9999977977512087,
+              0.00028477860630517237
+            ],
+            "fov": 45
+          },
+          "post": {},
+          "particleCompute": {}
+        },
+        {
+          "name": "UF",
+          "progress": 0.7599999999999999,
+          "visible": true,
+          "camera": {
+            "position": [
+              0,
+              -9.822434,
+              -1.472726
+            ],
+            "basePosition": [
+              0,
+              -9.822434,
+              -1.472726
+            ],
+            "target": [
+              0,
+              -9.81,
+              0
+            ],
+            "up": [
+              -0.004860282631360125,
+              0.9998175864423128,
+              0.01847082817341215
+            ],
+            "fov": 29.986647
+          },
+          "timelineDuration": 9.2,
+          "post": {
+            "uGradientAlpha": 0,
+            "uRingProximity": 0
+          },
+          "currentLink": 1,
+          "uiEnabled": true,
+          "particleCompute": {
+            "uRotation": 4.556388980384689,
+            "uCubeSize": 0.65,
+            "uVolumeScale": 1.3,
+            "uInteractForce": 1,
+            "uAdditionalNoise": 0.712035,
+            "uShowNoise": 0
+          },
+          "floorAdditionalTime": -1.207258
+        }
+      ],
+      "detailCamera": {
+        "position": [
+          0,
+          0,
+          4
+        ],
+        "basePosition": [
+          0,
+          0,
+          4
+        ],
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "up": [
+          -0.007134629824624584,
+          0.9999745442210525,
+          -0.00008925897225320177
+        ],
+        "fov": 45
+      },
+      "label": "finale-right-180"
+    },
+    {
+      "time": 78493.60000002384,
+      "url": "https://www.igloo.inc/",
+      "scrollY": 0,
+      "scroll": {
+        "total": 10.85,
+        "targetY1": 9.29,
+        "targetY2": 9.29,
+        "y": 9.29,
+        "velocity": 0
+      },
+      "autoCenter": {
+        "needed": false,
+        "animating": false,
+        "lastTarget": 9.29,
+        "lastTime": 51.97
+      },
+      "detailIndex": 0,
+      "isDetailOpen": false,
+      "root": {
+        "uProgress": 0,
+        "uProgressVel": 0,
+        "uInCubes": false,
+        "uDetailProgress": 0,
+        "uDetailProgress2": 0
+      },
+      "scenes": [
+        {
+          "name": "F3",
+          "progress": 0.8507462686567164,
+          "visible": false,
+          "camera": {
+            "position": [
+              -15.04951,
+              2.5,
+              22.24755
+            ],
+            "basePosition": [
+              -15.04951,
+              2.5,
+              22.24755
+            ],
+            "target": [
+              0,
+              1,
+              0
+            ],
+            "up": [
+              0.0013254264401378689,
+              0.9999987226175,
+              0.0008933130023675913
+            ],
+            "fov": 30
+          },
+          "timelineDuration": 21,
+          "post": {},
+          "particleCompute": {}
+        },
+        {
+          "name": "aF",
+          "progress": 0.875,
+          "visible": false,
+          "camera": {
+            "position": [
+              0.6835156778161572,
+              -19.78927690440149,
+              4.94166938607403
+            ],
+            "basePosition": [
+              0,
+              -20.125,
+              5
+            ],
+            "target": [
+              0,
+              -20.125,
+              0
+            ],
+            "up": [
+              -0.002079277249021513,
+              0.9999977977512087,
+              0.00028477860630517237
+            ],
+            "fov": 45
+          },
+          "post": {},
+          "particleCompute": {}
+        },
+        {
+          "name": "UF",
+          "progress": 0.7599999999999999,
+          "visible": true,
+          "camera": {
+            "position": [
+              0,
+              -9.822434,
+              -1.472726
+            ],
+            "basePosition": [
+              0,
+              -9.822434,
+              -1.472726
+            ],
+            "target": [
+              0,
+              -9.81,
+              0
+            ],
+            "up": [
+              -0.001963505821151711,
+              0.9998267836983125,
+              0.018508031888297416
+            ],
+            "fov": 29.986647
+          },
+          "timelineDuration": 9.2,
+          "post": {
+            "uGradientAlpha": 0,
+            "uRingProximity": 0
+          },
+          "currentLink": 1,
+          "uiEnabled": true,
+          "particleCompute": {
+            "uRotation": 2.049888980384692,
+            "uCubeSize": 0.65,
+            "uVolumeScale": 1.3,
+            "uInteractForce": 1,
+            "uAdditionalNoise": 0,
+            "uShowNoise": 0
+          },
+          "floorAdditionalTime": -4
+        }
+      ],
+      "detailCamera": {
+        "position": [
+          0,
+          0,
+          4
+        ],
+        "basePosition": [
+          0,
+          0,
+          4
+        ],
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "up": [
+          -0.007134629824624584,
+          0.9999745442210525,
+          -0.00008925897225320177
+        ],
+        "fov": 45
+      },
+      "label": "finale-right-settled"
+    },
+    {
+      "time": 82147.5,
+      "url": "https://www.igloo.inc/",
+      "scrollY": 0,
+      "scroll": {
+        "total": 10.85,
+        "targetY1": 9.29,
+        "targetY2": 9.29,
+        "y": 9.29,
+        "velocity": 0
+      },
+      "autoCenter": {
+        "needed": false,
+        "animating": false,
+        "lastTarget": 9.29,
+        "lastTime": 51.97
+      },
+      "detailIndex": 0,
+      "isDetailOpen": false,
+      "root": {
+        "uProgress": 0,
+        "uProgressVel": 0,
+        "uInCubes": false,
+        "uDetailProgress": 0,
+        "uDetailProgress2": 0
+      },
+      "scenes": [
+        {
+          "name": "F3",
+          "progress": 0.8507462686567164,
+          "visible": false,
+          "camera": {
+            "position": [
+              -15.04951,
+              2.5,
+              22.24755
+            ],
+            "basePosition": [
+              -15.04951,
+              2.5,
+              22.24755
+            ],
+            "target": [
+              0,
+              1,
+              0
+            ],
+            "up": [
+              0.0013254264401378689,
+              0.9999987226175,
+              0.0008933130023675913
+            ],
+            "fov": 30
+          },
+          "timelineDuration": 21,
+          "post": {},
+          "particleCompute": {}
+        },
+        {
+          "name": "aF",
+          "progress": 0.875,
+          "visible": false,
+          "camera": {
+            "position": [
+              0.6835156778161572,
+              -19.78927690440149,
+              4.94166938607403
+            ],
+            "basePosition": [
+              0,
+              -20.125,
+              5
+            ],
+            "target": [
+              0,
+              -20.125,
+              0
+            ],
+            "up": [
+              -0.002079277249021513,
+              0.9999977977512087,
+              0.00028477860630517237
+            ],
+            "fov": 45
+          },
+          "post": {},
+          "particleCompute": {}
+        },
+        {
+          "name": "UF",
+          "progress": 0.7599999999999999,
+          "visible": true,
+          "camera": {
+            "position": [
+              0,
+              -9.822434,
+              -1.472726
+            ],
+            "basePosition": [
+              0,
+              -9.822434,
+              -1.472726
+            ],
+            "target": [
+              0,
+              -9.81,
+              0
+            ],
+            "up": [
+              0.014013727558996911,
+              0.9997305633532182,
+              0.018504489654112652
+            ],
+            "fov": 29.986647
+          },
+          "timelineDuration": 9.2,
+          "post": {
+            "uGradientAlpha": 0,
+            "uRingProximity": 0
+          },
+          "currentLink": 2,
+          "uiEnabled": true,
+          "particleCompute": {
+            "uRotation": 3.0496389803846924,
+            "uCubeSize": 0.65,
+            "uVolumeScale": 1.25,
+            "uInteractForce": 1,
+            "uAdditionalNoise": 0,
+            "uShowNoise": 0
+          },
+          "floorAdditionalTime": -7.995155
+        }
+      ],
+      "detailCamera": {
+        "position": [
+          0,
+          0,
+          4
+        ],
+        "basePosition": [
+          0,
+          0,
+          4
+        ],
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "up": [
+          -0.007134629824624584,
+          0.9999745442210525,
+          -0.00008925897225320177
+        ],
+        "fov": 45
+      },
+      "label": "finale-medium"
+    },
+    {
+      "time": 83522.30000007153,
+      "url": "https://www.igloo.inc/",
+      "scrollY": 0,
+      "scroll": {
+        "total": 10.85,
+        "targetY1": 6.95,
+        "targetY2": 6.95,
+        "y": 6.95,
+        "velocity": 0
+      },
+      "autoCenter": {
+        "needed": false,
+        "animating": false,
+        "lastTarget": 6.95,
+        "lastTime": 51.97
+      },
+      "detailIndex": 0,
+      "isDetailOpen": false,
+      "root": {
+        "uProgress": 0,
+        "uProgressVel": 0,
+        "uInCubes": false,
+        "uDetailProgress": 0,
+        "uDetailProgress2": 0
+      },
+      "scenes": [
+        {
+          "name": "F3",
+          "progress": 0.8507462686567164,
+          "visible": false,
+          "camera": {
+            "position": [
+              -15.04951,
+              2.5,
+              22.24755
+            ],
+            "basePosition": [
+              -15.04951,
+              2.5,
+              22.24755
+            ],
+            "target": [
+              0,
+              1,
+              0
+            ],
+            "up": [
+              0.0013254264401378689,
+              0.9999987226175,
+              0.0008933130023675913
+            ],
+            "fov": 30
+          },
+          "timelineDuration": 21,
+          "post": {},
+          "particleCompute": {}
+        },
+        {
+          "name": "aF",
+          "progress": 0.875,
+          "visible": false,
+          "camera": {
+            "position": [
+              0.6835156778161572,
+              -19.78927690440149,
+              4.94166938607403
+            ],
+            "basePosition": [
+              0,
+              -20.125,
+              5
+            ],
+            "target": [
+              0,
+              -20.125,
+              0
+            ],
+            "up": [
+              -0.002079277249021513,
+              0.9999977977512087,
+              0.00028477860630517237
+            ],
+            "fov": 45
+          },
+          "post": {},
+          "particleCompute": {}
+        },
+        {
+          "name": "UF",
+          "progress": 0.4000000000000001,
+          "visible": true,
+          "camera": {
+            "position": [
+              0.006826323841932216,
+              -4.143291372572035,
+              -0.003005574932399445
+            ],
+            "basePosition": [
+              0,
+              -4.143287,
+              -0.00213
+            ],
+            "target": [
+              0,
+              -9.985992,
+              0
+            ],
+            "up": [
+              -0.990344489052412,
+              0.001395427745532731,
+              0.13862123136418825
+            ],
+            "fov": 26.175802
+          },
+          "timelineDuration": 9.2,
+          "post": {
+            "uGradientAlpha": 0,
+            "uRingProximity": 0.180625
+          },
+          "currentLink": 2,
+          "uiEnabled": false,
+          "particleCompute": {
+            "uRotation": 2.0138889803846944,
+            "uCubeSize": 0.65,
+            "uVolumeScale": 1.25,
+            "uInteractForce": 0,
+            "uAdditionalNoise": 0,
+            "uShowNoise": 0.9712
+          },
+          "floorAdditionalTime": -8
+        }
+      ],
+      "detailCamera": {
+        "position": [
+          0,
+          0,
+          4
+        ],
+        "basePosition": [
+          0,
+          0,
+          4
+        ],
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "up": [
+          -0.007134629824624584,
+          0.9999745442210525,
+          -0.00008925897225320177
+        ],
+        "fov": 45
+      },
+      "label": "entry-idle-start"
+    },
+    {
+      "time": 86317.39999997616,
+      "url": "https://www.igloo.inc/",
+      "scrollY": 0,
+      "scroll": {
+        "total": 10.85,
+        "targetY1": 7.010861,
+        "targetY2": 7.010861,
+        "y": 7.010861,
+        "velocity": 0.012549528861287386
+      },
+      "autoCenter": {
+        "needed": false,
+        "animating": true,
+        "lastTarget": 7.010861,
+        "lastTime": 80.644
+      },
+      "detailIndex": 0,
+      "isDetailOpen": false,
+      "root": {
+        "uProgress": 0,
+        "uProgressVel": 0.012549528861287386,
+        "uInCubes": false,
+        "uDetailProgress": 0,
+        "uDetailProgress2": 0
+      },
+      "scenes": [
+        {
+          "name": "F3",
+          "progress": 0.8507462686567164,
+          "visible": false,
+          "camera": {
+            "position": [
+              -15.04951,
+              2.5,
+              22.24755
+            ],
+            "basePosition": [
+              -15.04951,
+              2.5,
+              22.24755
+            ],
+            "target": [
+              0,
+              1,
+              0
+            ],
+            "up": [
+              0.0013254264401378689,
+              0.9999987226175,
+              0.0008933130023675913
+            ],
+            "fov": 30
+          },
+          "timelineDuration": 21,
+          "post": {},
+          "particleCompute": {}
+        },
+        {
+          "name": "aF",
+          "progress": 0.875,
+          "visible": false,
+          "camera": {
+            "position": [
+              0.6835156778161572,
+              -19.78927690440149,
+              4.94166938607403
+            ],
+            "basePosition": [
+              0,
+              -20.125,
+              5
+            ],
+            "target": [
+              0,
+              -20.125,
+              0
+            ],
+            "up": [
+              -0.002079277249021513,
+              0.9999977977512087,
+              0.00028477860630517237
+            ],
+            "fov": 45
+          },
+          "post": {},
+          "particleCompute": {}
+        },
+        {
+          "name": "UF",
+          "progress": 0.40936323076923087,
+          "visible": true,
+          "camera": {
+            "position": [
+              0.034720917632187695,
+              -4.395925809322911,
+              -0.016037091609577496
+            ],
+            "basePosition": [
+              0,
+              -4.397485,
+              -0.004922
+            ],
+            "target": [
+              0,
+              -9.980513,
+              0
+            ],
+            "up": [
+              -0.9511752099636461,
+              0.0032717039700887914,
+              0.3086341133182554
+            ],
+            "fov": 26.360684
+          },
+          "timelineDuration": 9.2,
+          "post": {
+            "uGradientAlpha": 0,
+            "uRingProximity": 0.043951
+          },
+          "currentLink": 2,
+          "uiEnabled": false,
+          "particleCompute": {
+            "uRotation": -0.0718610196153064,
+            "uCubeSize": 0.65,
+            "uVolumeScale": 1.25,
+            "uInteractForce": 0,
+            "uAdditionalNoise": 0,
+            "uShowNoise": 0.937039
+          },
+          "floorAdditionalTime": -8
+        }
+      ],
+      "detailCamera": {
+        "position": [
+          0,
+          0,
+          4
+        ],
+        "basePosition": [
+          0,
+          0,
+          4
+        ],
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "up": [
+          -0.007134629824624584,
+          0.9999745442210525,
+          -0.00008925897225320177
+        ],
+        "fov": 45
+      },
+      "label": "entry-idle-1600"
+    },
+    {
+      "time": 88814.5,
+      "url": "https://www.igloo.inc/",
+      "scrollY": 0,
+      "scroll": {
+        "total": 10.85,
+        "targetY1": 7.530302,
+        "targetY2": 7.530302,
+        "y": 7.530302,
+        "velocity": 0
+      },
+      "autoCenter": {
+        "needed": false,
+        "animating": true,
+        "lastTarget": 7.530302,
+        "lastTime": 80.644
+      },
+      "detailIndex": 0,
+      "isDetailOpen": false,
+      "root": {
+        "uProgress": 0,
+        "uProgressVel": 0,
+        "uInCubes": false,
+        "uDetailProgress": 0,
+        "uDetailProgress2": 0
+      },
+      "scenes": [
+        {
+          "name": "F3",
+          "progress": 0.8507462686567164,
+          "visible": false,
+          "camera": {
+            "position": [
+              -15.04951,
+              2.5,
+              22.24755
+            ],
+            "basePosition": [
+              -15.04951,
+              2.5,
+              22.24755
+            ],
+            "target": [
+              0,
+              1,
+              0
+            ],
+            "up": [
+              0.0013254264401378689,
+              0.9999987226175,
+              0.0008933130023675913
+            ],
+            "fov": 30
+          },
+          "timelineDuration": 21,
+          "post": {},
+          "particleCompute": {}
+        },
+        {
+          "name": "aF",
+          "progress": 0.875,
+          "visible": false,
+          "camera": {
+            "position": [
+              0.6835156778161572,
+              -19.78927690440149,
+              4.94166938607403
+            ],
+            "basePosition": [
+              0,
+              -20.125,
+              5
+            ],
+            "target": [
+              0,
+              -20.125,
+              0
+            ],
+            "up": [
+              -0.002079277249021513,
+              0.9999977977512087,
+              0.00028477860630517237
+            ],
+            "fov": 45
+          },
+          "post": {},
+          "particleCompute": {}
+        },
+        {
+          "name": "UF",
+          "progress": 0.4892772307692307,
+          "visible": true,
+          "camera": {
+            "position": [
+              0.006420156994040601,
+              -6.68925428356557,
+              -0.13732345802831047
+            ],
+            "basePosition": [
+              0,
+              -6.751057,
+              -0.125868
+            ],
+            "target": [
+              0,
+              -9.897355,
+              0
+            ],
+            "up": [
+              -0.3150503524232352,
+              0.08521720266887153,
+              0.9452413997531466
+            ],
+            "fov": 27.75225
+          },
+          "timelineDuration": 9.2,
+          "post": {
+            "uGradientAlpha": 0,
+            "uRingProximity": 0.441448
+          },
+          "currentLink": 2,
+          "uiEnabled": false,
+          "particleCompute": {
+            "uRotation": -1.9536110196153058,
+            "uCubeSize": 0.65,
+            "uVolumeScale": 1.25,
+            "uInteractForce": 0.10055430987637315,
+            "uAdditionalNoise": 0,
+            "uShowNoise": 0.221023
+          },
+          "floorAdditionalTime": -8
+        }
+      ],
+      "detailCamera": {
+        "position": [
+          0,
+          0,
+          4
+        ],
+        "basePosition": [
+          0,
+          0,
+          4
+        ],
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "up": [
+          -0.007134629824624584,
+          0.9999745442210525,
+          -0.00008925897225320177
+        ],
+        "fov": 45
+      },
+      "label": "entry-idle-1400"
+    },
+    {
+      "time": 91858.60000002384,
+      "url": "https://www.igloo.inc/",
+      "scrollY": 0,
+      "scroll": {
+        "total": 10.85,
+        "targetY1": 9.127326,
+        "targetY2": 9.127326,
+        "y": 9.127326,
+        "velocity": 0
+      },
+      "autoCenter": {
+        "needed": false,
+        "animating": true,
+        "lastTarget": 9.127326,
+        "lastTime": 80.644
+      },
+      "detailIndex": 0,
+      "isDetailOpen": false,
+      "root": {
+        "uProgress": 0,
+        "uProgressVel": 0,
+        "uInCubes": false,
+        "uDetailProgress": 0,
+        "uDetailProgress2": 0
+      },
+      "scenes": [
+        {
+          "name": "F3",
+          "progress": 0.8507462686567164,
+          "visible": false,
+          "camera": {
+            "position": [
+              -15.04951,
+              2.5,
+              22.24755
+            ],
+            "basePosition": [
+              -15.04951,
+              2.5,
+              22.24755
+            ],
+            "target": [
+              0,
+              1,
+              0
+            ],
+            "up": [
+              0.0013254264401378689,
+              0.9999987226175,
+              0.0008933130023675913
+            ],
+            "fov": 30
+          },
+          "timelineDuration": 21,
+          "post": {},
+          "particleCompute": {}
+        },
+        {
+          "name": "aF",
+          "progress": 0.875,
+          "visible": false,
+          "camera": {
+            "position": [
+              0.6835156778161572,
+              -19.78927690440149,
+              4.94166938607403
+            ],
+            "basePosition": [
+              0,
+              -20.125,
+              5
+            ],
+            "target": [
+              0,
+              -20.125,
+              0
+            ],
+            "up": [
+              -0.002079277249021513,
+              0.9999977977512087,
+              0.00028477860630517237
+            ],
+            "fov": 45
+          },
+          "post": {},
+          "particleCompute": {}
+        },
+        {
+          "name": "UF",
+          "progress": 0.7349732307692308,
+          "visible": true,
+          "camera": {
+            "position": [
+              0,
+              -9.793612,
+              -1.445626
+            ],
+            "basePosition": [
+              0,
+              -9.794363,
+              -1.446127
+            ],
+            "target": [
+              0,
+              -9.81,
+              0
+            ],
+            "up": [
+              -0.0046869717700572175,
+              0.999282428264511,
+              0.03758538090014538
+            ],
+            "fov": 29.940722
+          },
+          "timelineDuration": 9.2,
+          "post": {
+            "uGradientAlpha": 0,
+            "uRingProximity": 0
+          },
+          "currentLink": 2,
+          "uiEnabled": true,
+          "particleCompute": {
+            "uRotation": -4.214861019615305,
+            "uCubeSize": 0.65,
+            "uVolumeScale": 1.25,
+            "uInteractForce": 1,
+            "uAdditionalNoise": 0,
+            "uShowNoise": 0
+          },
+          "floorAdditionalTime": -8
+        }
+      ],
+      "detailCamera": {
+        "position": [
+          0,
+          0,
+          4
+        ],
+        "basePosition": [
+          0,
+          0,
+          4
+        ],
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "up": [
+          -0.007134629824624584,
+          0.9999745442210525,
+          -0.00008925897225320177
+        ],
+        "fov": 45
+      },
+      "label": "entry-idle-1700"
+    },
+    {
+      "time": 95070.39999997616,
+      "url": "https://www.igloo.inc/",
+      "scrollY": 0,
+      "scroll": {
+        "total": 10.85,
+        "targetY1": 9.289639,
+        "targetY2": 9.289639,
+        "y": 9.289639,
+        "velocity": 0
+      },
+      "autoCenter": {
+        "needed": false,
+        "animating": true,
+        "lastTarget": 9.289639,
+        "lastTime": 80.644
+      },
+      "detailIndex": 0,
+      "isDetailOpen": false,
+      "root": {
+        "uProgress": 0,
+        "uProgressVel": 0,
+        "uInCubes": false,
+        "uDetailProgress": 0,
+        "uDetailProgress2": 0
+      },
+      "scenes": [
+        {
+          "name": "F3",
+          "progress": 0.8507462686567164,
+          "visible": false,
+          "camera": {
+            "position": [
+              -15.04951,
+              2.5,
+              22.24755
+            ],
+            "basePosition": [
+              -15.04951,
+              2.5,
+              22.24755
+            ],
+            "target": [
+              0,
+              1,
+              0
+            ],
+            "up": [
+              0.0013254264401378689,
+              0.9999987226175,
+              0.0008933130023675913
+            ],
+            "fov": 30
+          },
+          "timelineDuration": 21,
+          "post": {},
+          "particleCompute": {}
+        },
+        {
+          "name": "aF",
+          "progress": 0.875,
+          "visible": false,
+          "camera": {
+            "position": [
+              0.6835156778161572,
+              -19.78927690440149,
+              4.94166938607403
+            ],
+            "basePosition": [
+              0,
+              -20.125,
+              5
+            ],
+            "target": [
+              0,
+              -20.125,
+              0
+            ],
+            "up": [
+              -0.002079277249021513,
+              0.9999977977512087,
+              0.00028477860630517237
+            ],
+            "fov": 45
+          },
+          "post": {},
+          "particleCompute": {}
+        },
+        {
+          "name": "UF",
+          "progress": 0.7599444615384615,
+          "visible": true,
+          "camera": {
+            "position": [
+              0,
+              -9.822382,
+              -1.472655
+            ],
+            "basePosition": [
+              0,
+              -9.822388,
+              -1.472663
+            ],
+            "target": [
+              0,
+              -9.81,
+              0
+            ],
+            "up": [
+              -0.0006972841880280279,
+              0.9998274336124164,
+              0.018563857109184373
+            ],
+            "fov": 29.986581
+          },
+          "timelineDuration": 9.2,
+          "post": {
+            "uGradientAlpha": 0,
+            "uRingProximity": 0
+          },
+          "currentLink": 2,
+          "uiEnabled": true,
+          "particleCompute": {
+            "uRotation": -6.636611019615297,
+            "uCubeSize": 0.65,
+            "uVolumeScale": 1.25,
+            "uInteractForce": 1,
+            "uAdditionalNoise": 0,
+            "uShowNoise": 0
+          },
+          "floorAdditionalTime": -8
+        }
+      ],
+      "detailCamera": {
+        "position": [
+          0,
+          0,
+          4
+        ],
+        "basePosition": [
+          0,
+          0,
+          4
+        ],
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "up": [
+          -0.007134629824624584,
+          0.9999745442210525,
+          -0.00008925897225320177
+        ],
+        "fov": 45
+      },
+      "label": "entry-idle-2000"
+    }
+  ],
+  "events": [
+    {
+      "type": "wheel",
+      "deltaY": 300
+    },
+    {
+      "type": "direct-placement",
+      "y": 1.85,
+      "label": "hero-cubes-overlap"
+    },
+    {
+      "type": "direct-placement",
+      "y": 2.35,
+      "label": "pudgy"
+    },
+    {
+      "type": "direct-placement",
+      "y": 2.85,
+      "label": "between-cubes"
+    },
+    {
+      "type": "direct-placement",
+      "y": 3.35,
+      "label": "overpass"
+    },
+    {
+      "type": "direct-placement",
+      "y": 4.35,
+      "label": "abstract"
+    },
+    {
+      "type": "click",
+      "at": [
+        720,
+        450
+      ],
+      "label": "abstract-open"
+    },
+    {
+      "type": "click",
+      "at": [
+        1350,
+        65
+      ],
+      "label": "abstract-close"
+    },
+    {
+      "type": "direct-placement",
+      "y": 4.85,
+      "label": "cubes-entry-overlap"
+    },
+    {
+      "type": "direct-placement",
+      "y": 5.6499999999999995,
+      "label": "entry-p0-2"
+    },
+    {
+      "type": "direct-placement",
+      "y": 6.17,
+      "label": "entry-p0-28"
+    },
+    {
+      "type": "direct-placement",
+      "y": 6.7875,
+      "label": "entry-p0-375"
+    },
+    {
+      "type": "direct-placement",
+      "y": 7.372499999999999,
+      "label": "entry-p0-465"
+    },
+    {
+      "type": "direct-placement",
+      "y": 7.925000000000001,
+      "label": "entry-p0-55"
+    },
+    {
+      "type": "direct-placement",
+      "y": 8.51,
+      "label": "entry-p0-64"
+    },
+    {
+      "type": "direct-placement",
+      "y": 9.29,
+      "label": "entry-p0-76"
+    },
+    {
+      "type": "key",
+      "key": "ArrowRight"
+    },
+    {
+      "type": "direct-placement",
+      "y": 6.95,
+      "label": "entry-idle-start"
+    },
+    {
+      "type": "wheel",
+      "deltaY": 80,
+      "label": "entry-idle-arm"
+    }
+  ],
+  "console": [],
+  "source": {
+    "identical": true,
+    "sha256": "54e3068a859b5b027d55e474b7ccf5aadf8df071e27689b3cfac073ad62cca48",
+    "patch": "const f=new jF; -> const f=new jF;window.__igloo=f;"
+  }
+}

@@ -1,0 +1,936 @@
+{
+  "source": {
+    "identical": true,
+    "sha256": "54e3068a859b5b027d55e474b7ccf5aadf8df071e27689b3cfac073ad62cca48",
+    "patch": "const f=new jF; -> const f=new jF;window.__igloo=f;"
+  },
+  "method": "Browser-local response adapter exposes root; source identical check required. No Spector. Direct progress placements are interventions, not natural scroll.",
+  "states": [
+    {
+      "label": "hero-settled",
+      "t": 17871.899999976158,
+      "y": 0.66,
+      "target": 0.66,
+      "velocity": 0,
+      "auto": false,
+      "url": "https://www.igloo.inc/",
+      "detail": 0,
+      "entryP": 0,
+      "entryFov": 22,
+      "entryCamera": [
+        0,
+        1.5,
+        -2
+      ],
+      "entryUp": [
+        -0.00005664631044815667,
+        0.9999999956361855,
+        -0.0000742887911070025
+      ],
+      "ring": 0,
+      "link": 0,
+      "extraNoise": 0
+    },
+    {
+      "label": "hero-wheel-100",
+      "t": 19541.700000047684,
+      "y": 0.7043362729872824,
+      "target": 0.885,
+      "velocity": 0.0411673160623022,
+      "auto": false,
+      "url": "https://www.igloo.inc/",
+      "detail": 0,
+      "entryP": 0,
+      "entryFov": 22,
+      "entryCamera": [
+        0,
+        1.5,
+        -2
+      ],
+      "entryUp": [
+        -0.00005664631044815667,
+        0.9999999956361855,
+        -0.0000742887911070025
+      ],
+      "ring": 0,
+      "link": 0,
+      "extraNoise": 0
+    },
+    {
+      "label": "hero-wheel-200",
+      "t": 19758.700000047684,
+      "y": 0.800213186558646,
+      "target": 0.885,
+      "velocity": 0.11479901596862604,
+      "auto": false,
+      "url": "https://www.igloo.inc/",
+      "detail": 0,
+      "entryP": 0,
+      "entryFov": 22,
+      "entryCamera": [
+        0,
+        1.5,
+        -2
+      ],
+      "entryUp": [
+        -0.00005664631044815667,
+        0.9999999956361855,
+        -0.0000742887911070025
+      ],
+      "ring": 0,
+      "link": 0,
+      "extraNoise": 0
+    },
+    {
+      "label": "hero-wheel-500",
+      "t": 20286.600000023842,
+      "y": 0.8779542318430382,
+      "target": 0.885,
+      "velocity": 0.10793517703175491,
+      "auto": false,
+      "url": "https://www.igloo.inc/",
+      "detail": 0,
+      "entryP": 0,
+      "entryFov": 22,
+      "entryCamera": [
+        0,
+        1.5,
+        -2
+      ],
+      "entryUp": [
+        -0.00005664631044815667,
+        0.9999999956361855,
+        -0.0000742887911070025
+      ],
+      "ring": 0,
+      "link": 0,
+      "extraNoise": 0
+    },
+    {
+      "label": "hero-wheel-900",
+      "t": 21216.399999976158,
+      "y": 0.8849086792415031,
+      "target": 0.885,
+      "velocity": 0.03790585565927378,
+      "auto": false,
+      "url": "https://www.igloo.inc/",
+      "detail": 0,
+      "entryP": 0,
+      "entryFov": 22,
+      "entryCamera": [
+        0,
+        1.5,
+        -2
+      ],
+      "entryUp": [
+        -0.00005664631044815667,
+        0.9999999956361855,
+        -0.0000742887911070025
+      ],
+      "ring": 0,
+      "link": 0,
+      "extraNoise": 0
+    },
+    {
+      "label": "hero-wheel-1200",
+      "t": 22436.700000047684,
+      "y": 0.885,
+      "target": 0.885,
+      "velocity": 0.008723802249808127,
+      "auto": false,
+      "url": "https://www.igloo.inc/",
+      "detail": 0,
+      "entryP": 0,
+      "entryFov": 22,
+      "entryCamera": [
+        0,
+        1.5,
+        -2
+      ],
+      "entryUp": [
+        -0.00005664631044815667,
+        0.9999999956361855,
+        -0.0000742887911070025
+      ],
+      "ring": 0,
+      "link": 0,
+      "extraNoise": 0
+    },
+    {
+      "label": "hero-wheel-1800",
+      "t": 25967.700000047684,
+      "y": 0.885,
+      "target": 0.885,
+      "velocity": 0,
+      "auto": false,
+      "url": "https://www.igloo.inc/",
+      "detail": 0,
+      "entryP": 0,
+      "entryFov": 22,
+      "entryCamera": [
+        0,
+        1.5,
+        -2
+      ],
+      "entryUp": [
+        -0.00005664631044815667,
+        0.9999999956361855,
+        -0.0000742887911070025
+      ],
+      "ring": 0,
+      "link": 0,
+      "extraNoise": 0
+    },
+    {
+      "label": "hero-cubes-overlap",
+      "t": 26839.399999976158,
+      "y": 1.85,
+      "target": 1.85,
+      "velocity": 0,
+      "auto": false,
+      "url": "https://www.igloo.inc/",
+      "detail": 0,
+      "entryP": 0,
+      "entryFov": 22,
+      "entryCamera": [
+        0,
+        1.5,
+        -2
+      ],
+      "entryUp": [
+        -0.00005664631044815667,
+        0.9999999956361855,
+        -0.0000742887911070025
+      ],
+      "ring": 0,
+      "link": 0,
+      "extraNoise": 0
+    },
+    {
+      "label": "pudgy",
+      "t": 29055.5,
+      "y": 2.35,
+      "target": 2.35,
+      "velocity": 0,
+      "auto": false,
+      "url": "https://www.igloo.inc/",
+      "detail": 0,
+      "entryP": 0,
+      "entryFov": 22,
+      "entryCamera": [
+        0,
+        1.5,
+        -2
+      ],
+      "entryUp": [
+        -0.00005664631044815667,
+        0.9999999956361855,
+        -0.0000742887911070025
+      ],
+      "ring": 0,
+      "link": 0,
+      "extraNoise": 0
+    },
+    {
+      "label": "between-cubes",
+      "t": 30980.800000071526,
+      "y": 2.85,
+      "target": 2.85,
+      "velocity": 0,
+      "auto": false,
+      "url": "https://www.igloo.inc/",
+      "detail": 0,
+      "entryP": 0,
+      "entryFov": 22,
+      "entryCamera": [
+        0,
+        1.5,
+        -2
+      ],
+      "entryUp": [
+        -0.00005664631044815667,
+        0.9999999956361855,
+        -0.0000742887911070025
+      ],
+      "ring": 0,
+      "link": 0,
+      "extraNoise": 0
+    },
+    {
+      "label": "overpass",
+      "t": 32999.5,
+      "y": 3.35,
+      "target": 3.35,
+      "velocity": 0,
+      "auto": false,
+      "url": "https://www.igloo.inc/",
+      "detail": 0,
+      "entryP": 0,
+      "entryFov": 22,
+      "entryCamera": [
+        0,
+        1.5,
+        -2
+      ],
+      "entryUp": [
+        -0.00005664631044815667,
+        0.9999999956361855,
+        -0.0000742887911070025
+      ],
+      "ring": 0,
+      "link": 0,
+      "extraNoise": 0
+    },
+    {
+      "label": "abstract",
+      "t": 35364.200000047684,
+      "y": 4.35,
+      "target": 4.35,
+      "velocity": 0,
+      "auto": false,
+      "url": "https://www.igloo.inc/",
+      "detail": 0,
+      "entryP": 0,
+      "entryFov": 22,
+      "entryCamera": [
+        0,
+        1.5,
+        -2
+      ],
+      "entryUp": [
+        -0.00005664631044815667,
+        0.9999999956361855,
+        -0.0000742887911070025
+      ],
+      "ring": 0,
+      "link": 0,
+      "extraNoise": 0
+    },
+    {
+      "label": "abstract-open-150",
+      "t": 37001.200000047684,
+      "y": 4.35,
+      "target": 4.35,
+      "velocity": 0,
+      "auto": true,
+      "url": "https://www.igloo.inc/portfolio/abstract",
+      "detail": 0,
+      "entryP": 0,
+      "entryFov": 22,
+      "entryCamera": [
+        0,
+        1.5,
+        -2
+      ],
+      "entryUp": [
+        -0.00005664631044815667,
+        0.9999999956361855,
+        -0.0000742887911070025
+      ],
+      "ring": 0,
+      "link": 0,
+      "extraNoise": 0
+    },
+    {
+      "label": "abstract-open-300",
+      "t": 38571.200000047684,
+      "y": 4.35,
+      "target": 4.35,
+      "velocity": 0,
+      "auto": false,
+      "url": "https://www.igloo.inc/portfolio/abstract",
+      "detail": 1,
+      "entryP": 0,
+      "entryFov": 22,
+      "entryCamera": [
+        0,
+        1.5,
+        -2
+      ],
+      "entryUp": [
+        -0.00005664631044815667,
+        0.9999999956361855,
+        -0.0000742887911070025
+      ],
+      "ring": 0,
+      "link": 0,
+      "extraNoise": 0
+    },
+    {
+      "label": "abstract-open-500",
+      "t": 40237.200000047684,
+      "y": 4.35,
+      "target": 4.35,
+      "velocity": 0,
+      "auto": false,
+      "url": "https://www.igloo.inc/portfolio/abstract",
+      "detail": 1,
+      "entryP": 0,
+      "entryFov": 22,
+      "entryCamera": [
+        0,
+        1.5,
+        -2
+      ],
+      "entryUp": [
+        -0.00005664631044815667,
+        0.9999999956361855,
+        -0.0000742887911070025
+      ],
+      "ring": 0,
+      "link": 0,
+      "extraNoise": 0
+    },
+    {
+      "label": "abstract-open-900",
+      "t": 42422.700000047684,
+      "y": 4.35,
+      "target": 4.35,
+      "velocity": 0,
+      "auto": false,
+      "url": "https://www.igloo.inc/portfolio/abstract",
+      "detail": 1,
+      "entryP": 0,
+      "entryFov": 22,
+      "entryCamera": [
+        0,
+        1.5,
+        -2
+      ],
+      "entryUp": [
+        -0.00005664631044815667,
+        0.9999999956361855,
+        -0.0000742887911070025
+      ],
+      "ring": 0,
+      "link": 0,
+      "extraNoise": 0
+    },
+    {
+      "label": "abstract-open-1200",
+      "t": 44606.300000071526,
+      "y": 4.35,
+      "target": 4.35,
+      "velocity": 0,
+      "auto": false,
+      "url": "https://www.igloo.inc/portfolio/abstract",
+      "detail": 1,
+      "entryP": 0,
+      "entryFov": 22,
+      "entryCamera": [
+        0,
+        1.5,
+        -2
+      ],
+      "entryUp": [
+        -0.00005664631044815667,
+        0.9999999956361855,
+        -0.0000742887911070025
+      ],
+      "ring": 0,
+      "link": 0,
+      "extraNoise": 0
+    },
+    {
+      "label": "abstract-close-200",
+      "t": 45914.5,
+      "y": 4.35,
+      "target": 4.35,
+      "velocity": 0,
+      "auto": false,
+      "url": "https://www.igloo.inc/",
+      "detail": 0.525949,
+      "entryP": 0,
+      "entryFov": 22,
+      "entryCamera": [
+        0,
+        1.5,
+        -2
+      ],
+      "entryUp": [
+        -0.00005664631044815667,
+        0.9999999956361855,
+        -0.0000742887911070025
+      ],
+      "ring": 0,
+      "link": 0,
+      "extraNoise": 0
+    },
+    {
+      "label": "abstract-close-500",
+      "t": 47525.89999997616,
+      "y": 4.35,
+      "target": 4.35,
+      "velocity": 0,
+      "auto": false,
+      "url": "https://www.igloo.inc/",
+      "detail": 0,
+      "entryP": 0,
+      "entryFov": 22,
+      "entryCamera": [
+        0,
+        1.5,
+        -2
+      ],
+      "entryUp": [
+        -0.00005664631044815667,
+        0.9999999956361855,
+        -0.0000742887911070025
+      ],
+      "ring": 0,
+      "link": 0,
+      "extraNoise": 0
+    },
+    {
+      "label": "abstract-close-1000",
+      "t": 50067.39999997616,
+      "y": 4.35,
+      "target": 4.35,
+      "velocity": 0,
+      "auto": false,
+      "url": "https://www.igloo.inc/",
+      "detail": 0,
+      "entryP": 0,
+      "entryFov": 22,
+      "entryCamera": [
+        0,
+        1.5,
+        -2
+      ],
+      "entryUp": [
+        -0.00005664631044815667,
+        0.9999999956361855,
+        -0.0000742887911070025
+      ],
+      "ring": 0,
+      "link": 0,
+      "extraNoise": 0
+    },
+    {
+      "label": "cubes-entry-overlap",
+      "t": 52312.700000047684,
+      "y": 4.85,
+      "target": 4.85,
+      "velocity": 0,
+      "auto": false,
+      "url": "https://www.igloo.inc/",
+      "detail": 0,
+      "entryP": 0.07692307692307693,
+      "entryFov": 22.154577,
+      "entryCamera": [
+        0,
+        1.37869,
+        -0.736966
+      ],
+      "entryUp": [
+        0.0031802243913249917,
+        -0.000038075575449360225,
+        -0.9999949423487458
+      ],
+      "ring": 0,
+      "link": 0,
+      "extraNoise": 0
+    },
+    {
+      "label": "entry-p0-2",
+      "t": 55566,
+      "y": 5.6499999999999995,
+      "target": 5.6499999999999995,
+      "velocity": 0,
+      "auto": false,
+      "url": "https://www.igloo.inc/",
+      "detail": 0,
+      "entryP": 0.19999999999999998,
+      "entryFov": 23.044938,
+      "entryCamera": [
+        0,
+        0.253875,
+        -0.036799
+      ],
+      "entryUp": [
+        -0.007323724555069019,
+        -0.00009861855254996541,
+        -0.999973176306756
+      ],
+      "ring": 0,
+      "link": 0,
+      "extraNoise": 0
+    },
+    {
+      "label": "entry-p0-28",
+      "t": 58166.39999997616,
+      "y": 6.17,
+      "target": 6.17,
+      "velocity": 0,
+      "auto": false,
+      "url": "https://www.igloo.inc/",
+      "detail": 0,
+      "entryP": 0.28,
+      "entryFov": 24.048079,
+      "entryCamera": [
+        0,
+        -1.107709,
+        0
+      ],
+      "entryUp": [
+        -0.20334130010478726,
+        0.000010708254275695377,
+        -0.9791079182383463
+      ],
+      "ring": 0.6561,
+      "link": 0,
+      "extraNoise": 0
+    },
+    {
+      "label": "entry-p0-375",
+      "t": 60716.89999997616,
+      "y": 6.7875,
+      "target": 6.7875,
+      "velocity": 0,
+      "auto": false,
+      "url": "https://www.igloo.inc/",
+      "detail": 0,
+      "entryP": 0.375,
+      "entryFov": 25.673611,
+      "entryCamera": [
+        0,
+        -3.417174,
+        0
+      ],
+      "entryUp": [
+        -0.9275487410942431,
+        -0.00004320842480310487,
+        -0.37370219564181995
+      ],
+      "ring": 1,
+      "link": 0,
+      "extraNoise": 0
+    },
+    {
+      "label": "entry-p0-465",
+      "t": 62820.300000071526,
+      "y": 7.372499999999999,
+      "target": 7.372499999999999,
+      "velocity": 0,
+      "auto": false,
+      "url": "https://www.igloo.inc/",
+      "detail": 0,
+      "entryP": 0.46499999999999986,
+      "entryFov": 27.364789,
+      "entryCamera": [
+        0,
+        -6.024987,
+        -0.060166
+      ],
+      "entryUp": [
+        -0.4809150351386068,
+        0.04170806455240796,
+        0.8757746093196154
+      ],
+      "ring": 0.913936,
+      "link": 0,
+      "extraNoise": 0
+    },
+    {
+      "label": "entry-p0-55",
+      "t": 64889.5,
+      "y": 7.925000000000001,
+      "target": 7.925000000000001,
+      "velocity": 0,
+      "auto": false,
+      "url": "https://www.igloo.inc/",
+      "detail": 0,
+      "entryP": 0.5500000000000002,
+      "entryFov": 28.586543,
+      "entryCamera": [
+        0,
+        -8.266524,
+        -0.683844
+      ],
+      "entryUp": [
+        -0.04781289562985048,
+        0.6422929101942836,
+        0.764966498956423
+      ],
+      "ring": 0,
+      "link": 0,
+      "extraNoise": 0
+    },
+    {
+      "label": "entry-p0-64",
+      "t": 67122.5,
+      "y": 8.51,
+      "target": 8.51,
+      "velocity": 0,
+      "auto": false,
+      "url": "https://www.igloo.inc/",
+      "detail": 0,
+      "entryP": 0.64,
+      "entryFov": 29.468721,
+      "entryCamera": [
+        0,
+        -9.412339,
+        -1.289802
+      ],
+      "entryUp": [
+        0.0006341845696622065,
+        0.9869756938993542,
+        0.16086819903827995
+      ],
+      "ring": 0,
+      "link": 0,
+      "extraNoise": 0
+    },
+    {
+      "label": "entry-p0-76",
+      "t": 70028.10000002384,
+      "y": 9.29,
+      "target": 9.29,
+      "velocity": 0,
+      "auto": false,
+      "url": "https://www.igloo.inc/",
+      "detail": 0,
+      "entryP": 0.7599999999999999,
+      "entryFov": 29.986647,
+      "entryCamera": [
+        0,
+        -9.822434,
+        -1.472726
+      ],
+      "entryUp": [
+        0.008202451095962413,
+        0.99978883045572,
+        0.018841822947947628
+      ],
+      "ring": 0,
+      "link": 0,
+      "extraNoise": 0
+    },
+    {
+      "label": "finale-visit-hover",
+      "t": 73027.89999997616,
+      "y": 9.29,
+      "target": 9.29,
+      "velocity": 0,
+      "auto": false,
+      "url": "https://www.igloo.inc/",
+      "detail": 0,
+      "entryP": 0.7599999999999999,
+      "entryFov": 29.986647,
+      "entryCamera": [
+        0,
+        -9.822434,
+        -1.472726
+      ],
+      "entryUp": [
+        -0.012728494861860335,
+        0.9997551465970071,
+        0.018100615220156362
+      ],
+      "ring": 0,
+      "link": 0,
+      "extraNoise": 0
+    },
+    {
+      "label": "finale-right-180",
+      "t": 75132.60000002384,
+      "y": 9.29,
+      "target": 9.29,
+      "velocity": 0,
+      "auto": false,
+      "url": "https://www.igloo.inc/",
+      "detail": 0,
+      "entryP": 0.7599999999999999,
+      "entryFov": 29.986647,
+      "entryCamera": [
+        0,
+        -9.822434,
+        -1.472726
+      ],
+      "entryUp": [
+        -0.004860282631360125,
+        0.9998175864423128,
+        0.01847082817341215
+      ],
+      "ring": 0,
+      "link": 1,
+      "extraNoise": 0.712035
+    },
+    {
+      "label": "finale-right-settled",
+      "t": 78493.60000002384,
+      "y": 9.29,
+      "target": 9.29,
+      "velocity": 0,
+      "auto": false,
+      "url": "https://www.igloo.inc/",
+      "detail": 0,
+      "entryP": 0.7599999999999999,
+      "entryFov": 29.986647,
+      "entryCamera": [
+        0,
+        -9.822434,
+        -1.472726
+      ],
+      "entryUp": [
+        -0.001963505821151711,
+        0.9998267836983125,
+        0.018508031888297416
+      ],
+      "ring": 0,
+      "link": 1,
+      "extraNoise": 0
+    },
+    {
+      "label": "finale-medium",
+      "t": 82147.5,
+      "y": 9.29,
+      "target": 9.29,
+      "velocity": 0,
+      "auto": false,
+      "url": "https://www.igloo.inc/",
+      "detail": 0,
+      "entryP": 0.7599999999999999,
+      "entryFov": 29.986647,
+      "entryCamera": [
+        0,
+        -9.822434,
+        -1.472726
+      ],
+      "entryUp": [
+        0.014013727558996911,
+        0.9997305633532182,
+        0.018504489654112652
+      ],
+      "ring": 0,
+      "link": 2,
+      "extraNoise": 0
+    },
+    {
+      "label": "entry-idle-start",
+      "t": 83522.30000007153,
+      "y": 6.95,
+      "target": 6.95,
+      "velocity": 0,
+      "auto": false,
+      "url": "https://www.igloo.inc/",
+      "detail": 0,
+      "entryP": 0.4000000000000001,
+      "entryFov": 26.175802,
+      "entryCamera": [
+        0,
+        -4.143287,
+        -0.00213
+      ],
+      "entryUp": [
+        -0.990344489052412,
+        0.001395427745532731,
+        0.13862123136418825
+      ],
+      "ring": 0.180625,
+      "link": 2,
+      "extraNoise": 0
+    },
+    {
+      "label": "entry-idle-1600",
+      "t": 86317.39999997616,
+      "y": 7.010861,
+      "target": 7.010861,
+      "velocity": 0.012549528861287386,
+      "auto": true,
+      "url": "https://www.igloo.inc/",
+      "detail": 0,
+      "entryP": 0.40936323076923087,
+      "entryFov": 26.360684,
+      "entryCamera": [
+        0,
+        -4.397485,
+        -0.004922
+      ],
+      "entryUp": [
+        -0.9511752099636461,
+        0.0032717039700887914,
+        0.3086341133182554
+      ],
+      "ring": 0.043951,
+      "link": 2,
+      "extraNoise": 0
+    },
+    {
+      "label": "entry-idle-1400",
+      "t": 88814.5,
+      "y": 7.530302,
+      "target": 7.530302,
+      "velocity": 0,
+      "auto": true,
+      "url": "https://www.igloo.inc/",
+      "detail": 0,
+      "entryP": 0.4892772307692307,
+      "entryFov": 27.75225,
+      "entryCamera": [
+        0,
+        -6.751057,
+        -0.125868
+      ],
+      "entryUp": [
+        -0.3150503524232352,
+        0.08521720266887153,
+        0.9452413997531466
+      ],
+      "ring": 0.441448,
+      "link": 2,
+      "extraNoise": 0
+    },
+    {
+      "label": "entry-idle-1700",
+      "t": 91858.60000002384,
+      "y": 9.127326,
+      "target": 9.127326,
+      "velocity": 0,
+      "auto": true,
+      "url": "https://www.igloo.inc/",
+      "detail": 0,
+      "entryP": 0.7349732307692308,
+      "entryFov": 29.940722,
+      "entryCamera": [
+        0,
+        -9.794363,
+        -1.446127
+      ],
+      "entryUp": [
+        -0.0046869717700572175,
+        0.999282428264511,
+        0.03758538090014538
+      ],
+      "ring": 0,
+      "link": 2,
+      "extraNoise": 0
+    },
+    {
+      "label": "entry-idle-2000",
+      "t": 95070.39999997616,
+      "y": 9.289639,
+      "target": 9.289639,
+      "velocity": 0,
+      "auto": true,
+      "url": "https://www.igloo.inc/",
+      "detail": 0,
+      "entryP": 0.7599444615384615,
+      "entryFov": 29.986581,
+      "entryCamera": [
+        0,
+        -9.822388,
+        -1.472663
+      ],
+      "entryUp": [
+        -0.0006972841880280279,
+        0.9998274336124164,
+        0.018563857109184373
+      ],
+      "ring": 0,
+      "link": 2,
+      "extraNoise": 0
+    }
+  ],
+  "console": []
+}
