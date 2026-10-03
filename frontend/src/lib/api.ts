@@ -556,4 +556,22 @@ export const api = {
   sheetListenStatus: () => json<Record<string, unknown>>("/api/sheet-listen/status"),
   sheetListenRefresh: () =>
     json<Record<string, unknown>>("/api/sheet-listen/refresh", { method: "POST" }),
+  sheetDraft: () =>
+    json<{
+      draft: {
+        workbook_title: string;
+        tab_title: string;
+        columns: Array<{ name: string; kind: "text" | "number" | "date" | "formula"; filled_by: "" | "owner" | "staff" | "jarvis"; formula: string }>;
+      };
+      updated_at: string | null;
+    }>("/api/sheets/draft"),
+  saveSheetDraft: (draft: {
+    workbook_title: string;
+    tab_title: string;
+    columns: Array<{ name: string; kind: string; filled_by: string; formula: string }>;
+  }) =>
+    json<{ draft: unknown; updated_at: string }>("/api/sheets/draft", {
+      method: "PUT",
+      body: JSON.stringify(draft),
+    }),
 };
