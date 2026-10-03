@@ -4,13 +4,52 @@ import type { ControlValue, OrbSpec, OrbStateSpec, PresenceMode } from "./protoc
 import { createSpring, setSpringTarget, springAtRest, stepSpring, type SpringState } from "./spring";
 
 export const PARTICLE_COUNT = 20000;
-/** Camera at z = 100 with a 60° vertical field of view: half the visible height at z = 0. */
-export const VISIBLE_HALF_HEIGHT = 100 * Math.tan(Math.PI / 6);
+const BLEND_EPS = 1e-3;
 const STAGGER = 0.15;
 const BULGE = 0.12;
+
+/** Same cube the landing gather eases away from. Shared with the GPU sim. */
+export function makeScatter(count: number): Float32Array {
+  const n = count * 3;
+  const scatter = new Float32Array(n);
+  let seed = 1337;
+  const rand = () => {
+    seed = (seed * 1664525 + 1013904223) >>> 0;
+    return seed / 4294967296;
+  };
+  for (let j = 0; j < n; j++) scatter[j] = (rand() - 0.5) * 1.0;
+  return scatter;
+}
+
+export type GpuFormulaState = {
+  /** 0 cortex, 1 asci, 2 chat. */
+  slot: number;
+  clock: number;
+  fitCy: number;
+  fitInvH: number;
+  radiusOuter: number;
+  radiusInner: number;
+  neuroActivity: number;
+  chaosFactor: number;
+  pulseSpeed: number;
+  scale: number;
+  flow: number;
+  chaos: number;
+  twist: number;
+};
+
+export type GpuFrame = {
+  easeK: number;
+  blend: number;
+  gather: number;
+  reduced: boolean;
+  a: GpuFormulaState;
+  b: GpuFormulaState;
+};
+/** Camera at z = 100 with a 60° vertical field of view: half the visible height at z = 0. */
+export const VISIBLE_HALF_HEIGHT = 100 * Math.tan(Math.PI / 6);
 const CONTROL_TAU_S = 0.13;
 const LEVEL_TAU_S = 0.06;
-const BLEND_EPS = 1e-3;
 const HITL_MIN_HEIGHT = 0.6;
 const PULSE_AMP = 0.15;
 const FIT_SAMPLE_TIMES = [0, 7.3, 19.1];
@@ -260,7 +299,9 @@ export class SwarmSim {
   private readonly tB: Float32Array;
   private readonly cB: Float32Array;
   private readonly targets: Float32Array;
-  private readonly scatter: Float32Array;
+  readonly scatter: Float32Array;
+  /** Ease factor for this frame. The GPU sim uses the same value. */
+  easeK = 1;
 
   private readonly springs: {
     cx: SpringState;
@@ -281,14 +322,7 @@ export class SwarmSim {
     this.tB = new Float32Array(n);
     this.cB = new Float32Array(n);
     this.targets = new Float32Array(n);
-    this.scatter = new Float32Array(n);
-    // Casberry's own start state: a random ±50-unit cube, normalised against a ~100-unit shape.
-    let seed = 1337;
-    const rand = () => {
-      seed = (seed * 1664525 + 1013904223) >>> 0;
-      return seed / 4294967296;
-    };
-    for (let j = 0; j < n; j++) this.scatter[j] = (rand() - 0.5) * 1.0;
+    this.scatter = makeScatter(count);
     this.positions.set(this.scatter);
     for (const formula of Object.values(formulas)) {
       const rt = new FormulaRuntime(formula);
@@ -380,9 +414,8 @@ export class SwarmSim {
     return onSection && this.gather >= 1 && Object.values(this.springs).every(springAtRest);
   }
 
-  /** Advance one frame. `dt` in seconds. */
-  step(dt: number) {
-    const t0 = typeof performance !== "undefined" ? performance.now() : 0;
+  /** Clocks, controls, and placement. Does not move particles. */
+  stepMotion(dt: number) {
     const snap = this.reducedMotion;
     this.elapsed += dt;
     const lk = snap ? 1 : 1 - Math.exp(-dt / LEVEL_TAU_S);
@@ -427,21 +460,72 @@ export class SwarmSim {
     this.uniforms.brightness = this.brightnessBase * pulse;
     this.uniforms.tint = tint;
     this.uniforms.tintMix = this.tintMixBase;
+    this.easeK = snap ? 1 : 1 - Math.pow(0.9, dt * 60);
+  }
 
+  /** CPU particle update. The live desk skips this and runs the same step on the GPU. */
+  private integrateParticles() {
+    const specA = this.spec(this.from);
+    const specB = this.spec(this.to);
+    const rtA = this.runtimes.get(specA.formula);
+    const rtB = this.runtimes.get(specB.formula);
     const evaluateNow = !this.primed || this.simEvery <= 1 || this.stepIndex % this.simEvery === 0;
     this.stepIndex += 1;
     if (evaluateNow && rtA && rtB) {
       this.computeTargets(rtA, rtB);
       this.primed = true;
     }
-
-    const k = snap ? 1 : 1 - Math.pow(0.9, dt * 60);
+    const k = this.easeK;
     const pos = this.positions;
     const tgt = this.targets;
     for (let j = 0; j < pos.length; j++) {
       pos[j] = pos[j]! + (tgt[j]! - pos[j]!) * k;
     }
+  }
+
+  /** Advance one frame on the CPU. `dt` in seconds. */
+  step(dt: number) {
+    const t0 = typeof performance !== "undefined" ? performance.now() : 0;
+    this.stepMotion(dt);
+    this.integrateParticles();
     this.lastSimMs = typeof performance !== "undefined" ? performance.now() - t0 : 0;
+  }
+
+  /** Uniforms for one GPU step. Call after `stepMotion`. */
+  gpuFrame(): GpuFrame {
+    return {
+      easeK: this.easeK,
+      blend: this.blend,
+      gather: this.gather,
+      reduced: this.reducedMotion,
+      a: this.packFormula(this.from),
+      b: this.packFormula(this.to),
+    };
+  }
+
+  private packFormula(sectionId: string): GpuFormulaState {
+    const spec = this.spec(sectionId);
+    const rt = this.runtimes.get(spec.formula);
+    const v = rt?.values ?? {};
+    const n = (id: string, fallback: number) => {
+      const value = v[id];
+      return value === undefined ? fallback : value;
+    };
+    return {
+      slot: spec.formula === "asci-system" ? 1 : spec.formula === "chat-gpt" ? 2 : 0,
+      clock: rt?.clock ?? 0,
+      fitCy: rt?.fitCy ?? 0,
+      fitInvH: rt?.fitInvH ?? 1,
+      radiusOuter: n("radiusOuter", 37.2),
+      radiusInner: n("radiusInner", 18.8),
+      neuroActivity: n("neuroActivity", 0),
+      chaosFactor: n("chaosFactor", 0),
+      pulseSpeed: n("pulseSpeed", 3.4),
+      scale: n("scale", 45),
+      flow: n("flow", 0.7),
+      chaos: n("chaos", 0.65),
+      twist: n("twist", 1.4),
+    };
   }
 
   private computeTargets(rtA: FormulaRuntime, rtB: FormulaRuntime) {

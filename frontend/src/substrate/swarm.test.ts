@@ -31,6 +31,20 @@ function settledSim(count: number, section: keyof typeof SPECS) {
   return sim;
 }
 
+describe("motion split", () => {
+  it("stepMotion leaves particles put and still advances the formula clock", () => {
+    const sim = new SwarmSim(64);
+    sim.setSpecs(SPECS);
+    sim.setOrb("casual", "casual", 0);
+    const before = Array.from(sim.positions);
+    sim.stepMotion(DT);
+    expect(Array.from(sim.positions)).toEqual(before);
+    expect(sim.runtime("cortex-dinamico")!.clock).toBeGreaterThan(0);
+    expect(sim.gpuFrame().easeK).toBeGreaterThan(0);
+    expect(sim.gpuFrame().easeK).toBeLessThanOrEqual(1);
+  });
+});
+
 describe("orb formulas", () => {
   it.each(Object.values(FORMULAS).map((f) => [f.id, f] as const))(
     "%s produces finite targets and colours for every particle",

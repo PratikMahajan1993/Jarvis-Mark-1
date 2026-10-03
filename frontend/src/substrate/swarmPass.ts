@@ -127,6 +127,8 @@ export class SwarmPass {
   private bloomScale = 0.5;
   private width = 1;
   private height = 1;
+  /** When set, positions and colors already live in the attribute buffers. */
+  gpuDriven = false;
 
   constructor(gl: OGLRenderingContext, count: number, positions: Float32Array, colors: Float32Array) {
     this.gl = gl;
@@ -220,6 +222,14 @@ export class SwarmPass {
     this.angle = (this.angle + dt * AUTO_ROTATE_RAD_S) % (Math.PI * 2);
   }
 
+  /** Buffers ogl uploaded at init. The GPU sim copies into these each frame. */
+  drawBuffers(): { position: WebGLBuffer; color: WebGLBuffer } | null {
+    const offset = this.geometry.attributes.offset?.buffer as WebGLBuffer | undefined;
+    const color = this.geometry.attributes.icolor?.buffer as WebGLBuffer | undefined;
+    if (!offset || !color) return null;
+    return { position: offset, color };
+  }
+
   private blur(renderer: Renderer, from: RenderTarget, to: RenderTarget, dx: number, dy: number) {
     this.blurProgram.uniforms.tMap.value = from.texture;
     this.blurProgram.uniforms.uDir.value = [dx / to.width, dy / to.height];
@@ -237,8 +247,10 @@ export class SwarmPass {
     p.uTintMix.value = u.tintMix;
     p.uBrightness.value = u.brightness;
     const attrs = this.geometry.attributes;
-    attrs.offset!.needsUpdate = true;
-    attrs.icolor!.needsUpdate = true;
+    if (!this.gpuDriven) {
+      attrs.offset!.needsUpdate = true;
+      attrs.icolor!.needsUpdate = true;
+    }
 
     const gl = this.gl;
     gl.clearColor(0, 0, 0, 0);

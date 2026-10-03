@@ -1,4 +1,5 @@
 import { Renderer } from "ogl";
+import { GpuSwarm } from "./gpuSwarm";
 import type { SubstrateCanvas, SubstrateIn, SubstrateOut } from "./protocol";
 import { PARTICLE_COUNT, SwarmSim } from "./swarm";
 import { SwarmPass } from "./swarmPass";
@@ -41,6 +42,7 @@ export class SubstrateEngine {
   private renderer: Renderer | null = null;
   private pass: SwarmPass | null = null;
   private sim: SwarmSim | null = null;
+  private gpu: GpuSwarm | null = null;
 
   private raf = 0;
   private lastFrame = 0;
@@ -153,6 +155,7 @@ export class SubstrateEngine {
     }
     this.pendingContext = null;
     this.stopLoop();
+    this.releaseGpuSim();
     this.detachContextListeners();
     const gl = this.renderer?.gl;
     gl?.getExtension("WEBGL_lose_context")?.loseContext();
@@ -230,6 +233,7 @@ export class SubstrateEngine {
     if (kind === "lost") {
       this.contextLost = true;
       this.stopLoop();
+      this.releaseGpuSim();
       this.renderer = null;
       this.pass = null;
       this.postOut({ type: "contextLost" });
@@ -254,7 +258,14 @@ export class SubstrateEngine {
     }
   }
 
+  private releaseGpuSim() {
+    this.gpu?.dispose();
+    this.gpu = null;
+    if (this.pass) this.pass.gpuDriven = false;
+  }
+
   private buildGpu(canvas: SubstrateCanvas) {
+    this.releaseGpuSim();
     this.renderer = null;
     this.pass = null;
     let renderer: Renderer;
@@ -280,6 +291,16 @@ export class SubstrateEngine {
     this.renderer = renderer;
     this.pass = new SwarmPass(renderer.gl, this.count, this.sim.positions, this.sim.colors);
     this.pass.setBloomScale(QUALITY_NOTCHES[this.qualityNotch]!.bloom);
+    if (renderer.isWebgl2) {
+      const gpu = GpuSwarm.tryCreate(renderer.gl as WebGL2RenderingContext, this.sim.count, this.sim.scatter);
+      const draw = this.pass.drawBuffers();
+      if (gpu && draw) {
+        this.gpu = gpu;
+        this.pass.gpuDriven = true;
+      } else {
+        gpu?.dispose();
+      }
+    }
     this.applyRendererSize();
   }
 
@@ -345,7 +366,7 @@ export class SubstrateEngine {
   private drawStill() {
     if (this.disposed || this.contextLost || !this.routeActive || this.hidden) return;
     if (!this.sim || !this.pass || !this.renderer) return;
-    this.sim.step(1 / 60);
+    this.advance(1 / 60);
     this.renderWithFx();
     this.maybePostSettled();
   }
@@ -390,9 +411,22 @@ export class SubstrateEngine {
     this.raf = requestAnimationFrame(tick);
   }
 
+  private advance(dt: number) {
+    if (!this.sim || !this.pass) return;
+    if (this.gpu && this.pass.gpuDriven) {
+      const t0 = typeof performance !== "undefined" ? performance.now() : 0;
+      this.sim.stepMotion(dt);
+      const draw = this.pass.drawBuffers();
+      if (draw) this.gpu.simulate(this.sim.gpuFrame(), draw.position, draw.color);
+      this.sim.lastSimMs = typeof performance !== "undefined" ? performance.now() - t0 : 0;
+      return;
+    }
+    this.sim.step(dt);
+  }
+
   private step(dt: number, time: number) {
     if (!this.sim || !this.pass || !this.renderer) return;
-    this.sim.step(dt);
+    this.advance(dt);
     this.pass.advanceRotation(dt);
     this.renderWithFx();
     this.simSamples.push(this.sim.lastSimMs);
