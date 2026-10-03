@@ -4,7 +4,7 @@
 
 Igloo's strongest transferable quality is its control over **how a composition becomes available, responds, and comes to rest**. It combines continuous travel with scene-specific settling, independently staged text, material feedback, and selective preservation of visual anchors. Identifying the rendering libraries does not explain that choreography.
 
-This report challenges [Pass 1](D:/Cursor/Jarvis-UI-UX/IGLOO-FORENSICS-PASS-1.md) against its retained evidence and a small, targeted second browser run. It is neither a Jarvis redesign nor an implementation plan. Visual identity, assets, branding and exact technology choices are outside the transferable conclusions.
+This report challenges [Pass 1](D:/Cursor/Jarvis-UI-UX/work/igloo-forensics/archive/IGLOO-FORENSICS-PASS-1.md) against its retained evidence and a small, targeted second browser run. It is neither a Jarvis redesign nor an implementation plan. Visual identity, assets, branding and exact technology choices are outside the transferable conclusions.
 
 **Confidence discipline:** **Confirmed** means verified production code, captured runtime state, or inspected pixels; the supporting modality is specified. **Strongly inferred** means an interpretation supported by multiple mechanisms/observations, without causal isolation. **Speculative** means unresolved. Source timings describe intended control, not measured latency or guaranteed smoothness. Perceived-polish rankings are interpretations, not experimental results.
 

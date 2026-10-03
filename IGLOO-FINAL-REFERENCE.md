@@ -240,7 +240,7 @@ Batched fragment transforms make the hero genuinely responsive. Custom transmiss
 
 Worker decoding, cached loads, shader/texture preparation, hidden-scene skipping and adaptive resolution manage presentation cost. The static/dynamic lighting split remains incompletely known; bright regions should not automatically be described as moving physical lights. Active depth-of-field processing was not established.
 
-Library versions, framebuffer formats, binary codecs, exact particle counts and capture command totals are omitted because they do not explain the interaction grammar. They remain in the [technical evidence inventory](D:/Cursor/Jarvis-UI-UX/IGLOO-FORENSICS-PASS-1.md) and [GPU capture summary](D:/Cursor/Jarvis-UI-UX/work/igloo-forensics-pass-1/evidence/spector-summary.json). For resolved interaction mechanisms, use [source extracts](D:/Cursor/Jarvis-UI-UX/work/igloo-forensics-pass-2/evidence/source-snippets.json), S01–S24, alongside the recorded state index. Source offsets apply only to the archived build.
+Library versions, framebuffer formats, binary codecs, exact particle counts and capture command totals are omitted because they do not explain the interaction grammar. They remain in the [technical evidence inventory](D:/Cursor/Jarvis-UI-UX/work/igloo-forensics/archive/IGLOO-FORENSICS-PASS-1.md) and [GPU capture summary](D:/Cursor/Jarvis-UI-UX/work/igloo-forensics-pass-1/evidence/spector-summary.json). For resolved interaction mechanisms, use [source extracts](D:/Cursor/Jarvis-UI-UX/work/igloo-forensics-pass-2/evidence/source-snippets.json), S01–S24, alongside the recorded state index. Source offsets apply only to the archived build.
 
 ## 15. Remaining uncertainties
 
