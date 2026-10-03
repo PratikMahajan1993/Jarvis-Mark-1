@@ -40,6 +40,13 @@ def _fake_sheet(*_args, **_kwargs):
     return {"sheets": [{"properties": {"sheetId": 0}}]}
 
 
+_DESK_PASSWORD = "SheetPass1"
+
+
+def _desk_password(monkeypatch) -> None:
+    monkeypatch.setattr(settings, "sheet_build_password", _DESK_PASSWORD)
+
+
 def _build_ready() -> dict:
     assert talk.tool_edit(action="set_title", title="Attendance")["ok"] is True
     assert talk.tool_edit(action="add_tab", title="October")["ok"] is True
@@ -166,7 +173,8 @@ def test_apply_creates_a_new_file_in_one_batch(monkeypatch):
         lambda spreadsheet_id, requests, account=None: calls.append(("batch", spreadsheet_id, requests)) or {"replies": []},
     )
     monkeypatch.setattr(talk, "trash_workbook", _boom)
-    result = talk.tool_apply()
+    _desk_password(monkeypatch)
+    result = talk.tool_apply(password=_DESK_PASSWORD)
     assert result["ok"] is True
     assert result["spreadsheet_id"] == "new-file"
     assert result["url"].endswith("/new-file/edit")
@@ -217,7 +225,8 @@ def test_apply_writes_nothing_when_the_batch_would_be_invalid(monkeypatch):
     _build_ready()
     talk.tool_edit(action="set_formula", name="Pay", formula="Nope * Hours")
     _block_google(monkeypatch)
-    result = talk.tool_apply()
+    _desk_password(monkeypatch)
+    result = talk.tool_apply(password=_DESK_PASSWORD)
     assert result["ok"] is False
     assert "Nope" in result["speak"]
     assert list_templates() == []
@@ -243,9 +252,11 @@ def test_failed_batch_trashes_the_new_file_and_saves_no_template(monkeypatch):
 
     monkeypatch.setattr(talk, "batch_update", _batch)
     monkeypatch.setattr(talk, "trash_workbook", _trash)
-    result = talk.tool_apply()
+    _desk_password(monkeypatch)
+    result = talk.tool_apply(password=_DESK_PASSWORD)
     assert result["ok"] is False
-    assert "not written" in result["speak"].lower()
+    assert "moved to trash" in result["speak"].lower()
+    assert "rejected" not in result["speak"].lower()
     assert ("trash", "new-file") in calls
     assert list_templates() == []
 
@@ -335,8 +346,9 @@ def test_apply_again_returns_the_first_file(monkeypatch):
     monkeypatch.setattr(talk, "get_workbook", _fake_sheet)
     monkeypatch.setattr(talk, "batch_update", lambda *_a, **_k: calls.append("batch") or {"replies": []})
     monkeypatch.setattr(talk, "trash_workbook", _boom)
-    first = talk.tool_apply()
-    second = talk.tool_apply()
+    _desk_password(monkeypatch)
+    first = talk.tool_apply(password=_DESK_PASSWORD)
+    second = talk.tool_apply(password=_DESK_PASSWORD)
     assert second["ok"] is True
     assert second["already_created"] is True
     assert second["url"] == first["url"]
@@ -397,3 +409,55 @@ def test_clone_refuses_to_replace_an_open_model():
     replaced = talk.tool_clone(template_id="attendance", title="November", discard=True)
     assert replaced["ok"] is True
     assert replaced["model"]["title"] == "November"
+
+
+def test_desk_create_requires_the_configured_password(monkeypatch):
+    _reset()
+    _build_ready()
+    _block_google(monkeypatch)
+    monkeypatch.setattr(settings, "sheet_build_password", "")
+    missing = talk.tool_apply()
+    assert missing["need"] == "password"
+    assert "not configured" in missing["speak"].lower()
+
+    _desk_password(monkeypatch)
+    asked = talk.tool_apply()
+    assert asked["need"] == "password"
+    assert "ask for the sheet password" in asked["speak"].lower()
+    wrong = talk.tool_apply(password="WrongPass1")
+    assert wrong["need"] == "password"
+    assert "refused" in wrong["speak"].lower()
+    symbols = talk.tool_apply(password="no spaces")
+    assert symbols["need"] == "password"
+    assert "alphanumeric" in symbols["speak"].lower()
+
+
+def test_failed_batch_names_the_empty_file_when_trash_fails(monkeypatch):
+    _reset()
+    _build_ready()
+    monkeypatch.setattr(
+        talk,
+        "create_workbook",
+        lambda title, account=None: {"spreadsheetId": "new-file", "spreadsheetUrl": "https://example/new-file"},
+    )
+    monkeypatch.setattr(talk, "get_workbook", _fake_sheet)
+    monkeypatch.setattr(talk, "batch_update", lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("rejected")))
+
+    def _trash(*_args, **_kwargs):
+        raise RuntimeError("trash denied")
+
+    monkeypatch.setattr(talk, "trash_workbook", _trash)
+    _desk_password(monkeypatch)
+    result = talk.tool_apply(password=_DESK_PASSWORD)
+    assert result["ok"] is False
+    assert "https://example/new-file" in result["speak"]
+    assert "rejected" not in result["speak"]
+    assert "trash denied" not in result["speak"]
+
+
+def test_password_is_redacted_from_tool_logs():
+    from app.tools.registry import _redact_tool_args
+
+    cleaned = _redact_tool_args({"password": _DESK_PASSWORD, "actor": ""})
+    assert cleaned["password"] == "[redacted]"
+    assert _DESK_PASSWORD not in str(cleaned)

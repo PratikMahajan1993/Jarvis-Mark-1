@@ -811,12 +811,12 @@ def jarvis_sheet_template_clone(template_id: str, title: str, discard: bool = Fa
 
 
 @mcp.tool()
-def jarvis_sheet_model_apply(telegram_user_id: str = "", actor: str = "") -> str:
-    """Create a new spreadsheet from the model in one batch. Desk owner may omit telegram_user_id. Pass actor=staff to refuse. A Telegram id must be in TELEGRAM_OWNER_USER_IDS."""
+def jarvis_sheet_model_apply(telegram_user_id: str = "", actor: str = "", password: str = "") -> str:
+    """Create a new spreadsheet from the model in one batch. From the desk, password is the alphanumeric SHEET_BUILD_PASSWORD. Do not repeat it. A Telegram owner id does not use the password."""
     return _dump(
         execute_tool(
             "sheet_model_apply",
-            {"telegram_user_id": telegram_user_id, "actor": actor},
+            {"telegram_user_id": telegram_user_id, "actor": actor, "password": password},
             _session(),
         )
     )

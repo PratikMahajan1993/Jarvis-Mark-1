@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import hmac
 import json
+import re
 from typing import Any
 
 from app.config import settings
@@ -25,6 +27,7 @@ from app.features.sheets.draft import (
 )
 
 _REFUSAL = "Sheet create refused: Telegram user is not an owner (or TELEGRAM_OWNER_USER_IDS is empty)."
+_PASSWORD = re.compile(r"^[A-Za-z0-9]+$")
 
 
 def owner_may_create(telegram_user_id: str = "", actor: str = "") -> tuple[bool, str]:
@@ -38,6 +41,21 @@ def owner_may_create(telegram_user_id: str = "", actor: str = "") -> tuple[bool,
     owners = [part.strip() for part in (settings.telegram_owner_user_ids or "").split(",") if part.strip()]
     if not owners or caller not in owners:
         return False, _REFUSAL
+    return True, ""
+
+
+def desk_password_ok(password: str) -> tuple[bool, str]:
+    """Desk creates require SHEET_BUILD_PASSWORD. The password is never returned."""
+    configured = str(settings.sheet_build_password or "").strip()
+    if not configured or not _PASSWORD.fullmatch(configured):
+        return False, "The sheet password is not configured."
+    given = str(password or "").strip()
+    if not given:
+        return False, "Ask for the sheet password. It is alphanumeric."
+    if not _PASSWORD.fullmatch(given):
+        return False, "The sheet password must be alphanumeric."
+    if not hmac.compare_digest(given, configured):
+        return False, "That sheet password was refused."
     return True, ""
 
 
@@ -190,6 +208,7 @@ def tool_apply(
     session_id: str = "",
     telegram_user_id: str = "",
     actor: str = "",
+    password: str = "",
     account: str | None = None,
     **_: Any,
 ) -> dict[str, Any]:
@@ -212,6 +231,10 @@ def tool_apply(
             "outline": outline(model),
             "speak": next_question(missing),
         }
+    if not str(telegram_user_id or "").strip():
+        ok_password, password_reason = desk_password_ok(password)
+        if not ok_password:
+            return _fail(model, password_reason, need="password")
     stamp = fingerprint(model)
     created = model.get("created") or {}
     if created.get("fingerprint") == stamp and created.get("url") and created.get("spreadsheet_id"):
@@ -242,12 +265,16 @@ def tool_apply(
         meta = get_workbook(spreadsheet_id, account=account)
         requests = compile_model(model, _first_sheet_id(meta))
         batch_update(spreadsheet_id, requests, account)
-    except Exception as exc:
+    except Exception:
+        trashed = False
         try:
             trash_workbook(spreadsheet_id, account=account)
+            trashed = True
         except Exception:
-            pass
-        return _fail(model, f"The sheet was not written. {exc}")
+            trashed = False
+        if trashed:
+            return _fail(model, "The sheet was not written. The empty file was moved to trash.")
+        return _fail(model, f"The sheet was not written. The empty file is still at {url}.")
     template = save_template(model)
     model = dict(model)
     model["created"] = {

@@ -20,9 +20,9 @@ Load `shop-sheets` when the owner wants a new workbook. Do not rebuild the sheet
 
 Only the owner may create a file.
 
-- Desk owner: call `jarvis_sheet_model_apply` with no Telegram user id and no actor.
-- Staff at the desk: pass `actor` `staff`. The tool refuses. Do not retry without it.
-- Telegram: pass `telegram_user_id`. It must be in `TELEGRAM_OWNER_USER_IDS`, the same gate as rate attestation. If the tool refuses, say only an owner may create a sheet and stop. Do not retry with another id.
+- Desk: when the owner says to create it, ask for the sheet password. It is alphanumeric. Pass it once as `password` on `jarvis_sheet_model_apply`. Do not repeat it, store it in the model, or include it in the outline. If the tool says to ask, ask again. If it says the password was refused, stop.
+- Staff at the desk: pass `actor` `staff`. The tool refuses. Do not retry without it, and do not ask them for the password.
+- Telegram: pass `telegram_user_id`. It must be in `TELEGRAM_OWNER_USER_IDS`, the same gate as rate attestation. Do not ask for the desk password. If the tool refuses, say only an owner may create a sheet and stop. Do not retry with another id.
 
 Editing the model does not create a file. Apply is the only create.
 
@@ -34,7 +34,7 @@ Editing the model does not create a file. Apply is the only create.
 4. Ask only for the next gap: title, then one tab, then one block on that tab.
 5. Store text, headings, and sample rows only when the owner stated them. Do not invent numbers.
 6. Formulas name columns (`Hours * Rate`). Do not write A1 references.
-7. Call `jarvis_sheet_model_apply` only when the owner says to create it, and only when `missing` is null.
+7. Call `jarvis_sheet_model_apply` only when the owner says to create it, and only when `missing` is null. From the desk, ask for the alphanumeric password first and pass it on that call.
 
 "Add Rate after Quantity" is an insert. If the tool says Quantity is not on the table, the model was left unchanged. Read the outline and ask. Do not invent another place for the column.
 

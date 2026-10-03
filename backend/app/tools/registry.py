@@ -171,6 +171,18 @@ def _ok(
 
 HANDLERS: dict[str, Callable[..., dict[str, Any]]] = {}
 
+_SECRET_ARG_KEYS = frozenset({"password", "sheet_password", "imap_password"})
+
+
+def _redact_tool_args(args: dict[str, Any]) -> dict[str, Any]:
+    cleaned: dict[str, Any] = {}
+    for key, value in args.items():
+        if "password" in str(key).casefold() or str(key).casefold() in _SECRET_ARG_KEYS:
+            cleaned[key] = "[redacted]"
+        else:
+            cleaned[key] = value
+    return cleaned
+
 
 def execute_tool(name: str, args: dict[str, Any], session_id: str) -> dict[str, Any]:
     from ..metrics import new_mission_id, record_mission_step
@@ -231,7 +243,7 @@ def execute_tool(name: str, args: dict[str, Any], session_id: str) -> dict[str, 
             mission_id=mission_id,
             step=0,
             role="tool",
-            detail=f"{name} {str(args)[:400]}",
+            detail=f"{name} {str(_redact_tool_args(args))[:400]}",
             status="ok",
         )
         result = handler(session_id=session_id, **args)
@@ -1473,11 +1485,17 @@ def _sheet_model_apply(
     session_id: str,
     telegram_user_id: str = "",
     actor: str = "",
+    password: str = "",
     **_: Any,
 ) -> dict[str, Any]:
     from app.features.sheets.talk import tool_apply
 
-    return tool_apply(session_id=session_id, telegram_user_id=telegram_user_id, actor=actor)
+    return tool_apply(
+        session_id=session_id,
+        telegram_user_id=telegram_user_id,
+        actor=actor,
+        password=password,
+    )
 
 
 HANDLERS.update(
@@ -2043,6 +2061,7 @@ TOOL_SCHEMAS = [
                 "properties": {
                     "telegram_user_id": {"type": "string"},
                     "actor": {"type": "string"},
+                    "password": {"type": "string", "description": "Alphanumeric desk password. Never repeat it."},
                 },
             },
         },

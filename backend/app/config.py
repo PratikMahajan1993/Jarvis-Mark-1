@@ -45,6 +45,8 @@ class Settings(BaseSettings):
     jarvis_host: str = "127.0.0.1"
     jarvis_port: int = 8000
     jarvis_api_token: str = ""
+    # Alphanumeric password required before a desk caller can create a sheet file.
+    sheet_build_password: str = ""
     jarvis_lan_allowlist: str = ""
     cors_origins: str = "http://localhost:3000"
     data_dir: Path = REPO_ROOT / "data"
